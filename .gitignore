@@ -1,0 +1,100 @@
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# User-supplied optical-disc images and compressed dumps (never commit)
+*.iso
+*.ISO
+*.gcm
+*.GCM
+*.ciso
+*.CISO
+*.rvz
+*.RVZ
+*.wia
+*.WIA
+*.wbfs
+*.WBFS
+*.nkit.iso
+*.nkit.gcz
+*.gcz
+*.GCZ
+*.tgc
+*.TGC
+
+# Extracted / generated game-derived material
+ref/**/extracted/
+ref/**/iso/
+ref/**/build/
+ref/**/generated/
+ref/**/output/
+generated/
+extracted/
+game-data/
+runtime-data/
+modules/
+*.dylib
+!scripts/**
+!src/**
+
+# User saves and memory-card data
+*.gci
+*.GCI
+*.raw
+*.RAW
+*.sav
+*.srm
+*.dolcard
+saves/
+SaveData/
+save/
+
+# Build products
+build/
+build-*/
+DerivedData/
+out/
+dist/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+*.xcarchive
+*.ipa
+*.dSYM
+*.dSYM.zip
+xcuserdata/
+*.xcuserstate
+
+# Logs and local diagnostics
+*.log
+logs/
+artifacts/runtime/
+artifacts/screenshots/
+!artifacts/.gitkeep
+
+# Signing material and secrets
+*.p12
+*.mobileprovision
+*.cer
+*.key
+*.pem
+*.provisionprofile
+.env
+.env.*
+!.env.example
+
+# Editor / tooling
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local dependency checkout working state that is large/vendor-heavy
+ref/ModernGekko/vendor/dolphin/
+ref/ModernGekko/build/
+ref/DolRecomp/build/
+ref/ModernGekko-Template/lib/
+ref/ModernGekko-Template/extracted/
+ref/ModernGekko-Template/build/
+ref/bellpad/
