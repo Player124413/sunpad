@@ -4,7 +4,7 @@ Last updated: 2026-08-05
 
 ## Open Stage 1 gaps
 
-1. **Input path not fully proven.** Keyboard mapping file exists and scripted keypresses were attempted, but a clean, reproducible advance from title to file-select/new-game still needs stronger evidence.
+1. **Input path not fully proven.** Keyboard mapping and `BackgroundInput=True` are configured; scripted Start/A injection has not yet cleanly advanced from intro cutscenes into file-select/new-game with definitive before/after proof. Physical GameController is the next best probe.
 2. **Playable hub / objective / save gates incomplete.**
 3. **Verbose runtime logging is sparse** after module load; most evidence currently comes from window title + screenshots.
 4. **SMC warning list present.** DolRecomp reported possible runtime code-patching ranges for GMSE01; no dedicated Sunshine patch set applied yet.

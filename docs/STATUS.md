@@ -42,19 +42,20 @@ Ahead-of-time statically recompiled game CPU code running through a Dolphin-deri
 5. **Gameplay evidence captured**:
    - Shine Sprite title/logo sequence
    - Opening airplane/map intro sequence
-   - Cabin cutscene with Mario and Toadsworth
+   - Cabin cutscene with Mario, Peach, and Toadsworth
+   - Isle Delfino welcome sequence with Piantas / statue / volcano backdrop
 6. Extended session held for tens of seconds without immediate crash while rendering intro/title content.
 7. Repository scaffold, docs, ignore rules, and Stage 1 helper scripts.
 
 ## What does not work / not yet proven
 
 - Full Stage 1 gate is not closed:
-  - Reliable controller/keyboard input acceptance through menus into Delfino Plaza not yet proven with clean before/after evidence.
-  - FLUDD / camera / objective completion not yet tested.
+  - Automated keyboard injection has **not** been proven to skip cutscenes into file-select/new-game reliably (BackgroundInput enabled; still needs better focus/input path or physical controller).
+  - Interactive Delfino Plaza control, FLUDD, camera, and objective completion not yet tested.
   - Save and reload not yet tested.
-  - Long-session stability not yet measured.
+  - Multi-hour soak not yet measured (multi-minute intro/title hold is proven).
 - No SunPad-native macOS/iOS application shell yet (still using moderngekko-run research launcher).
-- Sunshine-specific runtime patches not yet isolated; generic ModernGekko path currently reaches intro/title without custom game patches.
+- Sunshine-specific runtime patches not yet isolated; generic ModernGekko path currently reaches deep intro/title sequences without custom game patches.
 
 ## ReShine note
 

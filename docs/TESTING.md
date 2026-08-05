@@ -24,7 +24,7 @@ Last updated: 2026-08-05
 | Recompile main.dol, 0 unknown ops | Pass | 0 unknown; 221 chunks; recompile log |
 | Build host module | Pass | arm64 `gGMSE01_recomp.dylib` (~82 MB) |
 | Launch runtime | Pass | module loaded, Metal window |
-| Title / intro sequence | Pass | screenshots show Shine logo, map/airplane intro, Mario/Toadsworth cabin; window 30 FPS |
+| Title / intro sequence | Pass | Shine logo; map/airplane; cabin (Mario/Peach/Toadsworth); Isle Delfino welcome with Piantas; ~30 FPS Metal |
 | Controller/keyboard input | Partial | GCPadNew.ini present; scripted keypress attempt run; clean menu-advance proof still open |
 | Load playable area | Pending | |
 | Complete objective | Pending | |
@@ -53,3 +53,6 @@ file lib/ModernGekko/build/moderngekko-run build/modules/GMSE01/*/gGMSE01_recomp
 - `artifacts/runtime/2026-08-05-screen.png` — Shine Sprite title logo, 30 FPS window title
 - `artifacts/runtime/2026-08-05-title-1.png` — airplane map intro
 - `artifacts/runtime/2026-08-05-title-3.png` — Mario/Toadsworth cabin cutscene
+
+- `artifacts/runtime/2026-08-05-long-50.png` — Isle Delfino welcome / Piantas
+- `artifacts/runtime/2026-08-05-long-30.png` — cabin with Mario, Peach, Toadsworth

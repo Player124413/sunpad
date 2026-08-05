@@ -4,7 +4,7 @@ Last updated: 2026-08-05
 
 ## One-screen summary
 
-SunPad Stage 1 has a **working native Apple Silicon recompilation path** for Super Mario Sunshine USA (`GMSE01`). DolRecomp recompiles `main.dol` with zero unknown opcodes; ModernGekko packages an arm64 `gGMSE01_recomp.dylib` and launches it through Metal. Screenshot evidence shows the Shine logo, map/airplane intro, and Mario/Toadsworth cabin scene at 30 FPS. Full playable plaza/objective/save gates and the SunPad app shell remain.
+SunPad Stage 1 has a **working native Apple Silicon recompilation path** for Super Mario Sunshine USA (`GMSE01`). DolRecomp recompiles `main.dol` with zero unknown opcodes; ModernGekko packages an arm64 `gGMSE01_recomp.dylib` and launches it through Metal. Screenshot evidence shows the Shine logo, map/airplane intro, cabin cutscenes (Mario/Peach/Toadsworth), and the Isle Delfino welcome sequence at 30 FPS. Full playable plaza/objective/save gates and the SunPad app shell remain.
 
 ## What works
 
@@ -44,3 +44,11 @@ Controller config currently at:
 
 - Commit ISO, extracted FS, generated C/module binaries, or saves.
 - Claim full decompilation or complete playability yet.
+
+
+## Input notes
+
+- ModernGekko user config: `~/.local/share/moderngekko/Config/`
+- `GCPadNew.ini` keyboard map present (A=`X`, Start=Return, WASD, arrows, Q/E).
+- `Dolphin.ini` has `BackgroundInput = True` for automation experiments.
+- Reliable automated skip-to-file-select is still open; prefer a physical GameController next.
