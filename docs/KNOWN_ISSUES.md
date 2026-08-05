@@ -2,14 +2,19 @@
 
 Last updated: 2026-08-05
 
-## Blockers
+## Open Stage 1 gaps
 
-1. **Stage 1 recompilation not yet proven.** Tools are checked out and the compiler check passes, but Sunshine has not yet been extracted/recompiled/launched successfully in this workspace.
-2. **No published ReShine source.** Sunshine-specific private patches, if any, are not available for direct reuse.
+1. **Input path not fully proven.** Keyboard mapping file exists and scripted keypresses were attempted, but a clean, reproducible advance from title to file-select/new-game still needs stronger evidence.
+2. **Playable hub / objective / save gates incomplete.**
+3. **Verbose runtime logging is sparse** after module load; most evidence currently comes from window title + screenshots.
+4. **SMC warning list present.** DolRecomp reported possible runtime code-patching ranges for GMSE01; no dedicated Sunshine patch set applied yet.
 
-## Non-blocking observations
+## Resolved / non-blocking observations
 
-- ModernGekko-Template’s `lib/` symlinks must resolve to sibling `ref/ModernGekko` and `ref/DolRecomp` checkouts (relative path `../../...` from the template directory).
-- ModernGekko requires substantial dolphin Externals before a full runtime build.
-- Matching decompilation (`doldecomp/sms`) is incomplete and not the product runtime.
-- Controller configuration in ModernGekko is file-based (`GCPadNew.ini`), not an in-app UI.
+- ModernGekko first configure failed until dolphin Externals and vendored DolRecomp submodule were initialized.
+- Module C compile is slow at `-O2` (221 ~1 MB chunks); first build took on the order of ~15 minutes on this machine.
+- Early short launches that appeared to "exit immediately" were caused by aggressive process termination during automation, not by a hard boot crash; longer supervised runs held intro/title rendering.
+
+## Product gaps (later stages)
+
+- No SunPad-native menus, disc import UI, or iOS/iPad targets yet.

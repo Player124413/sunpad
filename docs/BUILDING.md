@@ -4,32 +4,35 @@ Last updated: 2026-08-05
 
 ## Prerequisites
 
-Apple Silicon Mac with:
+Apple Silicon Mac with Xcode, CMake, Ninja, pkg-config, Git, Python 3, and a legally obtained Super Mario Sunshine USA ISO (`GMSE01`).
 
-- Xcode 26.x + command-line tools
-- Homebrew packages: `cmake`, `ninja`, `pkg-config`, `git`
-- Python 3
-- A legally obtained Super Mario Sunshine USA ISO (`GMSE01`)
-
-## Stage 1: ModernGekko-Template reproduction
+## Stage 1 reproduction (current proven path)
 
 ```sh
-# from repository root
 cd ref/ModernGekko-Template
-# lib/ModernGekko and lib/DolRecomp should point at sibling clones
+# lib/ModernGekko -> ../../ModernGekko
+# lib/DolRecomp -> ../../DolRecomp
 make check FETCH=0
-make tools
-make extract ISO="../../Super Mario Sunshine.iso"
-make recompile GAME=Super-Mario-Sunshine
-# later:
-# make run GAME=Super-Mario-Sunshine
+
+# Build tools (DolRecomp is quick; ModernGekko requires dolphin Externals)
+# If ModernGekko configure fails, init missing vendor/dolphin Externals submodules.
+cmake -S lib/ModernGekko -B lib/ModernGekko/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DENABLE_QT=OFF -DENABLE_TESTS=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_MGBA=OFF \
+  -DUSE_RETRO_ACHIEVEMENTS=OFF -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DUSE_UPNP=OFF
+ninja -C lib/ModernGekko/build moderngekko-port moderngekko-run -j8
+
+# Extract + package module
+./lib/DolRecomp/build/dolrecomp extract "../../Super Mario Sunshine.iso" extracted/Super-Mario-Sunshine
+./lib/ModernGekko/build/moderngekko-port build extracted/Super-Mario-Sunshine \
+  --backend c --toolchain clang --output build/modules
+
+# Run
+./lib/ModernGekko/build/moderngekko-run --game extracted/Super-Mario-Sunshine \
+  --module "$(cat build/modules/GMSE01/active-module.txt)" --graphics Metal
 ```
 
-Notes:
+Generated/extracted materials stay local and must not be committed.
 
-- Generated/extracted output stays under `ref/ModernGekko-Template/extracted/` and local module caches; do not commit it.
-- Controller input may require a Dolphin-style `GCPadNew.ini` in ModernGekko’s user config directory.
+## Product builds
 
-## Product builds (future stages)
-
-macOS/iOS/iPadOS product commands will be added after Stage 1 proves a runnable recompilation path.
+macOS/iOS/iPadOS product commands will be added in Stages 2–4.

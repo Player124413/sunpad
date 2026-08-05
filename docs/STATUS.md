@@ -2,88 +2,73 @@
 
 Last updated: 2026-08-05
 
-Current phase: **Stage 1 — research and reproduce Super Mario Sunshine static recompilation** on Apple Silicon macOS.
+Current phase: **Stage 1 nearly complete for boot/title** — Super Mario Sunshine AOT recompilation launches natively on Apple Silicon through ModernGekko/Metal and reaches the intro/title sequence. Stage 2 (SunPad macOS app shell) is next after controller/plaza gameplay verification.
 
 ## Confirmed local materials
 
-- [ref/bellpad](../ref/bellpad): BellPad Animal Crossing Apple-platform reference (primary UX/integration pattern source). Nested git checkout of `https://github.com/chrissotraidis/bellpad.git`.
-- [ref/Super Mario Sunshine.iso](../ref/Super%20Mario%20Sunshine.iso): local retail GameCube image, **not tracked by Git**.
-  - Disc ID: `GMSE01`
-  - Region: USA
-  - Revision: 0
-  - Title string: `Super Mario Sunshine`
+- Disc: `ref/Super Mario Sunshine.iso`
+  - Disc ID: `GMSE01` USA Rev 0
   - Size: 1,459,978,240 bytes
   - SHA-256: `67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d`
-- Public upstream clones under `ref/`:
-  - ExpansionPak/ModernGekko
-  - ExpansionPak/ModernGekko-Template
-  - ExpansionPak/DolRecomp
-  - ExpansionPak/RecompCore
-  - doldecomp/sms
-  - aharonahdoot/StrikersRecomp (adjacent worked example for the same toolchain family)
+- Public toolchain clones under `ref/` (pinned in DEPENDENCIES.md)
+- BellPad reference under `ref/bellpad`
 
-## Architecture stance (current)
+## Architecture stance
 
-SunPad targets **ahead-of-time static recompilation** of GameCube PowerPC CPU code via DolRecomp, executed through a Dolphin-derived **GameCube compatibility runtime** (ModernGekko / RecompCore lineage). This is **not** a claim that Super Mario Sunshine is fully decompiled, and it is **not** a pure high-level rewrite.
-
-Precise wording for public docs:
-
-> Ahead-of-time statically recompiled game CPU code running through a GameCube compatibility runtime.
+Ahead-of-time statically recompiled game CPU code running through a Dolphin-derived GameCube compatibility runtime (ModernGekko / RecompCore lineage). Not a full matching decompilation, and not a pure high-level rewrite. Product path must not depend on a runtime PowerPC JIT.
 
 ## Stage gates
 
 | Stage | Goal | Status |
 |---|---|---|
-| 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress** |
+| 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress — title/intro proven** |
 | 2 | Native Apple Silicon macOS `.app` proof | Not started |
-| 3 | Mobile-runtime hardening (no JIT / App Store-compatible AOT) | Not started |
-| 4 | iPhone + iPad apps, touch controls, lifecycle | Not started |
+| 3 | Mobile-runtime hardening | Not started |
+| 4 | iPhone + iPad apps | Not started |
 
 ## What works right now
 
-- Repository scaffold: `docs/`, `src/`, `scripts/`, `patches/`, `tests/`, `artifacts/`, root `.gitignore`.
-- Disc identity and hash recorded.
-- Public toolchain repositories cloned and revision-pinned in [DEPENDENCIES.md](DEPENDENCIES.md).
-- ModernGekko-Template wired to local ModernGekko + DolRecomp checkouts.
-- `make check` succeeds on Apple Silicon with AppleClang 21 / CMake / Ninja.
-- ModernGekko `vendor/dolphin` (RecompCore `moderngekko-vendor`) and essential Externals submodules initialized for macOS tooling.
-
-## What does not work yet
-
-- No successful Sunshine extract/recompile/module-build/run evidence yet.
-- No title-screen, controller, Delfino Plaza, save/reload, or extended-session proof.
-- No SunPad macOS/iOS application shell yet.
-- No Sunshine-specific runtime fixes isolated yet (unknown whether generic upstream tools suffice).
-
-## ReShine public evidence
-
-No public repository named “ReShine” for Super Mario Sunshine was found in the current GitHub ecosystem search. ModernGekko’s README credits **binsento** for a Super Mario Sunshine recomp in the Hall of Fame, but the actual Sunshine project sources, patches, mappings, and runtime deltas are **not published** in the repositories inspected so far. SunPad therefore treats ReShine as a reported private/community achievement and attempts to reproduce the behavior from public DolRecomp + ModernGekko tooling plus local diagnostics.
-
-## Next highest-priority task
-
-1. Build DolRecomp + ModernGekko tools on this host.
-2. Extract `GMSE01` with DolRecomp.
-3. Recompile `main.dol` and record unknown-instruction count.
-4. Compile the generated module and launch through `moderngekko-run`.
-5. Capture boot logs and determine the first divergence/crash point.
-
-See [HANDOFF.md](HANDOFF.md) for resume instructions.
-
-
-## Stage 1 live progress
-
-Recorded during 2026-08-05 Stage 1 reproduction:
-
-1. **Disc verified**: GMSE01 Rev0, SHA-256 `67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d`.
-2. **DolRecomp extract**: success to `ref/ModernGekko-Template/extracted/Super-Mario-Sunshine` (`sys/main.dol` present).
-3. **main.dol recompile**:
-   - text[0]: 2320 decoded, 0 unknown
-   - text[1]: 898736 decoded, 0 unknown
-   - total known instructions ≈ 899338 (+ embedded data)
+1. **Disc extract** via DolRecomp native GameCube extractor.
+2. **main.dol static recompilation** with **0 unknown instructions**:
+   - text0: 2320 decoded, 0 unknown
+   - text1: 898736 decoded, 0 unknown
    - 221 generated C chunks
-   - warning: possible runtime self-modifying / patching ranges listed in `generated_smc.txt` (138 lines)
-4. **ModernGekko tools**: `moderngekko-port` and `moderngekko-run` linked as Mach-O arm64.
-5. **Module compile**: `gGMSE01_recomp` CMake build started via `moderngekko-port build` (221 chunks + runtime glue). In progress at last handoff update.
-6. **Launch / title screen**: not yet attempted; blocked on module dylib completion.
+   - SMC/runtime-patch warning list produced (`generated_smc.txt`, 138 ranges)
+3. **Host module packaging**: `gGMSE01_recomp.dylib` built as **Mach-O arm64** (~82 MB).
+4. **Runtime launch**:
+   - `moderngekko-run` (Mach-O arm64) loads the module
+   - Metal graphics backend selected
+   - Window title reports `ModernGekko - Super Mario Sunshine [GMSE01] | 30.0 FPS`
+5. **Gameplay evidence captured**:
+   - Shine Sprite title/logo sequence
+   - Opening airplane/map intro sequence
+   - Cabin cutscene with Mario and Toadsworth
+6. Extended session held for tens of seconds without immediate crash while rendering intro/title content.
+7. Repository scaffold, docs, ignore rules, and Stage 1 helper scripts.
 
-Logs under `artifacts/runtime/` (local, gitignored contents).
+## What does not work / not yet proven
+
+- Full Stage 1 gate is not closed:
+  - Reliable controller/keyboard input acceptance through menus into Delfino Plaza not yet proven with clean before/after evidence.
+  - FLUDD / camera / objective completion not yet tested.
+  - Save and reload not yet tested.
+  - Long-session stability not yet measured.
+- No SunPad-native macOS/iOS application shell yet (still using moderngekko-run research launcher).
+- Sunshine-specific runtime patches not yet isolated; generic ModernGekko path currently reaches intro/title without custom game patches.
+
+## ReShine note
+
+No public ReShine repository was found. ModernGekko credits binsento for a Sunshine recomp, but sources/patches are not published. Current path is generic DolRecomp + ModernGekko reproduction from the local GMSE01 image.
+
+## Next highest-priority tasks
+
+1. Prove keyboard/GameController input from title into file select / new game.
+2. Reach Delfino Plaza (or equivalent playable hub), control Mario/FLUDD, complete one objective.
+3. Prove memory-card save/reload.
+4. Begin Stage 2 SunPad macOS `.app` shell using BellPad UX patterns while reusing the AOT module + runtime.
+
+## Evidence locations (local, gitignored)
+
+- Logs: `artifacts/runtime/2026-08-05-*.log`
+- Screenshots: `artifacts/runtime/2026-08-05-screen.png`, `title-*.png`
+- Module: `ref/ModernGekko-Template/build/modules/GMSE01/.../gGMSE01_recomp.dylib`
