@@ -10,7 +10,7 @@ This repository does **not** include Super Mario Sunshine, disc images, extracte
 
 | Target | Status |
 |---|---|
-| Stage 1 desktop recompilation (ModernGekko + DolRecomp) | **In progress** |
+| Stage 1 desktop recompilation (ModernGekko + DolRecomp) | **Title/intro proven on Apple Silicon** |
 | Apple Silicon macOS app | Not started |
 | iPhone / iPad | Not started |
 
@@ -18,9 +18,11 @@ As of the latest handoff:
 
 - Local development target disc: **GMSE01** (USA) Rev 0.
 - Public tooling cloned and pinned under `ref/`.
-- DolRecomp successfully extracted the disc and recompiled `main.dol` with **0 unknown instructions** (~901k decoded ops, 221 C chunks).
-- ModernGekko tools (`moderngekko-port`, `moderngekko-run`) build as native **arm64** executables.
-- Host module packaging for `gGMSE01_recomp` is underway; playable boot is not yet proven.
+- DolRecomp extracts the disc and recompiles `main.dol` with **0 unknown instructions** (~901k decoded ops, 221 C chunks).
+- ModernGekko builds native **arm64** `moderngekko-port` / `moderngekko-run`.
+- Packaged arm64 `gGMSE01_recomp.dylib` launches through Metal.
+- Screenshot evidence reaches the Shine logo, opening map/airplane sequence, Mario/Toadsworth cabin cutscene, and the "Nintendo Presents Super Mario Sunshine" title card at ~30 FPS.
+- Delfino Plaza gameplay, objective completion, and save/reload remain open Stage 1 gates.
 
 See [docs/STATUS.md](docs/STATUS.md) and [docs/HANDOFF.md](docs/HANDOFF.md).
 
