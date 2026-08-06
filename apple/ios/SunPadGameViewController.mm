@@ -35,8 +35,20 @@
     dispatch_source_t _controllerTimer;
 }
 
+- (BOOL)shouldAutorotate {
+    return YES;
+}
+
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations {
+    // Super Mario Sunshine is a landscape game; the overlay is designed for
+    // landscape like the BellPad reference (never portrait).
+    return UIInterfaceOrientationMaskLandscape;
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
+    NSLog(@"[SunPad] viewDidLoad bounds=%@ orientation=%ld",
+          NSStringFromCGRect(self.view.bounds), (long)UIDevice.currentDevice.orientation);
     self.view.backgroundColor = UIColor.blackColor;
 
     _gameView = [[SunPadMetalSurfaceView alloc] initWithFrame:self.view.bounds];
@@ -139,6 +151,10 @@
     CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
     layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * 2.0,
                                     CGRectGetHeight(_gameView.bounds) * 2.0);
+    NSLog(@"[SunPad] layout bounds=%@ game=%@ drawable=%@",
+          NSStringFromCGRect(self.view.bounds),
+          NSStringFromCGRect(_gameView.bounds),
+          NSStringFromCGSize(layer.drawableSize));
 }
 
 - (void)startGameIfProvisioned {

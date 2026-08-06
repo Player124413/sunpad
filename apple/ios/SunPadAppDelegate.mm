@@ -8,6 +8,14 @@
 
 @implementation SunPadAppDelegate
 
+- (UIInterfaceOrientationMask)application:(UIApplication *)application
+    supportedInterfaceOrientationsForWindow:(UIWindow *)window {
+    (void)application;
+    (void)window;
+    // Super Mario Sunshine is a landscape-only experience.
+    return UIInterfaceOrientationMaskLandscape;
+}
+
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     (void)application;

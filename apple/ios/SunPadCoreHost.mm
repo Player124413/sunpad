@@ -96,6 +96,13 @@ namespace fs = std::filesystem;
             return;
         }
 
+        // Apply the persisted render-resolution choice now that the runtime's
+        // config layers exist.
+        NSInteger savedScale =
+            [[NSUserDefaults standardUserDefaults] integerForKey:@"SunPadRenderScale"];
+        Config::SetCurrent(Config::GFX_EFB_SCALE,
+                           static_cast<int>(savedScale < 0 ? 0 : (savedScale > 4 ? 4 : savedScale)));
+
         // Open the input FIFO for writing (blocks until the runtime reads it).
         NSString *pipePath = [[userDirectory stringByAppendingPathComponent:@"Pipes"]
             stringByAppendingPathComponent:@"sunpad"];
@@ -171,9 +178,10 @@ namespace fs = std::filesystem;
 
 - (void)setRenderScale:(NSInteger)scale {
     NSInteger clamped = scale < 0 ? 0 : (scale > 4 ? 4 : scale);
+    if (!_running->load())
+        return; // Runtime not booted yet; the scale applies at boot.
     // Config::SetCurrent is mutex-protected and the video backend refreshes
-    // g_ActiveConfig on the next config callback. 0 leaves the runtime's
-    // default internal resolution (device-native upscale via the layer).
+    // g_ActiveConfig on the next config callback.
     Config::SetCurrent(Config::GFX_EFB_SCALE, static_cast<int>(clamped));
 }
 

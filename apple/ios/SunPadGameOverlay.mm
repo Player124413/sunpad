@@ -352,86 +352,94 @@
     if (@available(iOS 11.0, *)) {
         safe = UIEdgeInsetsInsetRect(safe, self.safeAreaInsets);
     }
+    // BellPad's landscape layout math: scale to a reference 800x380 area on
+    // phones and a fixed larger set on iPads (width >= 1000).
+    BOOL pad = self.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPad &&
+               safe.size.width >= 1000.0;
+    CGFloat baseScale = pad ? 1.0
+                            : std::min<CGFloat>(1.0, std::min(safe.size.width / 800.0,
+                                                              safe.size.height / 380.0));
+    CGFloat controlScale = [SunPadSettings sharedSettings].controlSizeScale;
+    CGFloat scale = baseScale * controlScale;
+    CGFloat margin = pad ? 34.0 : std::max<CGFloat>(8.0, 18.0 * baseScale);
+    CGFloat stick = (pad ? 172.0 : 126.0 * baseScale) * controlScale;
+    CGFloat small = (pad ? 62.0 : 46.0 * baseScale) * controlScale;
+    CGFloat medium = (pad ? 76.0 : 58.0 * baseScale) * controlScale;
+    CGFloat large = (pad ? 104.0 : 78.0 * baseScale) * controlScale;
 
-    CGFloat margin = 16.0;
-    CGFloat scale = [SunPadSettings sharedSettings].controlSizeScale;
-    _menuButton.frame = CGRectMake(CGRectGetMaxX(safe) - margin - 44.0,
-                                   CGRectGetMinY(safe) + margin, 44.0, 44.0);
-
-    CGFloat stickSize = 128.0 * scale;
     [self placeControl:_moveStick
-                  defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin,
-                                          CGRectGetMaxY(safe) - margin - stickSize,
-                                          stickSize, stickSize)
-                   identifier:@"move"];
+          defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin,
+                                  CGRectGetMaxY(safe) - stick - margin, stick, stick)
+            identifier:@"move"];
+    CGFloat camera = (pad ? 112.0 : 86.0 * baseScale) * controlScale;
     [self placeControl:_cStick
-                  defaultFrame:CGRectMake(CGRectGetMidX(safe) - stickSize * 0.5,
-                                          CGRectGetMaxY(safe) - margin - stickSize,
-                                          stickSize, stickSize)
-                   identifier:@"c"];
+          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - camera,
+                                  CGRectGetMaxY(safe) - margin - camera, camera, camera)
+            identifier:@"c"];
 
-    CGFloat buttonSize = 56.0 * scale;
-    CGFloat smallSize = 44.0 * scale;
-    CGFloat gap = 8.0 * scale;
     SunPadGameButton *a = [self buttonWithMask:SunPadButtonA];
     SunPadGameButton *b = [self buttonWithMask:SunPadButtonB];
     SunPadGameButton *x = [self buttonWithMask:SunPadButtonX];
     SunPadGameButton *y = [self buttonWithMask:SunPadButtonY];
-    SunPadGameButton *z = [self buttonWithMask:SunPadButtonZ];
-    SunPadGameButton *start = [self buttonWithMask:SunPadButtonStart];
-    SunPadGameButton *l = [self buttonWithMask:SunPadButtonL];
-    SunPadGameButton *r = [self buttonWithMask:SunPadButtonR];
-    SunPadGameButton *du = [self buttonWithMask:SunPadButtonDpadUp];
-    SunPadGameButton *dd = [self buttonWithMask:SunPadButtonDpadDown];
-    SunPadGameButton *dl = [self buttonWithMask:SunPadButtonDpadLeft];
-    SunPadGameButton *dr = [self buttonWithMask:SunPadButtonDpadRight];
-
-    CGFloat rightX = CGRectGetMaxX(safe) - margin - buttonSize;
-    CGFloat rightY = CGRectGetMaxY(safe) - margin - buttonSize;
-    [self placeControl:a defaultFrame:CGRectMake(rightX, rightY, buttonSize, buttonSize) identifier:@"A"];
+    [self placeControl:a
+          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - large,
+                                  CGRectGetMaxY(safe) - margin - camera - large - 18.0 * scale,
+                                  large, large)
+            identifier:@"A"];
     [self placeControl:b
-          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - buttonSize - gap,
-                                  CGRectGetMidY(a.frame) + 8.0, buttonSize, buttonSize)
+          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - medium - 12.0 * scale,
+                                  CGRectGetMidY(a.frame) + 8.0, medium, medium)
             identifier:@"B"];
     [self placeControl:x
-          defaultFrame:CGRectMake(CGRectGetMidX(a.frame) - smallSize * 0.5,
-                                  CGRectGetMinY(a.frame) - smallSize - 10.0 * scale,
-                                  smallSize, smallSize)
+          defaultFrame:CGRectMake(CGRectGetMidX(a.frame) - small * 0.5,
+                                  CGRectGetMinY(a.frame) - small - 10.0 * scale,
+                                  small, small)
             identifier:@"X"];
     [self placeControl:y
-          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - smallSize - 8.0 * scale,
-                                  CGRectGetMinY(a.frame) - smallSize + 8.0,
-                                  smallSize, smallSize)
+          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - small - 8.0 * scale,
+                                  CGRectGetMinY(a.frame) - small + 8.0, small, small)
             identifier:@"Y"];
-    [self placeControl:z
-          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - smallSize - 8.0 * scale,
-                                  CGRectGetMaxY(a.frame) - smallSize, smallSize, smallSize)
+
+    CGFloat shoulderWidth = (pad ? 132.0 : 94.0 * baseScale) * controlScale;
+    CGFloat shoulderY = CGRectGetMinY(safe) + (pad ? 92.0 : 68.0 * baseScale);
+    [self placeControl:[self buttonWithMask:SunPadButtonL]
+          defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin, shoulderY, shoulderWidth, small)
+            identifier:@"L"];
+    [self placeControl:[self buttonWithMask:SunPadButtonR]
+          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth, shoulderY,
+                                  shoulderWidth, small)
+            identifier:@"R"];
+    [self placeControl:[self buttonWithMask:SunPadButtonZ]
+          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth - small - 12.0 * scale,
+                                  shoulderY, small, small)
             identifier:@"Z"];
-    [self placeControl:start
-          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - smallSize * 0.5,
-                                  CGRectGetMaxY(a.frame) + 10.0 * scale,
-                                  smallSize, 30.0 * scale)
+    CGFloat startWidth = (pad ? 116.0 : 92.0 * baseScale) * controlScale;
+    [self placeControl:[self buttonWithMask:SunPadButtonStart]
+          defaultFrame:CGRectMake(CGRectGetMidX(safe) - startWidth * 0.5,
+                                  CGRectGetMinY(safe) + margin, startWidth, small)
             identifier:@"Start"];
 
-    CGFloat shoulderY = CGRectGetMinY(safe) + margin + 44.0 + 12.0;
-    CGFloat shoulderWidth = 74.0 * scale;
-    [self placeControl:l
-          defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin, shoulderY,
-                                  shoulderWidth, 36.0 * scale)
-            identifier:@"L"];
-    [self placeControl:r
-          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth, shoulderY,
-                                  shoulderWidth, 36.0 * scale)
-            identifier:@"R"];
+    CGFloat d = (pad ? 48.0 : 36.0 * baseScale) * controlScale;
+    CGFloat dx = CGRectGetMaxX(_moveStick.frame) + (pad ? 34.0 : 18.0 * scale);
+    CGFloat dy = CGRectGetMidY(_moveStick.frame) - d * 0.5;
+    [self placeControl:[self buttonWithMask:SunPadButtonDpadUp]
+          defaultFrame:CGRectMake(dx + d, dy - d, d, d) identifier:@"D_U"];
+    [self placeControl:[self buttonWithMask:SunPadButtonDpadDown]
+          defaultFrame:CGRectMake(dx + d, dy + d, d, d) identifier:@"D_D"];
+    [self placeControl:[self buttonWithMask:SunPadButtonDpadLeft]
+          defaultFrame:CGRectMake(dx, dy, d, d) identifier:@"D_L"];
+    [self placeControl:[self buttonWithMask:SunPadButtonDpadRight]
+          defaultFrame:CGRectMake(dx + 2.0 * d, dy, d, d) identifier:@"D_R"];
 
-    // D-pad cluster on the left, above the main stick.
-    CGFloat dsize = 42.0 * scale;
-    CGFloat dpadX = CGRectGetMinX(safe) + margin + stickSize * 0.5 - dsize * 1.5;
-    CGFloat dpadY = CGRectGetMaxY(safe) - margin - stickSize - 12.0 * scale - dsize * 3.0;
-    [self placeControl:du defaultFrame:CGRectMake(dpadX + dsize * 0.5 - dsize * 0.5, dpadY, dsize, dsize) identifier:@"D_U"];
-    [self placeControl:dd defaultFrame:CGRectMake(dpadX + dsize * 0.5 - dsize * 0.5, dpadY + dsize * 2.0, dsize, dsize) identifier:@"D_D"];
-    [self placeControl:dl defaultFrame:CGRectMake(dpadX, dpadY + dsize, dsize, dsize) identifier:@"D_L"];
-    [self placeControl:dr defaultFrame:CGRectMake(dpadX + dsize * 2.0, dpadY + dsize, dsize, dsize) identifier:@"D_R"];
+    for (SunPadGameButton *button in _buttons) {
+        button.layer.cornerRadius =
+            std::min(button.bounds.size.width, button.bounds.size.height) * 0.5;
+    }
+
+    CGFloat settingsSide = 40.0;
+    _menuButton.frame = CGRectMake(CGRectGetMaxX(safe) - settingsSide,
+                                   CGRectGetMinY(safe) + 8.0,
+                                   settingsSide, settingsSide);
 
     CGFloat alpha = _touchControlsHidden ? 0.0 : [SunPadSettings sharedSettings].controlOpacity;
     for (UIView *view in self.subviews) {
