@@ -90,14 +90,11 @@ artifacts/screenshots/
 *.swp
 *~
 
-# Local dependency checkout working state that is large/vendor-heavy
-ref/ModernGekko/vendor/dolphin/
-ref/ModernGekko/build/
-ref/DolRecomp/build/
-ref/ModernGekko-Template/lib/
-ref/ModernGekko-Template/extracted/
-ref/ModernGekko-Template/build/
-ref/bellpad/
+# Local dependency checkouts (nested Git repos) and user-supplied disc images.
+# Each checkout is a nested Git repository, so committing would create broken
+# gitlinks or vendor bloat. The tree is reproducible from the pinned revisions
+# in docs/DEPENDENCIES.md.
+ref/
 __pycache__/
 
 # Local iOS provisioning (build products + host paths)

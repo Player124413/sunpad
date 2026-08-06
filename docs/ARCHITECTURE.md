@@ -27,13 +27,14 @@ User-owned GMSE01 disc image
 sunpad/
   docs/                 first-class documentation
   scripts/              build/test helpers (iOS toolchain, core build, provisioning)
-  patches/              SunPad-owned patches (generic vs Sunshine-specific)
+  patches/              SunPad-owned patches (generic vs Sunshine-specific) — see patches/README.md
   apple/
     shared/             SunPadSettings, SunPadInputState (macOS+iOS)
     ios/                UIKit app, game overlay, core host, Xcode assets
     macos/              (future macOS app)
   SunPad.xcodeproj      universal iPhone/iPad target
-  ref/                  external clones + local disc (mostly untracked/local)
+  ref/                  external clones + local disc (gitignored wholesale; see docs/DEPENDENCIES.md)
+  tests/                test index and harness pointers (see docs/TESTING.md)
   artifacts/            local logs/screenshots (gitignored contents)
 ```
 
