@@ -21,6 +21,9 @@ Last updated: 2026-08-06
    input probes use the pipe device.
 7. **Interpreter fallback speed** — un-recompiled/SMC regions fall back to the
    interpreter (no JIT by design); verify in demanding scenes.
+8. **Physical-device verification pending** — landscape rotation, audio
+   session behavior, controller auto-hide, and Metal performance are validated
+   on Simulators only so far.
 
 ## Desktop Stage 1 gaps
 

@@ -61,6 +61,14 @@ code-generating loader).
 9. **On-device game-data import** is implemented and verified: document
    picker → GMSE01 validation → private retain → on-device extraction
    (174 files, matches the desktop tree) → boot from the imported image.
+10. **Landscape-only presentation** with a BellPad-style control layout
+    (move stick, D-pad, camera stick, A/B/X/Y, L/R/Z, START, three-dot menu);
+    verified on iPhone and iPad simulators.
+11. **BellPad-style input merging**: touch + GameController through one
+    thread-safe normalized GameCube state (ORed buttons with edge latching,
+    strongest-wins sticks, max analog triggers / FLUDD pressure).
+12. **iOS audio**: native AVAudioEngine backend feeding the Dolphin Mixer at
+    48 kHz (audible on the Simulator).
 
 ### Desktop (previously proven)
 

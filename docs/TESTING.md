@@ -28,6 +28,10 @@ Last updated: 2026-08-06
 | No runtime JIT | Pass | JitArm64 fallback disabled; generic vertex loader; no w^x writes |
 | On-device import+extract | Pass | Picker validation (magic+GMSE01), private retain, 174-file extraction matches desktop tree |
 | Boot from imported image | Pass | iPhone Simulator boots intro from on-device-extracted root and advances on input |
+| Landscape presentation | Pass | App is landscape-only; BellPad-style layout verified on iPhone and iPad Simulators |
+| Merged input + D-pad | Pass | Mixer (OR buttons/latching, strongest sticks, max triggers); D-pad renders; input advances the game |
+| iOS audio backend | Pass | AVAudioEngine + AVAudioSourceNode at 48 kHz; no audio-related crash |
+| Startup stability | Pass | Render-scale pre-boot crash fixed; app stays alive across relaunches |
 
 Screenshots: `artifacts/screenshots/2026-08-06/`.
 
