@@ -10,9 +10,11 @@ This repository does **not** include Super Mario Sunshine, disc images, extracte
 
 | Target | Status |
 |---|---|
-| Stage 1 desktop recompilation (ModernGekko + DolRecomp) | **Title/intro proven on Apple Silicon** |
-| Apple Silicon macOS app | Not started |
-| iPhone / iPad | Not started |
+| Stage 1 desktop recompilation (ModernGekko + DolRecomp) | **Title/intro/input proven on Apple Silicon** |
+| Apple Silicon macOS app | Not started (moderngekko-run is the current shell) |
+| iPhone Simulator | **Game boots, renders, and responds to input** |
+| iPad Simulator | **Game boots to the title screen** |
+| Physical iPhone / iPad | Not yet (import flow + signing pending) |
 
 As of the latest handoff:
 
@@ -20,7 +22,10 @@ As of the latest handoff:
 - Public tooling cloned and pinned under `ref/`.
 - DolRecomp extracts the disc and recompiles `main.dol` with **0 unknown instructions** (~901k decoded ops, 221 C chunks).
 - ModernGekko builds native **arm64** `moderngekko-port` / `moderngekko-run`.
-- Packaged arm64 `gGMSE01_recomp.dylib` launches through Metal.
+- The iOS/iPadOS app statically links the ModernGekko core and runs the game
+  on the Simulator with Dolphin's Metal backend (no runtime JIT). Evidence:
+  Super Mario Sunshine title screen and gameplay rendering on iPhone 17 Pro
+  and iPad Pro 13-inch simulators; pipe input advances the game.
 - Screenshot evidence reaches the Shine logo, opening map/airplane sequence, Mario/Toadsworth cabin cutscene, and the "Nintendo Presents Super Mario Sunshine" title card at ~30 FPS.
 - Delfino Plaza gameplay, objective completion, and save/reload remain open Stage 1 gates.
 
@@ -74,6 +79,23 @@ make check FETCH=0
 
 Exact commands, pins, and known issues: [docs/BUILDING.md](docs/BUILDING.md), [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md), [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
 
+## iOS / iPadOS build (Simulator)
+
+```sh
+./scripts/ios-build-core.sh   # builds the iOS Simulator core + GMSE01 module and provisions the app
+xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath /tmp/sunpad-ddp build
+xcrun simctl boot "iPhone 17 Pro"
+xcrun simctl install "iPhone 17 Pro" /tmp/sunpad-ddp/Build/Products/Debug-iphonesimulator/SunPad.app
+xcrun simctl launch "iPhone 17 Pro" com.sunpad.SunPad
+```
+
+Run one Simulator at a time. The dev build reads a local provisioning
+manifest (`apple/ios/Provisioned/dev-config.plist`, gitignored) that points at
+the extracted game tree and the Simulator module; the document-picker import
+flow is the next milestone.
+
 ## Documentation
 
 - [STATUS](docs/STATUS.md)
@@ -88,9 +110,14 @@ Exact commands, pins, and known issues: [docs/BUILDING.md](docs/BUILDING.md), [d
 - [HANDOFF](docs/HANDOFF.md)
 - [LEGAL_AND_PROVENANCE](docs/LEGAL_AND_PROVENANCE.md)
 
-## Controls (planned)
+## Controls
 
-GameCube controls will be mapped for macOS keyboard/GameController and mobile touch layouts inspired by BellPad, adapted for Sunshine (movement, C-stick camera, A/B/X/Y/Z/Start/L/R, analog triggers / FLUDD pressure).
+GameCube controls are implemented in the iOS/iPadOS touch layout inspired by
+BellPad and adapted for Sunshine: main stick (movement), C-stick (camera),
+A/B/X/Y/Z/Start/L/R, plus GameController input that auto-hides the touch
+controls. The three-dot menu offers Native/1×/2×/3×/4× render resolution,
+touch-control size/opacity/hide/edit-layout settings, and reset. Analog
+triggers (FLUDD pressure) and per-control layout persistence are in progress.
 
 ## License / third parties
 

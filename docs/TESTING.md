@@ -1,58 +1,61 @@
 # Testing
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Principles
 
 - Compilation success is not gameplay success.
-- Capture dated evidence: target, OS, build config, git revision, game version, commands, logs, screenshots, result, remaining defects.
+- Capture dated evidence: target, OS, build config, git revision, game
+  version, commands, logs, screenshots, result, remaining defects.
+- Run only one Simulator at a time on this machine.
 
 ## Game under test
 
-- Disc: Super Mario Sunshine USA
-- ID: `GMSE01` Rev 0
+- Disc: Super Mario Sunshine USA, `GMSE01` Rev 0
 - SHA-256: `67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d`
 
-## Stage 1 checklist
+## iOS / iPadOS evidence (2026-08-06)
+
+| Check | Result | Evidence |
+|---|---|---|
+| iOS Simulator core build (arm64, IOSSIMULATOR) | Pass | `ref/ModernGekko/build-ios3`, `vtool` shows platform IOSSIMULATOR minos 16.0 |
+| GMSE01 simulator module build | Pass | `/tmp/module-ios2/gGMSE01_recomp.dylib` (platform IOSSIMULATOR) |
+| App link (static core + Metal + GameController) | Pass | `xcodebuild ... BUILD SUCCEEDED` |
+| iPhone 17 Pro Simulator boot | Pass | title screen rendered; process stable (PID held) |
+| iPhone attract/demo + gameplay rendering | Pass | LIFE/WATER HUD + coins rendered after input |
+| iPhone input through pipe device | Pass | START presses advanced the game state |
+| iPad Pro 13-inch Simulator boot | Pass | "Welcome to Isle Delfino" splash → title screen |
+| No runtime JIT | Pass | JitArm64 fallback disabled; generic vertex loader; no w^x writes |
+
+Screenshots: `artifacts/screenshots/2026-08-06/`.
+
+Commands used:
+
+```sh
+./scripts/ios-build-core.sh
+xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath /tmp/sunpad-ddp build
+xcrun simctl boot "iPhone 17 Pro"
+xcrun simctl install "iPhone 17 Pro" /tmp/sunpad-ddp/Build/Products/Debug-iphonesimulator/SunPad.app
+xcrun simctl launch "iPhone 17 Pro" com.sunpad.SunPad
+xcrun simctl io "iPhone 17 Pro" screenshot /tmp/sunpad-core.png
+# input probe (host writes to the app's pipe device):
+CONTAINER=$(xcrun simctl get_app_container "iPhone 17 Pro" com.sunpad.SunPad data)
+python3 scripts/gcpipe.py --pipe "$CONTAINER/Library/Application Support/SunPad/Pipes/sunpad" --tap START
+```
+
+## Stage 1 desktop checklist
 
 | Check | Status | Evidence |
 |---|---|---|
-| Disc identity/hash | Pass | `file` + Python header/hash |
-| Toolchain check | Pass | `make check` AppleClang 21 arm64 |
-| Build DolRecomp/ModernGekko | Pass | arm64 `dolrecomp`, `moderngekko-port`, `moderngekko-run` |
+| Disc identity/hash | Pass | `file` + SHA-256 |
 | Extract disc | Pass | `dolrecomp extract` → `sys/main.dol` |
-| Recompile main.dol, 0 unknown ops | Pass | 0 unknown; 221 chunks; recompile log |
-| Build host module | Pass | arm64 `gGMSE01_recomp.dylib` (~82 MB) |
+| Recompile main.dol, 0 unknown ops | Pass | 0 unknown; 221 chunks |
+| Host module | Pass | arm64 `gGMSE01_recomp.dylib` |
 | Launch runtime | Pass | module loaded, Metal window |
-| Title / intro sequence | Pass | Shine logo; map/airplane; cabin (Mario/Peach/Toadsworth); Isle Delfino welcome with Piantas; ~30 FPS Metal |
-| Controller/keyboard input | Partial | GCPadNew.ini present; scripted keypress attempt run; clean menu-advance proof still open |
-| Load playable area | Pending | |
-| Complete objective | Pending | |
-| Save/reload | Pending | |
-| Extended session | Partial | multi-tens-of-seconds intro/title hold observed; multi-hour not done |
-
-## Representative commands used
-
-```sh
-cd ref/ModernGekko-Template
-./lib/DolRecomp/build/dolrecomp extract "../../Super Mario Sunshine.iso" extracted/Super-Mario-Sunshine
-./lib/ModernGekko/build/moderngekko-port build extracted/Super-Mario-Sunshine --backend c --toolchain clang --output build/modules
-./lib/ModernGekko/build/moderngekko-run --game extracted/Super-Mario-Sunshine \
-  --module "$(cat build/modules/GMSE01/active-module.txt)" --graphics Metal
-file lib/ModernGekko/build/moderngekko-run build/modules/GMSE01/*/gGMSE01_recomp.dylib
-```
-
-## Architecture evidence
-
-- `moderngekko-run`: Mach-O 64-bit executable arm64
-- `gGMSE01_recomp.dylib`: Mach-O 64-bit dynamically linked shared library arm64
-- Host: Apple Silicon macOS 26.5 / Xcode 26.6
-
-## Screenshot evidence (local)
-
-- `artifacts/runtime/2026-08-05-screen.png` — Shine Sprite title logo, 30 FPS window title
-- `artifacts/runtime/2026-08-05-title-1.png` — airplane map intro
-- `artifacts/runtime/2026-08-05-title-3.png` — Mario/Toadsworth cabin cutscene
-
-- `artifacts/runtime/2026-08-05-long-50.png` — Isle Delfino welcome / Piantas
-- `artifacts/runtime/2026-08-05-long-30.png` — cabin with Mario, Peach, Toadsworth
+| Title / intro | Pass | Shine logo, cabin, Isle Delfino; 30 FPS |
+| Controller/keyboard input | Partial | pipe input proven; interactive acceptance open |
+| Load playable area | Partial | airstrip gameplay reached on desktop; plaza pending |
+| Objective / save / reload | Pending | |
+| Extended session | Partial | multi-minute holds; multi-hour not done |

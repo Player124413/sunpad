@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Goal architecture
 
@@ -16,51 +16,59 @@ User-owned GMSE01 disc image
         ▼
  ModernGekko / shared GameCube compatibility runtime
         │
-        ├── macOS app shell (Stage 2)
-        ├── iOS app shell (Stage 4)
-        └── iPadOS app shell (Stage 4)
+        ├── macOS app shell (Stage 2, pending)
+        ├── iOS app shell (SunPad.xcodeproj)
+        └── iPadOS app shell (same universal target)
 ```
 
-## Planned repository layout
+## Repository layout
 
 ```text
 sunpad/
   docs/                 first-class documentation
-  scripts/              reproducible build/test helpers
+  scripts/              build/test helpers (iOS toolchain, core build, provisioning)
   patches/              SunPad-owned patches (generic vs Sunshine-specific)
-  src/
-    runtime/            shared GameCube runtime adaptations
-    apple/              shared Apple platform layer
-    macos/              macOS application (future)
-    ios/                iOS/iPadOS application (future)
-  tests/
-  artifacts/            local logs/screenshots (gitignored contents)
+  apple/
+    shared/             SunPadSettings, SunPadInputState (macOS+iOS)
+    ios/                UIKit app, game overlay, core host, Xcode assets
+    macos/              (future macOS app)
+  SunPad.xcodeproj      universal iPhone/iPad target
   ref/                  external clones + local disc (mostly untracked/local)
+  artifacts/            local logs/screenshots (gitignored contents)
+```
+
+## CPU execution model
+
+- Preferred: AOT statically recompiled guest code module (DolRecomp C →
+  host-native module).
+- Allowed: Dolphin-derived compatibility services for hardware/OS.
+- Forbidden on Apple platforms: runtime PowerPC JIT. On iOS the static-recomp
+  fallback uses the interpreter, and the generic software vertex loader
+  replaces Dolphin's ARM64 code-generating loader.
+
+## iOS host layering
+
+```text
+SunPadGameViewController
+  ├── SunPadMetalSurfaceView (CAMetalLayer)
+  │     └── Dolphin Metal backend renders here
+  ├── SunPadCoreHost (background game thread)
+  │     ├── moderngekko::Runtime (RuntimeConfig.render_surface = layer)
+  │     └── pipe input bridge → Dolphin Pipes device
+  └── SunPadGameOverlay (three-dot menu, render scale, touch controls)
+        └── SunPadInputState (touch + GameController merged)
 ```
 
 ## Separation rules
 
-1. **Generated recomp output** never enters Git.
-2. **Sunshine-specific fixes** live in clearly named patch/docs areas, not hidden inside generic Apple UI code.
-3. **Shared runtime** is separate from platform lifecycle/UI.
-4. **BellPad** is a pattern reference, not a code base to fork wholesale for Animal Crossing logic.
+1. Generated recomp output never enters Git (`ref/**/generated/`, modules,
+   `apple/ios/Provisioned/`).
+2. Sunshine-specific fixes live in clearly named patch/docs areas.
+3. Shared runtime is separate from platform lifecycle/UI.
+4. BellPad is a pattern reference, not a fork source.
 
-## CPU execution model
+## iOS port deltas (in ref/ModernGekko)
 
-- Preferred: AOT statically recompiled guest code module.
-- Allowed: Dolphin-derived compatibility services for hardware/OS.
-- Forbidden for product path: runtime PowerPC JIT on Apple platforms.
-
-## Stage-specific notes
-
-### Stage 1
-Desktop reproduction using upstream ModernGekko-Template with local ISO.
-
-### Stage 2
-Wrap/replace the launcher with a polished native macOS app experience inspired by BellPad menus/controllers while still using AOT module + compatibility runtime.
-
-### Stage 3
-Audit and remove desktop-only assumptions that break iOS/iPadOS (dynamic module policy, paths, window system, executable memory, OpenGL-only paths). Prefer static link of generated code or another App Store-compatible AOT strategy.
-
-### Stage 4
-Shared runtime + Metal + GameController + Sunshine-specific touch controls.
+- `PlatformIOS.mm` (CAMetalLayer platform), Metal backend AppKit guards,
+  cubeb/libusb/hidapi/Quartz/watcher/AGL gating, GCAdapter + FilesystemWatcher
+  stubs, JIT fallback off, software vertex loader, translocated-path guard.

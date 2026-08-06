@@ -1,8 +1,13 @@
 # Status
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
-Current phase: **Stage 1 nearly complete for boot/title** — Super Mario Sunshine AOT recompilation launches natively on Apple Silicon through ModernGekko/Metal and reaches the intro/title sequence. Stage 2 (SunPad macOS app shell) is next after controller/plaza gameplay verification.
+Current phase: **SunPad now runs Super Mario Sunshine on the iPhone and iPad
+simulators** as an ahead-of-time statically recompiled game module through the
+Dolphin-derived compatibility runtime (ModernGekko) with the Metal backend.
+The iOS/iPadOS app has the BellPad-inspired three-dot menu, render-resolution
+choices, and Sunshine touch controls. The remaining desktop gameplay gates
+(plaza/objective/save) and the native macOS app shell are next.
 
 ## Confirmed local materials
 
@@ -15,61 +20,79 @@ Current phase: **Stage 1 nearly complete for boot/title** — Super Mario Sunshi
 
 ## Architecture stance
 
-Ahead-of-time statically recompiled game CPU code running through a Dolphin-derived GameCube compatibility runtime (ModernGekko / RecompCore lineage). Not a full matching decompilation, and not a pure high-level rewrite. Product path must not depend on a runtime PowerPC JIT.
+Ahead-of-time statically recompiled game CPU code running through a
+Dolphin-derived GameCube compatibility runtime (ModernGekko / RecompCore
+lineage). Not a matching decompilation, not a pure high-level rewrite, and on
+Apple platforms no runtime PowerPC JIT (the static-recomp fallback uses the
+interpreter, and the generic vertex loader replaces Dolphin's ARM64
+code-generating loader).
 
 ## Stage gates
 
 | Stage | Goal | Status |
 |---|---|---|
-| 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress — title/intro proven** |
-| 2 | Native Apple Silicon macOS `.app` proof | Not started |
-| 3 | Mobile-runtime hardening | Not started |
-| 4 | iPhone + iPad apps | Not started |
+| 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress — title/intro/input proven; plaza/objective/save open** |
+| 2 | Native Apple Silicon macOS `.app` proof | Not started (moderngekko-run is the current desktop shell) |
+| 3 | Mobile-runtime hardening | **In progress — iOS Simulator core built; JIT disabled; interpreter + software-vertex fallbacks** |
+| 4 | iPhone + iPad apps | **In progress — GMSE01 boots to title and renders gameplay on iPhone and iPad simulators** |
 
 ## What works right now
 
-1. **Disc extract** via DolRecomp native GameCube extractor.
-2. **main.dol static recompilation** with **0 unknown instructions**:
-   - text0: 2320 decoded, 0 unknown
-   - text1: 898736 decoded, 0 unknown
-   - 221 generated C chunks
-   - SMC/runtime-patch warning list produced (`generated_smc.txt`, 138 ranges)
-3. **Host module packaging**: `gGMSE01_recomp.dylib` built as **Mach-O arm64** (~82 MB).
-4. **Runtime launch**:
-   - `moderngekko-run` (Mach-O arm64) loads the module
-   - Metal graphics backend selected
-   - Window title reports `ModernGekko - Super Mario Sunshine [GMSE01] | 30.0 FPS`
-5. **Gameplay evidence captured**:
-   - Shine Sprite title/logo sequence
-   - Opening airplane/map intro sequence
-   - Cabin cutscene with Mario, Peach, and Toadsworth
-   - Isle Delfino welcome sequence with Piantas / statue / volcano backdrop
-6. Extended session held for tens of seconds without immediate crash while rendering intro/title content.
-7. Repository scaffold, docs, ignore rules, and Stage 1 helper scripts.
+### iOS / iPadOS (new)
+
+1. The ModernGekko / Dolphin-derived runtime builds as an arm64 iOS Simulator
+   binary (`platform IOSSIMULATOR`, minos 16.0, sdk 26.5).
+2. The GMSE01 recompiled module builds for the iOS Simulator (arm64).
+3. The SunPad iOS app links the core statically, boots the game on a
+   background thread, and renders through Dolphin's Metal backend into a
+   CAMetalLayer surface.
+4. iPhone 17 Pro Simulator: boots to the SUPER MARIO SUNSHINE title screen,
+   plays the attract/demo sequence, and renders gameplay (LIFE/WATER HUD,
+   coins); the process stays alive.
+5. iPad Pro 13-inch Simulator: boots through the "Welcome to Isle Delfino"
+   splash to the title screen.
+6. Input works end-to-end on iOS: normalized touch/GameController state is
+   written to the Dolphin pipe device and advances the game (START presses
+   moved the game from the title into gameplay rendering).
+7. BellPad-inspired overlay: three-dot menu, Native/1x/2x/3x/4x render
+   resolution, touch controls, opacity/size/hide/edit-layout settings.
+8. No runtime PowerPC JIT on iOS: interpreter fallback + software vertex
+   loader.
+
+### Desktop (previously proven)
+
+1. Disc extract via DolRecomp native GameCube extractor.
+2. `main.dol` static recompilation with 0 unknown instructions (221 chunks).
+3. Host module packaging: arm64 `gGMSE01_recomp.dylib`.
+4. `moderngekko-run` launches on Apple Silicon with Metal at 30 FPS through
+   the title/intro sequences and responds to pipe input.
 
 ## What does not work / not yet proven
 
-- Full Stage 1 gate is not closed:
-  - Automated keyboard injection has **not** been proven to skip cutscenes into file-select/new-game reliably (BackgroundInput enabled; still needs better focus/input path or physical controller).
-  - Interactive Delfino Plaza control, FLUDD, camera, and objective completion not yet tested.
-  - Save and reload not yet tested.
-  - Multi-hour soak not yet measured (multi-minute intro/title hold is proven).
-- No SunPad-native macOS/iOS application shell yet (still using moderngekko-run research launcher).
-- Sunshine-specific runtime patches not yet isolated; generic ModernGekko path currently reaches deep intro/title sequences without custom game patches.
-
-## ReShine note
-
-No public ReShine repository was found. ModernGekko credits binsento for a Sunshine recomp, but sources/patches are not published. Current path is generic DolRecomp + ModernGekko reproduction from the local GMSE01 image.
+- iOS audio is a Null backend (cubeb is macOS-only in this tree); an
+  AVAudioSession-backed backend is a follow-up.
+- iOS game-data provisioning reads dev host paths (Simulator only); the
+  document-picker import + on-device extraction/recompile flow is next.
+- The mobile render-resolution setting persists but is not yet applied to the
+  live EFB scale.
+- Physical-device runs (signing, performance, memory) are not yet done.
+- Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
+- No SunPad-native macOS app shell yet.
 
 ## Next highest-priority tasks
 
-1. Prove keyboard/GameController input from title into file select / new game.
-2. Reach Delfino Plaza (or equivalent playable hub), control Mario/FLUDD, complete one objective.
-3. Prove memory-card save/reload.
-4. Begin Stage 2 SunPad macOS `.app` shell using BellPad UX patterns while reusing the AOT module + runtime.
+1. iOS: on-device game-data import (document picker, ISO validation,
+   extraction, module provisioning) so a real device can boot.
+2. iOS: apply the render-resolution setting to the running runtime (EFB
+   scale), add AVAudioSession audio, interactive touch-control acceptance.
+3. Stage 2: native macOS SunPad `.app` shell on the shared runtime layer.
+4. Desktop Stage 1 gates: plaza gameplay, objective, save/reload evidence.
 
 ## Evidence locations (local, gitignored)
 
-- Logs: `artifacts/runtime/2026-08-05-*.log`
-- Screenshots: `artifacts/runtime/2026-08-05-screen.png`, `title-*.png`
-- Module: `ref/ModernGekko-Template/build/modules/GMSE01/.../gGMSE01_recomp.dylib`
+- Screenshots: `artifacts/screenshots/2026-08-06/`
+  - `iphone-title-screen.png`, `iphone-title-logo.png`,
+    `iphone-gameplay-after-input.png`, `ipad-isle-delfino.png`,
+    `ipad-title-screen.png`
+- iOS core build: `ref/ModernGekko/build-ios3/`
+- Simulator module: `/tmp/module-ios2/gGMSE01_recomp.dylib`

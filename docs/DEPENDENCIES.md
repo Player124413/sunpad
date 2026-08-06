@@ -62,6 +62,19 @@ Not selected as primary runtime:
 - ModernGekko dolphin vendor Externals for SDL, zlib-ng, libspng, VMA, cubeb, SPIRV-Cross, libusb (initialized locally as needed).
 - No game data is downloaded by these repositories.
 
+## iOS Simulator build requirements (SunPad)
+
+- Xcode 26.x with the iOS 26.x Simulator SDK.
+- Homebrew `fmt`, `lz4`, `zstd` header trees (headers only for the core
+  compile; the Simulator-static libraries are built from the vendored sources
+  by `scripts/ios-provision.sh` and recorded in
+  `apple/ios/Provisioned/dev-config.plist`).
+- The iOS toolchain file lives at `scripts/ios-simulator-toolchain.cmake`.
+
+## Update policy
+
+When any external checkout moves, update this file with the new SHA and the reason for the bump. Prefer official ExpansionPak / doldecomp upstreams over stale forks.
+
 ## Update policy
 
 When any external checkout moves, update this file with the new SHA and the reason for the bump. Prefer official ExpansionPak / doldecomp upstreams over stale forks.

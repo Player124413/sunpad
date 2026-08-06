@@ -1,20 +1,38 @@
 # Known Issues
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
-## Open Stage 1 gaps
+## iOS / iPadOS
 
-1. **Input path not fully proven.** Keyboard mapping and `BackgroundInput=True` are configured; scripted Start/A injection has not yet cleanly advanced from intro cutscenes into file-select/new-game with definitive before/after proof. Physical GameController is the next best probe.
-2. **Playable hub / objective / save gates incomplete.**
-3. **Verbose runtime logging is sparse** after module load; most evidence currently comes from window title + screenshots.
-4. **SMC warning list present.** DolRecomp reported possible runtime code-patching ranges for GMSE01; no dedicated Sunshine patch set applied yet.
+1. **Audio is silent** — cubeb is macOS-only in the vendored tree; the iOS
+   build disables it. A native AVAudioSession backend is a follow-up.
+2. **Dev-only game-data provisioning** — the app reads host paths from
+   `apple/ios/Provisioned/dev-config.plist`. Real devices need the
+   document-picker import + on-device extraction/recompile flow.
+3. **Render-resolution setting not applied live** — the Native/1x-4x choice
+   persists but the running runtime reads its own EFB-scale config; wiring
+   `GFX_EFB_SCALE` to the live session is pending.
+4. **Module loaded via `dlopen`** — works on Simulator; static linking of the
+   generated module is the App Store-compatible target.
+5. **Simulator-only evidence** — physical-device signing, performance, memory,
+   and controller behavior are untested.
+6. **No interactive touch acceptance yet** — touch controls render; automated
+   input probes use the pipe device.
+7. **Interpreter fallback speed** — un-recompiled/SMC regions fall back to the
+   interpreter (no JIT by design); verify in demanding scenes.
+
+## Desktop Stage 1 gaps
+
+1. **Input path not fully proven** — pipe input advances menus, but the
+   file-select cursor interaction was worked around rather than cleanly
+   understood; interactive plaza/objective/save gates remain open.
+2. **SMC warning list present** — DolRecomp reported possible runtime
+   code-patching ranges for GMSE01; no dedicated Sunshine patch set applied.
+3. **Verbose runtime logging is sparse** after module load.
 
 ## Resolved / non-blocking observations
 
-- ModernGekko first configure failed until dolphin Externals and vendored DolRecomp submodule were initialized.
-- Module C compile is slow at `-O2` (221 ~1 MB chunks); first build took on the order of ~15 minutes on this machine.
-- Early short launches that appeared to "exit immediately" were caused by aggressive process termination during automation, not by a hard boot crash; longer supervised runs held intro/title rendering.
-
-## Product gaps (later stages)
-
-- No SunPad-native menus, disc import UI, or iOS/iPad targets yet.
+- ModernGekko first configure needed dolphin Externals initialized.
+- Module C compile at `-O2` takes ~15-25 minutes (desktop and simulator).
+- Early "exit immediately" desktop launches were process-termination
+  artifacts, not boot crashes.

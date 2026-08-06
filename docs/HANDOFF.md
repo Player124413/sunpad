@@ -1,54 +1,84 @@
 # Handoff
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## One-screen summary
 
-SunPad Stage 1 has a **working native Apple Silicon recompilation path** for Super Mario Sunshine USA (`GMSE01`). DolRecomp recompiles `main.dol` with zero unknown opcodes; ModernGekko packages an arm64 `gGMSE01_recomp.dylib` and launches it through Metal. Screenshot evidence shows the Shine logo, map/airplane intro, cabin cutscenes (Mario/Peach/Toadsworth), and the Isle Delfino welcome sequence at 30 FPS. Full playable plaza/objective/save gates and the SunPad app shell remain.
+Super Mario Sunshine (`GMSE01`) now runs natively on the **iPhone and iPad
+simulators** through SunPad: the DolRecomp-generated module executes through
+the ModernGekko/Dolphin-derived compatibility runtime, rendered by Dolphin's
+Metal backend into a CAMetalLayer in the UIKit app. Desktop Stage 1 (title,
+intro, input) is also proven. The three-dot menu, Native/1x-4x render
+resolution, and Sunshine touch controls are implemented.
 
 ## What works
 
-- Extract + AOT recompile + module build + launch.
-- Metal rendering of intro/title content.
-- arm64 host tools and game module (no Rosetta, no JIT product path).
+- Desktop: extract → recompile (0 unknown ops) → arm64 module → Metal launch
+  to title/intro; pipe input advances the game.
+- iOS/iPadOS Simulator: core + module build (no JIT), app boots the game to
+  the title screen and renders gameplay; input advances state; stable process.
+- App UI: three-dot menu, render resolution choices, touch controls, settings
+  persistence.
 
 ## What does not
 
-- Not yet proven: robust input through menus, Delfino Plaza, FLUDD/camera, objective, save/reload, long soak.
-- No polished SunPad `.app` yet.
+- iOS audio (Null backend), live EFB-scale application of the render setting,
+  document-picker import/on-device extraction, physical-device runs.
+- Desktop Stage 1 gates: plaza gameplay, objective, save/reload.
+- Native macOS SunPad `.app` shell.
 
 ## Exact resume commands
 
 ```sh
 cd /Users/chrissotraidis/GitHub/sunpad
-./scripts/stage1-status.sh
+./scripts/ios-build-core.sh        # iOS core + module + provisioning
+xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -derivedDataPath /tmp/sunpad-ddp build
+xcrun simctl boot "iPhone 17 Pro"   # one simulator at a time
+xcrun simctl install "iPhone 17 Pro" \
+  /tmp/sunpad-ddp/Build/Products/Debug-iphonesimulator/SunPad.app
+xcrun simctl launch "iPhone 17 Pro" com.sunpad.SunPad
+xcrun simctl io "iPhone 17 Pro" screenshot /tmp/evidence.png
+```
+
+Input probe (proves the pipe path on iOS):
+
+```sh
+CONTAINER=$(xcrun simctl get_app_container "iPhone 17 Pro" com.sunpad.SunPad data)
+python3 scripts/gcpipe.py --pipe \
+  "$CONTAINER/Library/Application Support/SunPad/Pipes/sunpad" --tap START
+```
+
+Desktop:
+
+```sh
 cd ref/ModernGekko-Template
-./lib/ModernGekko/build/moderngekko-port inspect extracted/Super-Mario-Sunshine --output build/modules
 ./lib/ModernGekko/build/moderngekko-run --game extracted/Super-Mario-Sunshine \
   --module "$(cat build/modules/GMSE01/active-module.txt)" --graphics Metal
 ```
 
-Controller config currently at:
-
-- `~/.local/share/moderngekko/Config/GCPadNew.ini`
-- Keyboard A mapped to key `X`, Start to Return, WASD stick, arrows C-stick, Q/E triggers.
-
 ## Next actions
 
-1. From title, prove input advances to file select / new game with screenshots.
-2. Reach Delfino Plaza and complete one Shine objective.
-3. Test memory-card save/reload.
-4. Start Stage 2 macOS app shell (BellPad-inspired) wrapping this runtime.
+1. iOS on-device import: document picker → validate GMSE01 (header, size,
+   SHA-256) → extract → recompile/provision module → install to Application
+   Support (BellPad's validated import flow is the reference).
+2. Apply the render-resolution setting to the live runtime
+   (`Config::GFX_EFB_SCALE`); add an AVAudioSession audio backend.
+3. Interactive touch-control acceptance on the Simulator.
+4. Stage 2: native macOS SunPad `.app` shell on the shared runtime.
+5. Desktop: plaza gameplay, objective, save/reload evidence.
 
 ## Do not
 
-- Commit ISO, extracted FS, generated C/module binaries, or saves.
+- Commit the ISO, extracted FS, generated C/module binaries, saves, or
+  `apple/ios/Provisioned/`.
 - Claim full decompilation or complete playability yet.
-
+- Run more than one Simulator at a time.
 
 ## Input notes
 
-- ModernGekko user config: `~/.local/share/moderngekko/Config/`
-- `GCPadNew.ini` keyboard map present (A=`X`, Start=Return, WASD, arrows, Q/E).
-- `Dolphin.ini` has `BackgroundInput = True` for automation experiments.
-- Reliable automated skip-to-file-select is still open; prefer a physical GameController next.
+- The pipe device (`Pipes/sunpad`) carries normalized input; commands:
+  `PRESS/RELEASE <BUTTON>` and `SET MAIN|C <x> <y>` with x/y in [0,1]
+  (0.5 = neutral). `gcpipe.py` encodes this.
+- Desktop user config: `~/.local/share/moderngekko/Config/`.
