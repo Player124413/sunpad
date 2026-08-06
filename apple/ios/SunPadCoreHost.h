@@ -24,6 +24,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)stop;
 
+/* Stops the current runtime (if any) and boots the game at gameRoot with the
+ * given module. Used after an imported image is extracted. */
+- (void)restartWithGameRoot:(NSString *)gameRoot
+                 modulePath:(NSString *)modulePath;
+
 /* Publishes the normalized input snapshot to the game through the pipe
  * device. Safe to call from any thread at ~60 Hz. */
 - (void)publishInput:(SunPadInputState)input;

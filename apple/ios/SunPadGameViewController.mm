@@ -1,6 +1,7 @@
 #import "SunPadGameViewController.h"
 
 #import "SunPadCoreHost.h"
+#import "SunPadDiscExtractor.h"
 #import "SunPadGameOverlay.h"
 #import "SunPadSettings.h"
 
@@ -57,6 +58,13 @@
                                              selector:@selector(settingsChanged:)
                                                  name:NSUserDefaultsDidChangeNotification
                                                object:nil];
+    // DEBUG hook: -sunpadImportTest <iso path> runs the full import flow.
+    NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;
+    NSUInteger importIndex = [arguments indexOfObject:@"-sunpadImportTest"];
+    if (importIndex != NSNotFound && importIndex + 1 < arguments.count) {
+        [self importGameDataFromURL:[NSURL fileURLWithPath:arguments[importIndex + 1]]];
+        return;
+    }
     [self startGameIfProvisioned];
 }
 
@@ -80,7 +88,11 @@
     if (configPath == nil)
         return; // Not a dev-provisioned build; import flow is a later stage.
     NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
-    NSString *gameRoot = config[@"DevGameRoot"];
+    // Prefer an extracted root produced from an imported image; fall back to
+    // the dev-provisioned tree for acceptance testing on the Simulator.
+    NSString *gameRoot = [SunPadSettings sharedSettings].extractedGameRoot;
+    if (gameRoot.length == 0)
+        gameRoot = config[@"DevGameRoot"];
     NSString *modulePath = config[@"DevModulePath"];
     if (gameRoot.length == 0 || modulePath.length == 0)
         return;
@@ -216,8 +228,10 @@
 }
 
 - (void)importGameDataFromURL:(NSURL *)url {
+    NSLog(@"[SunPad] import start: %@", url.path);
     NSString *message = [self validateGameDataAtURL:url];
     if (message != nil) {
+        NSLog(@"[SunPad] import validation failed: %@", message);
         [self presentBootError:message];
         return;
     }
@@ -236,21 +250,48 @@
     if (![[NSFileManager defaultManager] copyItemAtPath:url.path
                                                  toPath:destination
                                                   error:&copyError]) {
+        NSLog(@"[SunPad] import copy failed: %@", copyError);
         [self presentBootError:[NSString stringWithFormat:@"Could not retain the game image: %@",
                                                           copyError.localizedDescription]];
         return;
     }
+    NSLog(@"[SunPad] import retained at %@", destination);
     [SunPadSettings sharedSettings].retainedGameDataPath = destination;
     [[SunPadSettings sharedSettings] synchronize];
 
-    UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"Game Data Retained"
-                                            message:[NSString stringWithFormat:
-                                                @"%@ was validated and stored. Recompile-and-boot from an imported image requires the on-device module provisioning flow (next milestone); the dev build continues using its provisioned game tree.",
-                                                url.lastPathComponent]
+    NSArray<NSString *> *extractPaths = NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory, NSUserDomainMask, YES);
+    NSString *extractRoot = [[extractPaths.firstObject
+        stringByAppendingPathComponent:@"SunPad/GameData"]
+        stringByAppendingPathComponent:@"GMSE01"];
+
+    UIAlertController *progressAlert =
+        [UIAlertController alertControllerWithTitle:@"Importing Game Data"
+                                            message:@"Extracting the disc…"
                                      preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
+    [self presentViewController:progressAlert animated:YES completion:nil];
+
+    __weak SunPadGameViewController *weakSelf = self;
+    [SunPadDiscExtractor extractImageAtPath:destination
+                               toDirectory:extractRoot
+                                   progress:^(NSString *status, double fraction) {
+        progressAlert.message = [NSString stringWithFormat:@"%@ (%.0f%%)", status, fraction * 100.0];
+    }
+                                 completion:^(BOOL ok, NSString *error) {
+        [progressAlert dismissViewControllerAnimated:YES completion:nil];
+        if (!ok) {
+            [weakSelf presentBootError:error ?: @"Extraction failed."];
+            return;
+        }
+        [SunPadSettings sharedSettings].extractedGameRoot = extractRoot;
+        [[SunPadSettings sharedSettings] synchronize];
+
+        NSBundle *bundle = NSBundle.mainBundle;
+        NSString *configPath = [bundle pathForResource:@"dev-config" ofType:@"plist"];
+        NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
+        NSString *modulePath = config[@"DevModulePath"];
+        [_coreHost restartWithGameRoot:extractRoot modulePath:modulePath];
+    }];
 }
 
 - (nullable NSString *)validateGameDataAtURL:(NSURL *)url {
@@ -267,7 +308,8 @@
     if (magic != 0xC2339F3D)
         return @"The file is not a GameCube disc image (bad magic).";
     char gameId[7] = {0};
-    memcpy(gameId, bytes + 0x60, 6);
+    // The GameCube disc header starts with the six-character game code.
+    memcpy(gameId, bytes + 0x00, 6);
     if (strncmp(gameId, "GMSE01", 6) != 0)
         return [NSString stringWithFormat:@"Unsupported game ID '%s'; SunPad currently supports GMSE01 (Super Mario Sunshine USA).", gameId];
     return nil;

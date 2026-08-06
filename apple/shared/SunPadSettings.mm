@@ -108,6 +108,19 @@
     }
 }
 
+- (NSString *)extractedGameRoot {
+    return [[NSUserDefaults standardUserDefaults] stringForKey:@"SunPadExtractedGameRoot"];
+}
+
+- (void)setExtractedGameRoot:(NSString *)extractedGameRoot {
+    if (extractedGameRoot == nil) {
+        [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"SunPadExtractedGameRoot"];
+    } else {
+        [[NSUserDefaults standardUserDefaults] setObject:extractedGameRoot
+                                                  forKey:@"SunPadExtractedGameRoot"];
+    }
+}
+
 - (void)synchronize {
     [[NSUserDefaults standardUserDefaults] synchronize];
 }

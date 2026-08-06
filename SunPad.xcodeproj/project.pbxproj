@@ -31,6 +31,7 @@
 		AA000000000000000000011C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000228 /* Foundation.framework */; };
 		AA000000000000000000011D /* CoreHaptics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022A /* CoreHaptics.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		AA000000000000000000011E /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022B /* UniformTypeIdentifiers.framework */; };
+		AA000000000000000000011F /* SunPadDiscExtractor.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022C /* SunPadDiscExtractor.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -65,6 +66,8 @@
 		AA0000000000000000000229 /* SunPadCoreHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadCoreHost.h; sourceTree = "<group>"; };
 		AA000000000000000000022A /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
 		AA000000000000000000022B /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
+		AA000000000000000000022C /* SunPadDiscExtractor.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadDiscExtractor.mm; sourceTree = "<group>"; };
+		AA000000000000000000022D /* SunPadDiscExtractor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadDiscExtractor.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -119,6 +122,8 @@
 				AA0000000000000000000201 /* SunPadAppDelegate.mm */,
 				AA0000000000000000000218 /* SunPadCoreHost.mm */,
 				AA0000000000000000000229 /* SunPadCoreHost.h */,
+				AA000000000000000000022C /* SunPadDiscExtractor.mm */,
+				AA000000000000000000022D /* SunPadDiscExtractor.h */,
 				AA0000000000000000000202 /* SunPadGameViewController.mm */,
 				AA0000000000000000000211 /* SunPadGameViewController.h */,
 				AA0000000000000000000203 /* SunPadGameOverlay.mm */,
@@ -241,6 +246,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000000000000000000011F /* SunPadDiscExtractor.mm in Sources */,
 				AA0000000000000000000112 /* SunPadCoreHost.mm in Sources */,
 				AA0000000000000000000101 /* SunPadAppDelegate.mm in Sources */,
 				AA0000000000000000000102 /* SunPadGameViewController.mm in Sources */,

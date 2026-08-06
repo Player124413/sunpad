@@ -177,6 +177,28 @@ namespace fs = std::filesystem;
         _gameThread->join();
 }
 
+- (void)restartWithGameRoot:(NSString *)gameRoot modulePath:(NSString *)modulePath {
+    if (*_running) {
+        // Graceful stop; the runtime's Run returns and the thread joins.
+        [self stop];
+    }
+    NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory, NSUserDomainMask, YES);
+    NSString *userDirectory = [paths.firstObject stringByAppendingPathComponent:@"SunPad"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:userDirectory
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    __weak SunPadCoreHost *weakSelf = self;
+    [self startWithGameRoot:gameRoot
+                 modulePath:modulePath
+              userDirectory:userDirectory
+                    onError:^(NSString *message) {
+        (void)weakSelf;
+        NSLog(@"[SunPad] runtime error after restart: %@", message);
+    }];
+}
+
 - (void)dealloc {
     if (_pipeFd >= 0)
         ::close(_pipeFd);

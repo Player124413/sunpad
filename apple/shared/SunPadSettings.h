@@ -29,6 +29,9 @@ NS_ASSUME_NONNULL_BEGIN
 /* Save/load the retained game-data path (Application Support on mobile). */
 @property(nonatomic, copy, nullable) NSString *retainedGameDataPath;
 
+/* Extracted game tree (sys/ + files/) produced from the retained image. */
+@property(nonatomic, copy, nullable) NSString *extractedGameRoot;
+
 - (void)synchronize;
 
 @end
