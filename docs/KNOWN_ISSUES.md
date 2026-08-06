@@ -6,9 +6,10 @@ Last updated: 2026-08-06
 
 1. **Audio is silent** — cubeb is macOS-only in the vendored tree; the iOS
    build disables it. A native AVAudioSession backend is a follow-up.
-2. **Dev-only game-data provisioning** — the app reads host paths from
-   `apple/ios/Provisioned/dev-config.plist`. Real devices need the
-   document-picker import + on-device extraction/recompile flow.
+2. **Module provisioning** — import/extract/boot works on-device, but the
+   recompiled module is provisioned from the Mac (`dev-config.plist`); iOS has
+   no C compiler, so the module for a given disc must be produced by the Mac
+   toolchain and matched by game ID.
 3. **Render-resolution setting not applied live** — the Native/1x-4x choice
    persists but the running runtime reads its own EFB-scale config; wiring
    `GFX_EFB_SCALE` to the live session is pending.

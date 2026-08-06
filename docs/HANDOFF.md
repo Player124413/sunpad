@@ -17,13 +17,15 @@ resolution, and Sunshine touch controls are implemented.
   to title/intro; pipe input advances the game.
 - iOS/iPadOS Simulator: core + module build (no JIT), app boots the game to
   the title screen and renders gameplay; input advances state; stable process.
+- On-device import: document picker → GMSE01 validation → retain → on-device
+  extraction → boot from the imported image (verified on the Simulator).
 - App UI: three-dot menu, render resolution choices, touch controls, settings
   persistence.
 
 ## What does not
 
-- iOS audio (Null backend), live EFB-scale application of the render setting,
-  document-picker import/on-device extraction, physical-device runs.
+- iOS audio (Null backend), physical-device runs, module provisioning for
+  discs beyond the dev-provisioned GMSE01 build.
 - Desktop Stage 1 gates: plaza gameplay, objective, save/reload.
 - Native macOS SunPad `.app` shell.
 
@@ -61,8 +63,8 @@ cd ref/ModernGekko-Template
 ## Next actions
 
 1. iOS on-device import: document picker → validate GMSE01 (header, size,
-   SHA-256) → extract → recompile/provision module → install to Application
-   Support (BellPad's validated import flow is the reference).
+   SHA-256) → extract → boot with the provisioned module (done; module
+   matching for other discs remains).
 2. Apply the render-resolution setting to the live runtime
    (`Config::GFX_EFB_SCALE`); add an AVAudioSession audio backend.
 3. Interactive touch-control acceptance on the Simulator.

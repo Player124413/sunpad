@@ -26,6 +26,8 @@ Last updated: 2026-08-06
 | iPhone input through pipe device | Pass | START presses advanced the game state |
 | iPad Pro 13-inch Simulator boot | Pass | "Welcome to Isle Delfino" splash → title screen |
 | No runtime JIT | Pass | JitArm64 fallback disabled; generic vertex loader; no w^x writes |
+| On-device import+extract | Pass | Picker validation (magic+GMSE01), private retain, 174-file extraction matches desktop tree |
+| Boot from imported image | Pass | iPhone Simulator boots intro from on-device-extracted root and advances on input |
 
 Screenshots: `artifacts/screenshots/2026-08-06/`.
 

@@ -43,10 +43,21 @@ SunPad-specific iOS changes (all in `ref/ModernGekko`):
 
 ## Game data on mobile
 
-The current dev build reads host paths (`apple/ios/Provisioned/dev-config.plist`,
-gitignored) for the extracted game tree and the simulator module — Simulator
-only. The product flow (document picker → validate GMSE01 → extract →
-recompile → install to Application Support) is the next mobile milestone.
+The import flow is implemented and verified on the Simulator:
+
+1. **Document picker** opens from "Game Data & Saves > Change or Reimport".
+2. **Validate** the GameCube header (magic at 0x1C, GMSE01 game code at 0x00).
+3. **Retain** a private copy in Application Support.
+4. **Extract on-device** (`SunPadDiscExtractor`, Dolphin's DiscIO) into
+   `SunPad/GameData/GMSE01` (`sys/` + `files/`).
+5. **Boot** the extracted root with the provisioned module.
+
+Verified: the on-device extraction produces the same 174-file tree as the
+desktop extraction, and the game boots from the imported image and responds to
+input. The recompiled module still comes from the Mac toolchain (iOS has no C
+compiler); matching the provisioned module to the imported disc (game ID) is
+the remaining gap. A `-sunpadImportTest <iso>` launch argument runs the flow
+headlessly for verification.
 
 ## Lifecycle and controls
 

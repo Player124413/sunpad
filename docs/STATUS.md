@@ -58,6 +58,9 @@ code-generating loader).
    resolution, touch controls, opacity/size/hide/edit-layout settings.
 8. No runtime PowerPC JIT on iOS: interpreter fallback + software vertex
    loader.
+9. **On-device game-data import** is implemented and verified: document
+   picker → GMSE01 validation → private retain → on-device extraction
+   (174 files, matches the desktop tree) → boot from the imported image.
 
 ### Desktop (previously proven)
 
@@ -71,8 +74,8 @@ code-generating loader).
 
 - iOS audio is a Null backend (cubeb is macOS-only in this tree); an
   AVAudioSession-backed backend is a follow-up.
-- iOS game-data provisioning reads dev host paths (Simulator only); the
-  document-picker import + on-device extraction/recompile flow is next.
+- The recompiled module is provisioned from the Mac toolchain (iOS has no C
+  compiler); import/extract/boot works on-device.
 - The mobile render-resolution setting persists but is not yet applied to the
   live EFB scale.
 - Physical-device runs (signing, performance, memory) are not yet done.
