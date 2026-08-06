@@ -9,15 +9,15 @@ NS_ASSUME_NONNULL_BEGIN
 @class SunPadGameOverlay;
 
 @protocol SunPadGameOverlayDelegate <NSObject>
-/* The touch controls or GameController published a new input snapshot. */
-- (void)gameOverlay:(SunPadGameOverlay *)overlay didUpdateInput:(SunPadInputState)input;
 /* The user asked to change or reimport the game data image. */
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay;
 @end
 
 /* UIKit overlay above the game render surface: the three-dot menu, render
  * resolution choices (Native/1x/2x/3x/4x), touch-control settings, and the
- * Sunshine GameCube touch controls. Patterns adapted from BellPad. */
+ * Sunshine GameCube touch controls (main stick, C-stick, D-pad,
+ * A/B/X/Y/Z/Start/L/R). Touch state is published to the shared input mixer
+ * (BellPad's canonical boundary). */
 @interface SunPadGameOverlay : UIView
 
 @property(nonatomic, weak, nullable) id<SunPadGameOverlayDelegate> delegate;
@@ -30,9 +30,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /* Applies persisted settings to the touch controls. */
 - (void)applySettings;
-
-/* The current normalized input snapshot (touch + controller merged). */
-- (SunPadInputState)currentInputState;
 
 @end
 

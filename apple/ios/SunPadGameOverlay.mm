@@ -1,18 +1,23 @@
 #import "SunPadGameOverlay.h"
 
+#import "SunPadInputMixer.h"
 #import "SunPadSettings.h"
 
 #import <GameController/GameController.h>
 
 #include <algorithm>
+#include <cmath>
 
 @interface SunPadStickView : UIView
 @property(nonatomic, copy) void (^valueChanged)(float x, float y);
+@property(nonatomic, readonly) BOOL active;
+- (void)reset;
 @end
 
 @implementation SunPadStickView {
     UIView *_thumb;
     float _valueX, _valueY;
+    BOOL _active;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -51,22 +56,12 @@
     [self updateThumbCenter];
 }
 
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [self handleTouch:touches.anyObject];
+- (BOOL)active {
+    return _active;
 }
 
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [self handleTouch:touches.anyObject];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    _valueX = _valueY = 0.0f;
-    [self updateThumbCenter];
-    if (self.valueChanged)
-        self.valueChanged(0.0f, 0.0f);
-}
-
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+- (void)reset {
+    _active = NO;
     _valueX = _valueY = 0.0f;
     [self updateThumbCenter];
     if (self.valueChanged)
@@ -83,18 +78,35 @@
     float y = std::max(-1.0f, std::min(1.0f, (float)((p.y - half) / maxTravel)));
     _valueX = x;
     _valueY = y;
+    _active = YES;
     [self updateThumbCenter];
     if (self.valueChanged)
         self.valueChanged(x, y);
 }
 
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self handleTouch:touches.anyObject];
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self handleTouch:touches.anyObject];
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self reset];
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self reset];
+}
+
 @end
 
-@interface SunPadButtonView : UIButton
-@property(nonatomic, assign) BOOL padHeld;
+@interface SunPadGameButton : UIButton
+@property(nonatomic, assign) uint16_t inputMask;
 @end
 
-@implementation SunPadButtonView
+@implementation SunPadGameButton
 @end
 
 @interface SunPadGameOverlay () <UIGestureRecognizerDelegate>
@@ -104,7 +116,7 @@
     UIButton *_menuButton;          // the three-dot menu
     SunPadStickView *_moveStick;
     SunPadStickView *_cStick;
-    NSMutableDictionary<NSString *, SunPadButtonView *> *_buttons;
+    NSMutableArray<SunPadGameButton *> *_buttons;
     NSMutableDictionary<NSString *, UIPanGestureRecognizer *> *_controlDrags;
     NSMutableDictionary<NSString *, NSValue *> *_controlOrigins;
 
@@ -115,14 +127,13 @@
     UISwitch *_hideControlsSwitch;
     UISwitch *_editLayoutSwitch;
 
-    SunPadInputState _input;
+    SunPadInputState _touchState;
     BOOL _touchControlsHidden;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
         self.userInteractionEnabled = YES;
-        _input.connected = 1;
         [self buildMenuButton];
         [self buildTouchControls];
         [self buildSettingsPanel];
@@ -219,6 +230,7 @@
                                             handler:^(UIAlertAction *action) {
         (void)action;
         [[SunPadSettings sharedSettings] setRetainedGameDataPath:nil];
+        [[SunPadSettings sharedSettings] setExtractedGameRoot:nil];
         [[SunPadSettings sharedSettings] synchronize];
         [weakSelf.delegate gameOverlayRequestsGameDataChange:weakSelf];
     }]];
@@ -228,7 +240,7 @@
 #pragma mark - Touch controls
 
 - (void)buildTouchControls {
-    _buttons = [NSMutableDictionary dictionary];
+    _buttons = [NSMutableArray array];
     _controlDrags = [NSMutableDictionary dictionary];
     _controlOrigins = [NSMutableDictionary dictionary];
 
@@ -237,36 +249,19 @@
     [self addSubview:_moveStick];
     [self addSubview:_cStick];
 
-    NSArray<NSArray<NSString *> *> *buttonSpecs = @[
-        @[ @"A", @"A" ],
-        @[ @"B", @"B" ],
-        @[ @"X", @"X" ],
-        @[ @"Y", @"Y" ],
-        @[ @"Z", @"Z" ],
-        @[ @"Start", @"START" ],
-        @[ @"L", @"L" ],
-        @[ @"R", @"R" ],
-    ];
-    for (NSArray<NSString *> *spec in buttonSpecs) {
-        NSString *identifier = spec[0];
-        NSString *label = spec[1];
-        SunPadButtonView *button = [UIButton buttonWithType:UIButtonTypeSystem];
-        [button setTitle:label forState:UIControlStateNormal];
-        [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-        button.titleLabel.font = [UIFont systemFontOfSize:18.0 weight:UIFontWeightBold];
-        button.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.16];
-        button.layer.cornerRadius = 28.0;
-        button.layer.borderWidth = 2.0;
-        button.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.36].CGColor;
-        button.accessibilityLabel = label;
-        [button addTarget:self action:@selector(buttonDown:)
-         forControlEvents:UIControlEventTouchDown];
-        [button addTarget:self action:@selector(buttonUp:)
-         forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside |
-                                UIControlEventTouchCancel];
-        _buttons[identifier] = button;
-        [self addSubview:button];
-    }
+    [self addButton:@"A" mask:SunPadButtonA];
+    [self addButton:@"B" mask:SunPadButtonB];
+    [self addButton:@"X" mask:SunPadButtonX];
+    [self addButton:@"Y" mask:SunPadButtonY];
+    [self addButton:@"Z" mask:SunPadButtonZ];
+    [self addButton:@"START" mask:SunPadButtonStart];
+    [self addButton:@"L" mask:SunPadButtonL];
+    [self addButton:@"R" mask:SunPadButtonR];
+    // D-pad
+    [self addButton:@"▲" mask:SunPadButtonDpadUp];
+    [self addButton:@"▼" mask:SunPadButtonDpadDown];
+    [self addButton:@"◀" mask:SunPadButtonDpadLeft];
+    [self addButton:@"▶" mask:SunPadButtonDpadRight];
 }
 
 - (SunPadStickView *)makeStick {
@@ -278,54 +273,75 @@
     return stick;
 }
 
+- (void)addButton:(NSString *)label mask:(uint16_t)mask {
+    SunPadGameButton *button = [SunPadGameButton buttonWithType:UIButtonTypeSystem];
+    [button setTitle:label forState:UIControlStateNormal];
+    [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    button.titleLabel.font = [UIFont systemFontOfSize:18.0 weight:UIFontWeightBold];
+    button.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.16];
+    button.layer.cornerRadius = 28.0;
+    button.layer.borderWidth = 2.0;
+    button.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.36].CGColor;
+    button.accessibilityLabel = label;
+    button.inputMask = mask;
+    [button addTarget:self action:@selector(buttonDown:)
+     forControlEvents:UIControlEventTouchDown];
+    [button addTarget:self action:@selector(buttonUp:)
+     forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside |
+                            UIControlEventTouchCancel];
+    [_buttons addObject:button];
+    [self addSubview:button];
+}
+
 - (void)stickChanged:(SunPadStickView *)stick x:(float)x y:(float)y {
-    if (stick == _moveStick) {
-        _input.mainX = x;
-        _input.mainY = y;
-    } else {
-        _input.cX = x;
-        _input.cY = y;
-    }
-    [self publishInput];
-}
-
-- (void)buttonDown:(SunPadButtonView *)button {
-    button.padHeld = YES;
-    [self setButton:button pressed:YES];
-}
-
-- (void)buttonUp:(SunPadButtonView *)button {
-    button.padHeld = NO;
-    [self setButton:button pressed:NO];
-}
-
-- (void)setButton:(SunPadButtonView *)button pressed:(BOOL)pressed {
-    NSArray<NSString *> *matches =
-        [_buttons.allKeys filteredArrayUsingPredicate:
-            [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
-                return _buttons[object] == button;
-            }]];
-    NSString *identifier = matches.firstObject;
-    if (identifier == nil)
+    if ([SunPadSettings sharedSettings].editingControlLayout)
         return;
-    SunPadButton bit = SunPadButtonA;
-    if ([identifier isEqualToString:@"A"]) bit = SunPadButtonA;
-    else if ([identifier isEqualToString:@"B"]) bit = SunPadButtonB;
-    else if ([identifier isEqualToString:@"X"]) bit = SunPadButtonX;
-    else if ([identifier isEqualToString:@"Y"]) bit = SunPadButtonY;
-    else if ([identifier isEqualToString:@"Z"]) bit = SunPadButtonZ;
-    else if ([identifier isEqualToString:@"Start"]) bit = SunPadButtonStart;
-    else if ([identifier isEqualToString:@"L"]) bit = SunPadButtonL;
-    else if ([identifier isEqualToString:@"R"]) bit = SunPadButtonR;
-    if (pressed)
-        _input.buttons |= bit;
-    else
-        _input.buttons &= ~bit;
-    [self publishInput];
+    int8_t xi = (int8_t)std::lround(x * 127.0f);
+    int8_t yi = (int8_t)std::lround(y * 127.0f);
+    if (stick == _moveStick) {
+        _touchState.stickX = xi;
+        _touchState.stickY = yi;
+    } else {
+        _touchState.cStickX = xi;
+        _touchState.cStickY = yi;
+    }
+    _touchState.connected = 1;
+    [[SunPadInputMixer sharedMixer] setInputState:_touchState fromTouch:YES];
 }
 
-- (void)publishInput {
-    [self.delegate gameOverlay:self didUpdateInput:_input];
+- (void)buttonDown:(SunPadGameButton *)button {
+    if ([SunPadSettings sharedSettings].editingControlLayout)
+        return;
+    _touchState.buttons |= button.inputMask;
+    if (button.inputMask == SunPadButtonL)
+        _touchState.triggerL = 255;
+    if (button.inputMask == SunPadButtonR)
+        _touchState.triggerR = 255;
+    button.transform = CGAffineTransformMakeScale(0.92, 0.92);
+    _touchState.connected = 1;
+    [[SunPadInputMixer sharedMixer] setInputState:_touchState fromTouch:YES];
+}
+
+- (void)buttonUp:(SunPadGameButton *)button {
+    if ([SunPadSettings sharedSettings].editingControlLayout)
+        return;
+    _touchState.buttons &= ~button.inputMask;
+    if (button.inputMask == SunPadButtonL)
+        _touchState.triggerL = 0;
+    if (button.inputMask == SunPadButtonR)
+        _touchState.triggerR = 0;
+    button.transform = CGAffineTransformIdentity;
+    _touchState.connected = 1;
+    [[SunPadInputMixer sharedMixer] setInputState:_touchState fromTouch:YES];
+}
+
+- (void)clearTouchInput {
+    _touchState = (SunPadInputState){0};
+    [[SunPadInputMixer sharedMixer] clearInputFromTouch:YES];
+    for (SunPadGameButton *button in _buttons)
+        button.transform = CGAffineTransformIdentity;
+    [_moveStick reset];
+    [_cStick reset];
 }
 
 #pragma mark - Layout
@@ -343,64 +359,118 @@
                                    CGRectGetMinY(safe) + margin, 44.0, 44.0);
 
     CGFloat stickSize = 128.0 * scale;
-    _moveStick.frame = CGRectMake(CGRectGetMinX(safe) + margin,
-                                  CGRectGetMaxY(safe) - margin - stickSize,
-                                  stickSize, stickSize);
-    _cStick.frame = CGRectMake(CGRectGetMidX(safe) - stickSize * 0.5,
-                               CGRectGetMaxY(safe) - margin - stickSize,
-                               stickSize, stickSize);
+    [self placeControl:_moveStick
+                  defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin,
+                                          CGRectGetMaxY(safe) - margin - stickSize,
+                                          stickSize, stickSize)
+                   identifier:@"move"];
+    [self placeControl:_cStick
+                  defaultFrame:CGRectMake(CGRectGetMidX(safe) - stickSize * 0.5,
+                                          CGRectGetMaxY(safe) - margin - stickSize,
+                                          stickSize, stickSize)
+                   identifier:@"c"];
 
     CGFloat buttonSize = 56.0 * scale;
     CGFloat smallSize = 44.0 * scale;
     CGFloat gap = 8.0 * scale;
-    SunPadButtonView *a = _buttons[@"A"];
-    SunPadButtonView *b = _buttons[@"B"];
-    SunPadButtonView *x = _buttons[@"X"];
-    SunPadButtonView *y = _buttons[@"Y"];
-    SunPadButtonView *z = _buttons[@"Z"];
-    SunPadButtonView *start = _buttons[@"Start"];
-    SunPadButtonView *l = _buttons[@"L"];
-    SunPadButtonView *r = _buttons[@"R"];
+    SunPadGameButton *a = [self buttonWithMask:SunPadButtonA];
+    SunPadGameButton *b = [self buttonWithMask:SunPadButtonB];
+    SunPadGameButton *x = [self buttonWithMask:SunPadButtonX];
+    SunPadGameButton *y = [self buttonWithMask:SunPadButtonY];
+    SunPadGameButton *z = [self buttonWithMask:SunPadButtonZ];
+    SunPadGameButton *start = [self buttonWithMask:SunPadButtonStart];
+    SunPadGameButton *l = [self buttonWithMask:SunPadButtonL];
+    SunPadGameButton *r = [self buttonWithMask:SunPadButtonR];
+    SunPadGameButton *du = [self buttonWithMask:SunPadButtonDpadUp];
+    SunPadGameButton *dd = [self buttonWithMask:SunPadButtonDpadDown];
+    SunPadGameButton *dl = [self buttonWithMask:SunPadButtonDpadLeft];
+    SunPadGameButton *dr = [self buttonWithMask:SunPadButtonDpadRight];
 
     CGFloat rightX = CGRectGetMaxX(safe) - margin - buttonSize;
     CGFloat rightY = CGRectGetMaxY(safe) - margin - buttonSize;
-    a.frame = CGRectMake(rightX, rightY, buttonSize, buttonSize);
-    b.frame = CGRectMake(CGRectGetMinX(a.frame) - buttonSize - gap,
-                         CGRectGetMidY(a.frame) + 8.0, buttonSize, buttonSize);
-    x.frame = CGRectMake(CGRectGetMidX(a.frame) - smallSize * 0.5,
-                         CGRectGetMinY(a.frame) - smallSize - 10.0 * scale,
-                         smallSize, smallSize);
-    y.frame = CGRectMake(CGRectGetMinX(a.frame) - smallSize - 8.0 * scale,
-                         CGRectGetMinY(a.frame) - smallSize + 8.0,
-                         smallSize, smallSize);
-    z.frame = CGRectMake(CGRectGetMinX(a.frame) - smallSize - 8.0 * scale,
-                         CGRectGetMaxY(a.frame) - smallSize, smallSize, smallSize);
-    start.frame = CGRectMake(CGRectGetMinX(a.frame) - smallSize * 0.5,
-                             CGRectGetMaxY(a.frame) + 10.0 * scale,
-                             smallSize, 30.0 * scale);
+    [self placeControl:a defaultFrame:CGRectMake(rightX, rightY, buttonSize, buttonSize) identifier:@"A"];
+    [self placeControl:b
+          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - buttonSize - gap,
+                                  CGRectGetMidY(a.frame) + 8.0, buttonSize, buttonSize)
+            identifier:@"B"];
+    [self placeControl:x
+          defaultFrame:CGRectMake(CGRectGetMidX(a.frame) - smallSize * 0.5,
+                                  CGRectGetMinY(a.frame) - smallSize - 10.0 * scale,
+                                  smallSize, smallSize)
+            identifier:@"X"];
+    [self placeControl:y
+          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - smallSize - 8.0 * scale,
+                                  CGRectGetMinY(a.frame) - smallSize + 8.0,
+                                  smallSize, smallSize)
+            identifier:@"Y"];
+    [self placeControl:z
+          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - smallSize - 8.0 * scale,
+                                  CGRectGetMaxY(a.frame) - smallSize, smallSize, smallSize)
+            identifier:@"Z"];
+    [self placeControl:start
+          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - smallSize * 0.5,
+                                  CGRectGetMaxY(a.frame) + 10.0 * scale,
+                                  smallSize, 30.0 * scale)
+            identifier:@"Start"];
 
     CGFloat shoulderY = CGRectGetMinY(safe) + margin + 44.0 + 12.0;
     CGFloat shoulderWidth = 74.0 * scale;
-    l.frame = CGRectMake(CGRectGetMinX(safe) + margin, shoulderY,
-                         shoulderWidth, 36.0 * scale);
-    r.frame = CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth, shoulderY,
-                         shoulderWidth, 36.0 * scale);
+    [self placeControl:l
+          defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin, shoulderY,
+                                  shoulderWidth, 36.0 * scale)
+            identifier:@"L"];
+    [self placeControl:r
+          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth, shoulderY,
+                                  shoulderWidth, 36.0 * scale)
+            identifier:@"R"];
 
-    if (_touchControlsHidden) {
-        for (UIView *view in self.subviews) {
-            if (view == _menuButton || view == _settingsPanel)
-                continue;
-            view.alpha = 0.0;
-        }
-    } else {
-        for (UIView *view in self.subviews) {
-            if (view == _menuButton || view == _settingsPanel)
-                continue;
-            view.alpha = [SunPadSettings sharedSettings].controlOpacity;
-        }
+    // D-pad cluster on the left, above the main stick.
+    CGFloat dsize = 42.0 * scale;
+    CGFloat dpadX = CGRectGetMinX(safe) + margin + stickSize * 0.5 - dsize * 1.5;
+    CGFloat dpadY = CGRectGetMaxY(safe) - margin - stickSize - 12.0 * scale - dsize * 3.0;
+    [self placeControl:du defaultFrame:CGRectMake(dpadX + dsize * 0.5 - dsize * 0.5, dpadY, dsize, dsize) identifier:@"D_U"];
+    [self placeControl:dd defaultFrame:CGRectMake(dpadX + dsize * 0.5 - dsize * 0.5, dpadY + dsize * 2.0, dsize, dsize) identifier:@"D_D"];
+    [self placeControl:dl defaultFrame:CGRectMake(dpadX, dpadY + dsize, dsize, dsize) identifier:@"D_L"];
+    [self placeControl:dr defaultFrame:CGRectMake(dpadX + dsize * 2.0, dpadY + dsize, dsize, dsize) identifier:@"D_R"];
+
+    CGFloat alpha = _touchControlsHidden ? 0.0 : [SunPadSettings sharedSettings].controlOpacity;
+    for (UIView *view in self.subviews) {
+        if (view == _menuButton || view == _settingsPanel)
+            continue;
+        view.alpha = alpha;
     }
 
     [self layoutSettingsPanelInSafeArea:safe];
+}
+
+- (void)placeControl:(UIView *)control defaultFrame:(CGRect)defaultFrame identifier:(NSString *)identifier {
+    control.bounds = CGRectMake(0, 0, defaultFrame.size.width, defaultFrame.size.height);
+    NSDictionary *saved = [[NSUserDefaults standardUserDefaults]
+        dictionaryForKey:@"SunPadControlOrigins"];
+    NSValue *savedPoint = saved[identifier];
+    if (savedPoint != nil) {
+        CGPoint normalized = savedPoint.CGPointValue;
+        CGRect safe = self.bounds;
+        if (@available(iOS 11.0, *))
+            safe = UIEdgeInsetsInsetRect(safe, self.safeAreaInsets);
+        CGFloat cx = CGRectGetMinX(safe) + normalized.x * safe.size.width;
+        CGFloat cy = CGRectGetMinY(safe) + normalized.y * safe.size.height;
+        CGFloat halfW = control.bounds.size.width * 0.5;
+        CGFloat halfH = control.bounds.size.height * 0.5;
+        cx = std::clamp(cx, CGRectGetMinX(safe) + halfW, CGRectGetMaxX(safe) - halfW);
+        cy = std::clamp(cy, CGRectGetMinY(safe) + halfH, CGRectGetMaxY(safe) - halfH);
+        control.center = CGPointMake(cx, cy);
+    } else {
+        control.center = CGPointMake(CGRectGetMidX(defaultFrame), CGRectGetMidY(defaultFrame));
+    }
+}
+
+- (SunPadGameButton *)buttonWithMask:(uint16_t)mask {
+    for (SunPadGameButton *button in _buttons) {
+        if (button.inputMask == mask)
+            return button;
+    }
+    return nil;
 }
 
 - (void)layoutSettingsPanelInSafeArea:(CGRect)safe {
@@ -517,9 +587,8 @@
 
 - (void)toggleSettingsPanel {
     _settingsPanel.hidden = !_settingsPanel.hidden;
-    if (!_settingsPanel.hidden) {
+    if (!_settingsPanel.hidden)
         _renderScaleControl.selectedSegmentIndex = [SunPadSettings sharedSettings].renderScale;
-    }
 }
 
 - (void)renderScaleChanged:(UISegmentedControl *)control {
@@ -572,20 +641,22 @@
 
 - (void)resetLayout {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults removeObjectForKey:@"SunPadControlOrigins"];
     [defaults removeObjectForKey:@"SunPadControlSizeScale"];
     [defaults removeObjectForKey:@"SunPadControlOpacity"];
-    [defaults removeObjectForKey:@"SunPadControlOrigins"];
-    [defaults removeObjectForKey:@"SunPadControlSizeOverrides"];
     [[SunPadSettings sharedSettings] synchronize];
-    _controlOrigins = [NSMutableDictionary dictionary];
     [self applySettings];
     [self setNeedsLayout];
 }
 
-#pragma mark - Layout editing (drag controls)
+#pragma mark - Layout editing (drag + persist)
 
 - (void)beginLayoutEditing {
-    for (NSString *identifier in @[ @"move", @"c", @"A", @"B", @"X", @"Y", @"Z", @"Start", @"L", @"R" ]) {
+    NSArray<NSString *> *identifiers = @[
+        @"move", @"c", @"A", @"B", @"X", @"Y", @"Z", @"Start", @"L", @"R",
+        @"D_U", @"D_D", @"D_L", @"D_R",
+    ];
+    for (NSString *identifier in identifiers) {
         UIView *control = [self controlForIdentifier:identifier];
         if (control == nil)
             continue;
@@ -600,8 +671,7 @@
 
 - (void)endLayoutEditing {
     for (UIPanGestureRecognizer *drag in _controlDrags.allValues) {
-        UIView *control = drag.view;
-        [control removeGestureRecognizer:drag];
+        [drag.view removeGestureRecognizer:drag];
     }
     [_controlDrags removeAllObjects];
     [_controlOrigins removeAllObjects];
@@ -610,14 +680,43 @@
 - (UIView *)controlForIdentifier:(NSString *)identifier {
     if ([identifier isEqualToString:@"move"]) return _moveStick;
     if ([identifier isEqualToString:@"c"]) return _cStick;
-    return _buttons[identifier];
+    if ([identifier isEqualToString:@"D_U"]) return [self buttonWithMask:SunPadButtonDpadUp];
+    if ([identifier isEqualToString:@"D_D"]) return [self buttonWithMask:SunPadButtonDpadDown];
+    if ([identifier isEqualToString:@"D_L"]) return [self buttonWithMask:SunPadButtonDpadLeft];
+    if ([identifier isEqualToString:@"D_R"]) return [self buttonWithMask:SunPadButtonDpadRight];
+    for (SunPadGameButton *button in _buttons) {
+        if ([identifier isEqualToString:[self identifierForMask:button.inputMask]])
+            return button;
+    }
+    return nil;
+}
+
+- (NSString *)identifierForMask:(uint16_t)mask {
+    switch (mask) {
+    case SunPadButtonA: return @"A";
+    case SunPadButtonB: return @"B";
+    case SunPadButtonX: return @"X";
+    case SunPadButtonY: return @"Y";
+    case SunPadButtonZ: return @"Z";
+    case SunPadButtonStart: return @"Start";
+    case SunPadButtonL: return @"L";
+    case SunPadButtonR: return @"R";
+    case SunPadButtonDpadUp: return @"D_U";
+    case SunPadButtonDpadDown: return @"D_D";
+    case SunPadButtonDpadLeft: return @"D_L";
+    case SunPadButtonDpadRight: return @"D_R";
+    default: return @"";
+    }
 }
 
 - (void)controlDragged:(UIPanGestureRecognizer *)drag {
-    NSString *identifier = [_controlDrags.allKeys filteredArrayUsingPredicate:
-        [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
-            return _controlDrags[object] == drag;
-        }]].firstObject;
+    NSString *identifier = nil;
+    for (NSString *key in _controlDrags.allKeys) {
+        if (_controlDrags[key] == drag) {
+            identifier = key;
+            break;
+        }
+    }
     if (identifier == nil)
         return;
     CGPoint translation = [drag translationInView:self];
@@ -626,6 +725,23 @@
         return;
     CGPoint origin = originValue.CGPointValue;
     drag.view.center = CGPointMake(origin.x + translation.x, origin.y + translation.y);
+
+    if (drag.state == UIGestureRecognizerStateEnded ||
+        drag.state == UIGestureRecognizerStateCancelled) {
+        CGRect safe = self.bounds;
+        if (@available(iOS 11.0, *))
+            safe = UIEdgeInsetsInsetRect(safe, self.safeAreaInsets);
+        CGPoint normalized = CGPointMake(
+            (drag.view.center.x - CGRectGetMinX(safe)) / safe.size.width,
+            (drag.view.center.y - CGRectGetMinY(safe)) / safe.size.height);
+        NSMutableDictionary *saved = [[[NSUserDefaults standardUserDefaults]
+            dictionaryForKey:@"SunPadControlOrigins"] mutableCopy];
+        if (saved == nil)
+            saved = [NSMutableDictionary dictionary];
+        saved[identifier] = [NSValue valueWithCGPoint:normalized];
+        [[NSUserDefaults standardUserDefaults] setObject:saved forKey:@"SunPadControlOrigins"];
+        [[SunPadSettings sharedSettings] synchronize];
+    }
 }
 
 #pragma mark - Settings application
@@ -649,10 +765,22 @@
 }
 
 - (void)applyControllerVisibility {
-    BOOL controllerConnected = GCController.controllers.count > 0;
+    BOOL controllerConnected = NO;
+#if !TARGET_OS_SIMULATOR
+    // Only real hardware controllers hide the touch controls; the Simulator
+    // can report virtual controllers that would hide them during testing.
+    for (GCController *controller in GCController.controllers) {
+        if (controller.extendedGamepad != nil) {
+            controllerConnected = YES;
+            break;
+        }
+    }
+#endif
     BOOL shouldHide = controllerConnected &&
         [SunPadSettings sharedSettings].hideTouchControlsWhenControllerConnected;
     [self setTouchControlsHidden:shouldHide animated:YES];
+    if (controllerConnected)
+        [self clearTouchInput];
 }
 
 - (void)observeControllerConnection {
@@ -665,10 +793,6 @@
                                                  name:GCControllerDidDisconnectNotification
                                                object:nil];
     [self applyControllerVisibility];
-}
-
-- (SunPadInputState)currentInputState {
-    return _input;
 }
 
 @end

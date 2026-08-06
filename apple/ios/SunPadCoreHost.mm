@@ -126,25 +126,31 @@ namespace fs = std::filesystem;
         return;
     char buffer[128];
     int len = 0;
-    // Main stick: pipe expects raw [0,1] with 0.5 = neutral.
-    float mx = 0.5f + input.mainX * 0.5f;
-    float my = 0.5f - input.mainY * 0.5f;
-    float cx = 0.5f + input.cX * 0.5f;
-    float cy = 0.5f - input.cY * 0.5f;
+    // Sticks are int8 [-127,127]; the pipe expects raw [0,1] with 0.5 neutral
+    // and the positive Y axis mapped to stick-down (GCPadNew.ini).
+    float mx = 0.5f + (input.stickX / 127.0f) * 0.5f;
+    float my = 0.5f - (input.stickY / 127.0f) * 0.5f;
+    float cx = 0.5f + (input.cStickX / 127.0f) * 0.5f;
+    float cy = 0.5f - (input.cStickY / 127.0f) * 0.5f;
     len += snprintf(buffer + len, sizeof(buffer) - len,
                     "SET MAIN %.3f %.3f\n", mx, my);
     len += snprintf(buffer + len, sizeof(buffer) - len,
                     "SET C %.3f %.3f\n", cx, cy);
+    // Triggers are uint8 [0,255] -> pipe value [0,1] (0 = off, 1 = full).
     len += snprintf(buffer + len, sizeof(buffer) - len,
-                    "SET L %.3f\n", (input.triggerL + 1.0f) * 0.5f);
+                    "SET L %.3f\n", input.triggerL / 255.0f);
     len += snprintf(buffer + len, sizeof(buffer) - len,
-                    "SET R %.3f\n", (input.triggerR + 1.0f) * 0.5f);
+                    "SET R %.3f\n", input.triggerR / 255.0f);
 
     struct { uint16_t bit; const char *name; } buttons[] = {
         {SunPadButtonA, "A"},    {SunPadButtonB, "B"},
         {SunPadButtonX, "X"},    {SunPadButtonY, "Y"},
         {SunPadButtonZ, "Z"},    {SunPadButtonStart, "START"},
         {SunPadButtonL, "L"},    {SunPadButtonR, "R"},
+        {SunPadButtonDpadUp, "D_UP"},
+        {SunPadButtonDpadDown, "D_DOWN"},
+        {SunPadButtonDpadLeft, "D_LEFT"},
+        {SunPadButtonDpadRight, "D_RIGHT"},
     };
     static uint16_t lastButtons = 0;
     for (const auto &button : buttons) {

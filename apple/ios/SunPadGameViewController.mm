@@ -3,12 +3,15 @@
 #import "SunPadCoreHost.h"
 #import "SunPadDiscExtractor.h"
 #import "SunPadGameOverlay.h"
+#import "SunPadInputMixer.h"
 #import "SunPadSettings.h"
 
 #import <GameController/GameController.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+#include <cmath>
 
 /* UIView whose backing layer is a CAMetalLayer: the ModernGekko Metal video
  * backend renders directly into this layer (Dolphin owns the drawable). */
@@ -29,7 +32,6 @@
     SunPadMetalSurfaceView *_gameView;
     SunPadCoreHost *_coreHost;
     SunPadGameOverlay *_overlay;
-    SunPadInputState _controllerInput;
     dispatch_source_t _controllerTimer;
 }
 
@@ -53,7 +55,6 @@
     _overlay.delegate = self;
     [self.view addSubview:_overlay];
 
-    [self observeControllerConnection];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(settingsChanged:)
                                                  name:NSUserDefaultsDidChangeNotification
@@ -66,6 +67,66 @@
         return;
     }
     [self startGameIfProvisioned];
+    [self startInputConsumer];
+    [self observeControllers];
+}
+
+- (void)observeControllers {
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(controllerDidConnect:)
+                                                 name:GCControllerDidConnectNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(controllerDidDisconnect:)
+                                                 name:GCControllerDidDisconnectNotification
+                                               object:nil];
+    for (GCController *controller in GCController.controllers)
+        [self configureController:controller];
+}
+
+- (void)controllerDidConnect:(NSNotification *)notification {
+    [self configureController:notification.object];
+}
+
+- (void)controllerDidDisconnect:(NSNotification *)notification {
+    (void)notification;
+    [[SunPadInputMixer sharedMixer] clearInputFromTouch:NO];
+}
+
+/* BellPad's GameCube mapping: analog triggers carry L/R pressure (FLUDD),
+ * the right shoulder is Z, menu is Start, and the D-pad maps to D-pad bits. */
+- (void)configureController:(GCController *)controller {
+    GCExtendedGamepad *gamepad = controller.extendedGamepad;
+    if (gamepad == nil)
+        return;
+    __weak SunPadGameViewController *weakSelf = self;
+    gamepad.valueChangedHandler = ^(GCExtendedGamepad *pad, GCControllerElement *element) {
+        (void)element;
+        (void)weakSelf;
+        SunPadInputState state;
+        state.connected = 1;
+        if (pad.buttonA.isPressed) state.buttons |= SunPadButtonA;
+        if (pad.buttonB.isPressed) state.buttons |= SunPadButtonB;
+        if (pad.buttonX.isPressed) state.buttons |= SunPadButtonX;
+        if (pad.buttonY.isPressed) state.buttons |= SunPadButtonY;
+        if (pad.leftShoulder.isPressed) state.buttons |= SunPadButtonL;
+        if (pad.rightShoulder.isPressed) state.buttons |= SunPadButtonZ;
+        if (pad.buttonMenu.isPressed) state.buttons |= SunPadButtonStart;
+        if (pad.dpad.up.isPressed) state.buttons |= SunPadButtonDpadUp;
+        if (pad.dpad.down.isPressed) state.buttons |= SunPadButtonDpadDown;
+        if (pad.dpad.left.isPressed) state.buttons |= SunPadButtonDpadLeft;
+        if (pad.dpad.right.isPressed) state.buttons |= SunPadButtonDpadRight;
+        state.stickX = (int8_t)std::lround(pad.leftThumbstick.xAxis.value * 127.0f);
+        state.stickY = (int8_t)std::lround(pad.leftThumbstick.yAxis.value * 127.0f);
+        state.cStickX = (int8_t)std::lround(pad.rightThumbstick.xAxis.value * 127.0f);
+        state.cStickY = (int8_t)std::lround(pad.rightThumbstick.yAxis.value * 127.0f);
+        state.triggerL = (uint8_t)std::lround(pad.leftTrigger.value * 255.0f);
+        state.triggerR = (uint8_t)std::lround(pad.rightTrigger.value * 255.0f);
+        if (state.triggerL > 30) state.buttons |= SunPadButtonL;
+        if (state.triggerR > 30) state.buttons |= SunPadButtonR;
+        [[SunPadInputMixer sharedMixer] setInputState:state fromTouch:NO];
+    };
+    gamepad.valueChangedHandler(gamepad, nil);
 }
 
 - (void)settingsChanged:(NSNotification *)notification {
@@ -91,7 +152,9 @@
     // Prefer an extracted root produced from an imported image; fall back to
     // the dev-provisioned tree for acceptance testing on the Simulator.
     NSString *gameRoot = [SunPadSettings sharedSettings].extractedGameRoot;
-    if (gameRoot.length == 0)
+    BOOL rootValid = gameRoot.length > 0 &&
+        [[NSFileManager defaultManager] fileExistsAtPath:gameRoot];
+    if (!rootValid)
         gameRoot = config[@"DevGameRoot"];
     NSString *modulePath = config[@"DevModulePath"];
     if (gameRoot.length == 0 || modulePath.length == 0)
@@ -124,22 +187,9 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)observeControllerConnection {
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(controllerConnected)
-                                                 name:GCControllerDidConnectNotification
-                                               object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(controllerConnected)
-                                                 name:GCControllerDidDisconnectNotification
-                                               object:nil];
-}
-
-- (void)controllerConnected {
-    // Poll controllers on a light timer and merge into the overlay input.
+- (void)startInputConsumer {
+    // Feed the game thread the merged touch+controller snapshot at 60 Hz.
     if (_controllerTimer)
-        dispatch_source_cancel(_controllerTimer);
-    if (GCController.controllers.count == 0)
         return;
     _controllerTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
                                               dispatch_get_main_queue());
@@ -147,54 +197,17 @@
                               1.0 / 60.0 * NSEC_PER_SEC, 0);
     __weak SunPadGameViewController *weakSelf = self;
     dispatch_source_set_event_handler(_controllerTimer, ^{
-        [weakSelf pollControllers];
+        [weakSelf publishMergedInput];
     });
     dispatch_resume(_controllerTimer);
 }
 
-- (void)pollControllers {
-    _controllerInput = (SunPadInputState){0};
-    for (GCController *controller in GCController.controllers) {
-        GCControllerDirectionPad *stick = controller.extendedGamepad.leftThumbstick;
-        GCControllerDirectionPad *c = controller.extendedGamepad.rightThumbstick;
-        GCControllerButtonInput *a = controller.extendedGamepad.buttonA;
-        GCControllerButtonInput *b = controller.extendedGamepad.buttonB;
-        GCControllerButtonInput *x = controller.extendedGamepad.buttonX;
-        GCControllerButtonInput *y = controller.extendedGamepad.buttonY;
-        GCControllerButtonInput *l = controller.extendedGamepad.leftShoulder;
-        GCControllerButtonInput *r = controller.extendedGamepad.rightShoulder;
-        _controllerInput.mainX = stick.xAxis.value;
-        _controllerInput.mainY = -stick.yAxis.value;
-        _controllerInput.cX = c.xAxis.value;
-        _controllerInput.cY = -c.yAxis.value;
-        _controllerInput.triggerL = l.value;
-        _controllerInput.triggerR = r.value;
-        if (a.isPressed) _controllerInput.buttons |= SunPadButtonA;
-        if (b.isPressed) _controllerInput.buttons |= SunPadButtonB;
-        if (x.isPressed) _controllerInput.buttons |= SunPadButtonX;
-        if (y.isPressed) _controllerInput.buttons |= SunPadButtonY;
-        if (l.isPressed) _controllerInput.buttons |= SunPadButtonL;
-        if (r.isPressed) _controllerInput.buttons |= SunPadButtonR;
-        _controllerInput.connected = 1;
-        break;
-    }
-    [_overlay setTouchControlsHidden:
-        _controllerInput.connected &&
-        [SunPadSettings sharedSettings].hideTouchControlsWhenControllerConnected
-                               animated:YES];
+- (void)publishMergedInput {
+    SunPadInputState merged = [[SunPadInputMixer sharedMixer] consumeMergedState];
+    [_coreHost publishInput:merged];
 }
 
 #pragma mark - SunPadGameOverlayDelegate
-
-- (void)gameOverlay:(SunPadGameOverlay *)overlay didUpdateInput:(SunPadInputState)input {
-    (void)overlay;
-    SunPadInputState merged = input;
-    if (_controllerInput.connected) {
-        // Physical controller takes precedence over touch.
-        merged = _controllerInput;
-    }
-    [_coreHost publishInput:merged];
-}
 
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay {
     (void)overlay;
