@@ -23,11 +23,11 @@
 - (instancetype)initWithFrame:(CGRect)frame {
     if ((self = [super initWithFrame:frame])) {
         self.multipleTouchEnabled = NO;
-        self.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.10];
-        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.32].CGColor;
+        self.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.12];
+        self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.34].CGColor;
         self.layer.borderWidth = 2.0;
         _thumb = [[UIView alloc] initWithFrame:CGRectZero];
-        _thumb.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.30];
+        _thumb.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.32];
         _thumb.userInteractionEnabled = NO;
         [self addSubview:_thumb];
     }
@@ -40,6 +40,7 @@
     self.layer.cornerRadius = side * 0.5;
     CGFloat thumbDiameter = side * 0.42;
     _thumb.bounds = CGRectMake(0, 0, thumbDiameter, thumbDiameter);
+    _thumb.layer.cornerRadius = thumbDiameter * 0.5;
     [self updateThumbCenter];
 }
 
@@ -70,18 +71,25 @@
 
 - (void)handleTouch:(UITouch *)touch {
     CGPoint p = [touch locationInView:self];
-    CGFloat half = self.bounds.size.width * 0.5;
-    CGFloat maxTravel = half - _thumb.bounds.size.width * 0.5 - 3.0;
-    if (maxTravel <= 0.0f)
-        return;
-    float x = std::max(-1.0f, std::min(1.0f, (float)((p.x - half) / maxTravel)));
-    float y = std::max(-1.0f, std::min(1.0f, (float)((p.y - half) / maxTravel)));
-    _valueX = x;
-    _valueY = y;
+    CGPoint center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+    CGFloat radius = std::max<CGFloat>(1.0, std::min(self.bounds.size.width,
+                                                     self.bounds.size.height) * 0.5);
+    CGFloat dx = (p.x - center.x) / radius;
+    CGFloat dy = (p.y - center.y) / radius;
+    CGFloat length = hypot(dx, dy);
+    if (length > 1.0) {
+        dx /= length;
+        dy /= length;
+    }
+    CGFloat thumbRadius = _thumb.bounds.size.width * 0.5;
+    CGFloat travel = std::max<CGFloat>(0.0, radius - thumbRadius - 4.0);
+    _thumb.center = CGPointMake(center.x + dx * travel, center.y + dy * travel);
+    // BellPad: positive Y is up (negate UIKit's down-positive coordinate).
+    _valueX = (float)dx;
+    _valueY = (float)(-dy);
     _active = YES;
-    [self updateThumbCenter];
     if (self.valueChanged)
-        self.valueChanged(x, y);
+        self.valueChanged(_valueX, _valueY);
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
