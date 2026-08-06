@@ -98,3 +98,4 @@ ref/ModernGekko-Template/lib/
 ref/ModernGekko-Template/extracted/
 ref/ModernGekko-Template/build/
 ref/bellpad/
+__pycache__/
