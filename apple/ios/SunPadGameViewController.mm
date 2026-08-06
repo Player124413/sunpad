@@ -33,6 +33,7 @@
     SunPadCoreHost *_coreHost;
     SunPadGameOverlay *_overlay;
     dispatch_source_t _controllerTimer;
+    UILabel *_fpsLabel;
 }
 
 - (BOOL)shouldAutorotate {
@@ -67,6 +68,15 @@
     _overlay.delegate = self;
     [self.view addSubview:_overlay];
 
+    _fpsLabel = [UILabel new];
+    _fpsLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.85];
+    _fpsLabel.font = [UIFont monospacedDigitSystemFontOfSize:12.0
+                                                      weight:UIFontWeightSemibold];
+    _fpsLabel.text = @"";
+    _fpsLabel.hidden = YES;
+    [self.view addSubview:_fpsLabel];
+    [self startFPSMonitor];
+
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(settingsChanged:)
                                                  name:NSUserDefaultsDidChangeNotification
@@ -81,6 +91,35 @@
     [self startGameIfProvisioned];
     [self startInputConsumer];
     [self observeControllers];
+}
+
+- (void)startFPSMonitor {
+    static dispatch_source_t fpsTimer;
+    if (fpsTimer)
+        return;
+    fpsTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                      dispatch_get_main_queue());
+    dispatch_source_set_timer(fpsTimer, dispatch_time(DISPATCH_TIME_NOW, 0),
+                              1.0 * NSEC_PER_SEC, 0);
+    __weak SunPadGameViewController *weakSelf = self;
+    dispatch_source_set_event_handler(fpsTimer, ^{
+        [weakSelf updateFPSLabel];
+    });
+    dispatch_resume(fpsTimer);
+}
+
+- (void)updateFPSLabel {
+    double fps = [_coreHost currentFPS];
+    if (fps > 0.0) {
+        // Super Mario Sunshine runs at a 30 Hz NTSC frame rate, so FPS ~ 30 is
+        // full speed. Dolphin's raw "speed" metric is not wired on the static
+        // recomp path and would read misleadingly.
+        _fpsLabel.text = [NSString stringWithFormat:@"%.1f FPS", fps];
+        _fpsLabel.hidden = NO;
+        NSLog(@"[SunPad] FPS: %.1f  EFB: %@", fps, [_coreHost efbResolution]);
+    } else {
+        _fpsLabel.hidden = YES;
+    }
 }
 
 - (void)observeControllers {
@@ -155,6 +194,9 @@
           NSStringFromCGRect(self.view.bounds),
           NSStringFromCGRect(_gameView.bounds),
           NSStringFromCGSize(layer.drawableSize));
+    _fpsLabel.frame = CGRectMake(CGRectGetMinX(self.view.bounds) + 8.0,
+                                 CGRectGetMinY(self.view.bounds) + 8.0,
+                                 140.0, 22.0);
 }
 
 - (void)startGameIfProvisioned {

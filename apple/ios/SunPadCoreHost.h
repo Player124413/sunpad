@@ -37,6 +37,15 @@ NS_ASSUME_NONNULL_BEGIN
  * to the running runtime. Safe to call from any thread. */
 - (void)setRenderScale:(NSInteger)scale;
 
+/* Current emulated FPS from the runtime (0 if not booted). */
+- (double)currentFPS;
+
+/* Emulation speed relative to real time (100 = full speed). */
+- (double)currentSpeed;
+
+/* Internal (EFB) render resolution, e.g. "640x528". */
+- (NSString *)efbResolution;
+
 @property(nonatomic, readonly, getter=isRunning) BOOL running;
 
 @end

@@ -17,6 +17,8 @@ namespace fs = std::filesystem;
 #include "moderngekko/runtime.hpp"
 
 #include "Core/Config/GraphicsSettings.h"
+#include "Core/System.h"
+#include "VideoCommon/PerformanceMetrics.h"
 
 @implementation SunPadCoreHost {
     CAMetalLayer *_layer;
@@ -182,6 +184,26 @@ namespace fs = std::filesystem;
     // Config::SetCurrent is mutex-protected and the video backend refreshes
     // g_ActiveConfig on the next config callback.
     Config::SetCurrent(Config::GFX_EFB_SCALE, static_cast<int>(clamped));
+}
+
+- (double)currentFPS {
+    if (!_running->load())
+        return 0.0;
+    return Core::System::GetInstance().GetPerfMetrics().GetFPS();
+}
+
+- (double)currentSpeed {
+    if (!_running->load())
+        return 0.0;
+    return Core::System::GetInstance().GetPerfMetrics().GetSpeed();
+}
+
+- (NSString *)efbResolution {
+    if (!_running->load())
+        return @"";
+    auto &metrics = Core::System::GetInstance().GetPerfMetrics();
+    return [NSString stringWithFormat:@"%ux%u", metrics.GetEFBWidth(),
+                                      metrics.GetEFBHeight()];
 }
 
 - (void)stop {
