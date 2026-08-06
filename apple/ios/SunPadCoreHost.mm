@@ -71,7 +71,6 @@ namespace fs = std::filesystem;
 - (void)runGameWithGameRoot:(NSString *)gameRoot
                  modulePath:(NSString *)modulePath
               userDirectory:(NSString *)userDirectory {
-    *_running = true;
     std::string errorMessage;
     @autoreleasepool {
         moderngekko::RuntimeConfig config;
@@ -87,7 +86,6 @@ namespace fs = std::filesystem;
         auto created = moderngekko::Runtime::Create(std::move(config));
         if (!created) {
             errorMessage = created.error->message;
-            *_running = false;
             if (_onError) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _onError(@(errorMessage.c_str()));
@@ -95,6 +93,7 @@ namespace fs = std::filesystem;
             }
             return;
         }
+        *_running = true;
 
         // Apply the persisted render-resolution choice now that the runtime's
         // config layers exist.
