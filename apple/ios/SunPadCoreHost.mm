@@ -16,6 +16,8 @@ namespace fs = std::filesystem;
 /* The ModernGekko runtime header is a C++ header; include it here only. */
 #include "moderngekko/runtime.hpp"
 
+#include "Core/Config/GraphicsSettings.h"
+
 @implementation SunPadCoreHost {
     CAMetalLayer *_layer;
     std::thread *_gameThread;
@@ -159,6 +161,14 @@ namespace fs = std::filesystem;
 
     if (len > 0)
         ::write(_pipeFd, buffer, len);
+}
+
+- (void)setRenderScale:(NSInteger)scale {
+    NSInteger clamped = scale < 0 ? 0 : (scale > 4 ? 4 : scale);
+    // Config::SetCurrent is mutex-protected and the video backend refreshes
+    // g_ActiveConfig on the next config callback. 0 leaves the runtime's
+    // default internal resolution (device-native upscale via the layer).
+    Config::SetCurrent(Config::GFX_EFB_SCALE, static_cast<int>(clamped));
 }
 
 - (void)stop {

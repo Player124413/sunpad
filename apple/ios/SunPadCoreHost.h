@@ -28,6 +28,10 @@ NS_ASSUME_NONNULL_BEGIN
  * device. Safe to call from any thread at ~60 Hz. */
 - (void)publishInput:(SunPadInputState)input;
 
+/* Applies the render-resolution scale (0 = native/default, 1..4 = EFB scale)
+ * to the running runtime. Safe to call from any thread. */
+- (void)setRenderScale:(NSInteger)scale;
+
 @property(nonatomic, readonly, getter=isRunning) BOOL running;
 
 @end

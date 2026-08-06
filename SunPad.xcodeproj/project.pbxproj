@@ -30,6 +30,7 @@
 		AA000000000000000000011B /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000227 /* CoreMotion.framework */; };
 		AA000000000000000000011C /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000228 /* Foundation.framework */; };
 		AA000000000000000000011D /* CoreHaptics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022A /* CoreHaptics.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
+		AA000000000000000000011E /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022B /* UniformTypeIdentifiers.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -63,6 +64,7 @@
 		AA0000000000000000000228 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		AA0000000000000000000229 /* SunPadCoreHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadCoreHost.h; sourceTree = "<group>"; };
 		AA000000000000000000022A /* CoreHaptics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreHaptics.framework; path = System/Library/Frameworks/CoreHaptics.framework; sourceTree = SDKROOT; };
+		AA000000000000000000022B /* UniformTypeIdentifiers.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UniformTypeIdentifiers.framework; path = System/Library/Frameworks/UniformTypeIdentifiers.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA000000000000000000011E /* UniformTypeIdentifiers.framework in Frameworks */,
 				AA000000000000000000011D /* CoreHaptics.framework in Frameworks */,
 				AA000000000000000000011C /* Foundation.framework in Frameworks */,
 				AA000000000000000000011B /* CoreMotion.framework in Frameworks */,
@@ -140,6 +143,7 @@
 		AA0000000000000000000403 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				AA000000000000000000022B /* UniformTypeIdentifiers.framework */,
 				AA000000000000000000022A /* CoreHaptics.framework */,
 				AA0000000000000000000228 /* Foundation.framework */,
 				AA0000000000000000000227 /* CoreMotion.framework */,

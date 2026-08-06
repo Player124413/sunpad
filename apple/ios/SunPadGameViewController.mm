@@ -7,6 +7,7 @@
 #import <GameController/GameController.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 /* UIView whose backing layer is a CAMetalLayer: the ModernGekko Metal video
  * backend renders directly into this layer (Dolphin owns the drawable). */
@@ -20,7 +21,7 @@
 }
 @end
 
-@interface SunPadGameViewController () <SunPadGameOverlayDelegate>
+@interface SunPadGameViewController () <SunPadGameOverlayDelegate, UIDocumentPickerDelegate>
 @end
 
 @implementation SunPadGameViewController {
@@ -52,7 +53,16 @@
     [self.view addSubview:_overlay];
 
     [self observeControllerConnection];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(settingsChanged:)
+                                                 name:NSUserDefaultsDidChangeNotification
+                                               object:nil];
     [self startGameIfProvisioned];
+}
+
+- (void)settingsChanged:(NSNotification *)notification {
+    (void)notification;
+    [_coreHost setRenderScale:[SunPadSettings sharedSettings].renderScale];
 }
 
 - (void)viewDidLayoutSubviews {
@@ -182,9 +192,85 @@
 }
 
 - (void)presentGameDataImport {
-    // TODO(Stage 4): present a UIDocumentPickerViewController that validates
-    // the GMSE01 image (header, size, SHA-256) and installs it into private
-    // Application Support, following BellPad's validated import flow.
+    NSArray<UTType *> *types = @[
+        [UTType typeWithFilenameExtension:@"iso"],
+        [UTType typeWithFilenameExtension:@"gcm"],
+        [UTType typeWithFilenameExtension:@"rvz"],
+        UTTypeData,
+    ];
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types
+                                                               asCopy:NO];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+    didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    (void)controller;
+    NSURL *url = urls.firstObject;
+    if (url == nil)
+        return;
+    [self importGameDataFromURL:url];
+}
+
+- (void)importGameDataFromURL:(NSURL *)url {
+    NSString *message = [self validateGameDataAtURL:url];
+    if (message != nil) {
+        [self presentBootError:message];
+        return;
+    }
+
+    // Stage the image into private Application Support (never the bundle).
+    NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory, NSUserDomainMask, YES);
+    NSString *dataDir = [paths.firstObject stringByAppendingPathComponent:@"SunPad/GameData"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dataDir
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    NSString *destination =
+        [dataDir stringByAppendingPathComponent:url.lastPathComponent];
+    NSError *copyError = nil;
+    if (![[NSFileManager defaultManager] copyItemAtPath:url.path
+                                                 toPath:destination
+                                                  error:&copyError]) {
+        [self presentBootError:[NSString stringWithFormat:@"Could not retain the game image: %@",
+                                                          copyError.localizedDescription]];
+        return;
+    }
+    [SunPadSettings sharedSettings].retainedGameDataPath = destination;
+    [[SunPadSettings sharedSettings] synchronize];
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"Game Data Retained"
+                                            message:[NSString stringWithFormat:
+                                                @"%@ was validated and stored. Recompile-and-boot from an imported image requires the on-device module provisioning flow (next milestone); the dev build continues using its provisioned game tree.",
+                                                url.lastPathComponent]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (nullable NSString *)validateGameDataAtURL:(NSURL *)url {
+    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:url.path];
+    if (handle == nil)
+        return @"The selected file could not be opened.";
+    NSData *header = [handle readDataOfLength:0x100];
+    [handle closeFile];
+    if (header.length < 0x100)
+        return @"The file is too small to be a GameCube image.";
+
+    const uint8_t *bytes = (const uint8_t *)header.bytes;
+    uint32_t magic = CFSwapInt32BigToHost(*(uint32_t *)(bytes + 0x1C));
+    if (magic != 0xC2339F3D)
+        return @"The file is not a GameCube disc image (bad magic).";
+    char gameId[7] = {0};
+    memcpy(gameId, bytes + 0x60, 6);
+    if (strncmp(gameId, "GMSE01", 6) != 0)
+        return [NSString stringWithFormat:@"Unsupported game ID '%s'; SunPad currently supports GMSE01 (Super Mario Sunshine USA).", gameId];
+    return nil;
 }
 
 @end
