@@ -24,8 +24,9 @@ resolution, and Sunshine touch controls are implemented.
 
 ## What does not
 
-- iOS audio (Null backend), physical-device runs, module provisioning for
-  discs beyond the dev-provisioned GMSE01 build.
+- Physical-device runs (audio sessions, controllers, performance, memory);
+  module provisioning for discs beyond the dev-provisioned GMSE01 build;
+  lifecycle save-flushing and audio-interruption restoration.
 - Desktop Stage 1 gates: plaza gameplay, objective, save/reload.
 - Native macOS SunPad `.app` shell.
 
@@ -62,12 +63,12 @@ cd ref/ModernGekko-Template
 
 ## Next actions
 
-1. iOS on-device import: document picker → validate GMSE01 (header, size,
-   SHA-256) → extract → boot with the provisioned module (done; module
-   matching for other discs remains).
-2. Apply the render-resolution setting to the live runtime
-   (`Config::GFX_EFB_SCALE`); add an AVAudioSession audio backend.
-3. Interactive touch-control acceptance on the Simulator.
+1. Physical-device verification (signing, audio sessions, controllers,
+   performance, memory) and interactive touch-control acceptance.
+2. Module matching/provisioning for imported discs beyond the dev GMSE01
+   build.
+3. Lifecycle hardening: save flushing before suspension, audio-interruption
+   restoration, controller connect/disconnect during gameplay.
 4. Stage 2: native macOS SunPad `.app` shell on the shared runtime.
 5. Desktop: plaza gameplay, objective, save/reload evidence.
 

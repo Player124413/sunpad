@@ -32,6 +32,7 @@ Last updated: 2026-08-06
 | Merged input + D-pad | Pass | Mixer (OR buttons/latching, strongest sticks, max triggers); D-pad renders; input advances the game |
 | iOS audio backend | Pass | AVAudioEngine + AVAudioSourceNode at 48 kHz; no audio-related crash |
 | Startup stability | Pass | Render-scale pre-boot crash fixed; app stays alive across relaunches |
+| Runtime diagnostics | Pass | Overlay FPS readout (30.0 at 640x528 EFB) and EFB resolution via PerformanceMetrics |
 
 Screenshots: `artifacts/screenshots/2026-08-06/`.
 
@@ -50,6 +51,24 @@ xcrun simctl io "iPhone 17 Pro" screenshot /tmp/sunpad-core.png
 CONTAINER=$(xcrun simctl get_app_container "iPhone 17 Pro" com.sunpad.SunPad data)
 python3 scripts/gcpipe.py --pipe "$CONTAINER/Library/Application Support/SunPad/Pipes/sunpad" --tap START
 ```
+
+### Re-verification before merge (2026-08-06)
+
+Run at git revision `d3c1ed8` (docs-only changes since do not affect the app
+artifact) on this machine, iPhone 17 Pro Simulator (iOS 26.5), Debug build,
+after an incremental `./scripts/ios-build-core.sh` (core + module + merged
+static archive) and `xcodebuild` app build:
+
+| Check | Result | Evidence |
+|---|---|---|
+| Core + module + provisioning pipeline | Pass | `ios-build-core.sh` completed; `libSunPadCore.a` merged |
+| App build | Pass | `xcodebuild ... BUILD SUCCEEDED` |
+| Launch + boot | Pass | "Welcome to Isle Delfino" splash rendered (~29-30 FPS) |
+| Pipe input advances the game | Pass | `gcpipe.py --tap START` moved the splash into the Peach/Mario cabin intro cutscene |
+| Stability | Pass | App stayed alive across relaunch (one unrelated Simulator shutdown required a `simctl boot` + relaunch) |
+
+Screenshots: `artifacts/screenshots/2026-08-06/reverify-2026-08-06-splash.png`,
+`artifacts/screenshots/2026-08-06/reverify-2026-08-06-cabin-intro-after-start.png`.
 
 ## Stage 1 desktop checklist
 

@@ -69,6 +69,8 @@ code-generating loader).
     strongest-wins sticks, max analog triggers / FLUDD pressure).
 12. **iOS audio**: native AVAudioEngine backend feeding the Dolphin Mixer at
     48 kHz (audible on the Simulator).
+13. **Runtime diagnostics**: the overlay shows live FPS (30.0 on the iPhone
+    17 Pro Simulator at 640x528 EFB) and the current EFB resolution.
 
 ### Desktop (previously proven)
 
@@ -80,24 +82,32 @@ code-generating loader).
 
 ## What does not work / not yet proven
 
-- iOS audio is a Null backend (cubeb is macOS-only in this tree); an
-  AVAudioSession-backed backend is a follow-up.
+- Physical-device iOS audio is untested: the AVAudioEngine backend runs on the
+  Simulator, but audio-session interruptions, backgrounding, and hardware
+  behavior on real devices are not yet verified.
 - The recompiled module is provisioned from the Mac toolchain (iOS has no C
-  compiler); import/extract/boot works on-device.
-- The mobile render-resolution setting persists but is not yet applied to the
-  live EFB scale.
+  compiler); import/extract/boot works on-device, but provisioning a module
+  for a disc other than the dev-provisioned GMSE01 build is not implemented.
 - Physical-device runs (signing, performance, memory) are not yet done.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
 - No SunPad-native macOS app shell yet.
+- Interactive touch-control acceptance is not yet complete: controls render and
+  a drag tool (`scripts/simdrag.swift`) exists, but hands-on layout acceptance
+  remains.
+- App lifecycle hardening is partial: backgrounding/pause hooks exist but
+  save-flushing before suspension and audio-interruption restoration are not
+  implemented.
 
 ## Next highest-priority tasks
 
-1. iOS: on-device game-data import (document picker, ISO validation,
-   extraction, module provisioning) so a real device can boot.
-2. iOS: apply the render-resolution setting to the running runtime (EFB
-   scale), add AVAudioSession audio, interactive touch-control acceptance.
-3. Stage 2: native macOS SunPad `.app` shell on the shared runtime layer.
-4. Desktop Stage 1 gates: plaza gameplay, objective, save/reload evidence.
+1. Physical-device verification (signing, audio sessions, controllers,
+   performance, memory) and interactive touch-control acceptance.
+2. Module provisioning for imported discs beyond the dev GMSE01 build
+   (game-ID matching against the provisioned module).
+3. App lifecycle: save flushing before suspension, audio-interruption
+   restoration, controller connect/disconnect during gameplay.
+4. Stage 2: native macOS SunPad `.app` shell on the shared runtime layer.
+5. Desktop Stage 1 gates: plaza gameplay, objective, save/reload evidence.
 
 ## Evidence locations (local, gitignored)
 

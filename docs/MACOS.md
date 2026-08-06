@@ -1,12 +1,17 @@
 # macOS
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 Stage 2 target: native Apple Silicon `SunPad.app`.
 
 ## Current status
 
-Not started. Waiting on Stage 1 recompilation reproduction.
+Not started. Stage 1 desktop reproduction is proven through the title/intro
+sequences (extract → recompile with 0 unknown ops → arm64 module →
+`moderngekko-run` at ~30 FPS with Metal and pipe input); the remaining Stage 1
+gates are plaza gameplay, objective completion, and save/reload evidence.
+The native `SunPad.app` shell is built on top of the shared Apple runtime once
+those gates close.
 
 ## Intended properties
 

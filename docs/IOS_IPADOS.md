@@ -8,8 +8,8 @@ Last updated: 2026-08-06
 iPad Pro 13-inch simulators (iOS 26.5)** through the SunPad app: the
 ahead-of-time statically recompiled game module runs through the
 ModernGekko/Dolphin-derived compatibility runtime, rendered by Dolphin's Metal
-backend into a CAMetalLayer. Input advances the game. Physical-device and
-import-flow work remain.
+backend into a CAMetalLayer. Input advances the game. The on-device game-data
+import flow is implemented and verified; physical-device verification remains.
 
 ## What is built
 
@@ -41,6 +41,10 @@ SunPad-specific iOS changes (all in `ref/ModernGekko`):
   replaced by the generic software loader (`GFX_VERTEX_LOADER_TYPE=Software`).
 - Translocated-path (macOS-only) bundle code is skipped on iOS.
 
+Audio uses a native `AVAudioEngine` backend (`AudioEngineStream`) feeding the
+Dolphin Mixer at 48 kHz, and the persisted Native/1×-4× render-resolution
+choice is applied live through `Config::GFX_EFB_SCALE` (at boot and on change).
+
 ## Game data on mobile
 
 The import flow is implemented and verified on the Simulator:
@@ -61,7 +65,7 @@ headlessly for verification.
 
 ## Lifecycle and controls
 
-- App delegate hooks pause/resume and backgrounding; save flushing before
-  suspension is the next milestone.
+- App delegate pause/resume/background hooks exist but are stubs; save
+  flushing before suspension is the next milestone.
 - GameController polling merges into the same normalized input snapshot as
   touch; touch controls auto-hide when a controller is connected.

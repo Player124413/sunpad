@@ -1,6 +1,6 @@
 # Dependencies
 
-Last updated: 2026-08-05
+Last updated: 2026-08-06
 
 ## Host toolchain (verified on this machine)
 
@@ -75,6 +75,10 @@ Not selected as primary runtime:
 
 When any external checkout moves, update this file with the new SHA and the reason for the bump. Prefer official ExpansionPak / doldecomp upstreams over stale forks.
 
-## Update policy
+## Repository hygiene note
 
-When any external checkout moves, update this file with the new SHA and the reason for the bump. Prefer official ExpansionPak / doldecomp upstreams over stale forks.
+The `ref/` checkouts and the local disc image are Git-ignored wholesale: each
+checkout is a nested Git repository, so committing them would create broken
+gitlinks or vendor bloat. A fresh machine reproduces the tree by cloning the
+pinned revisions above (or running `make check` in ModernGekko-Template) and
+supplying their own disc image.

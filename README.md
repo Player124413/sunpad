@@ -212,6 +212,20 @@ supported game data. See
 upstream licenses of the dependency pins in
 [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
 
+## Documentation
+
+- [docs/STATUS.md](docs/STATUS.md) — where the project stands, platform by platform
+- [docs/HANDOFF.md](docs/HANDOFF.md) — exact resume commands and next actions
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layering and separation rules
+- [docs/RESEARCH.md](docs/RESEARCH.md) — ecosystem research and ReShine findings
+- [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) — pinned external revisions and licenses
+- [docs/BUILDING.md](docs/BUILDING.md) — exact extract/recompile/build/run commands
+- [docs/TESTING.md](docs/TESTING.md) — dated evidence and checklists
+- [docs/MACOS.md](docs/MACOS.md) — Stage 2 macOS app plan
+- [docs/IOS_IPADOS.md](docs/IOS_IPADOS.md) — iOS/iPadOS port details
+- [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — known limitations and workarounds
+- [docs/LEGAL_AND_PROVENANCE.md](docs/LEGAL_AND_PROVENANCE.md) — legal and provenance boundaries
+
 ## Contributing
 
 SunPad is a research/experimental project. The best way to help is to test a
