@@ -1,103 +1,105 @@
 #import "SunPadGameViewController.h"
 
+#import "SunPadCoreHost.h"
 #import "SunPadGameOverlay.h"
 #import "SunPadSettings.h"
 
 #import <GameController/GameController.h>
 #import <Metal/Metal.h>
-#import <MetalKit/MetalKit.h>
+#import <QuartzCore/QuartzCore.h>
 
-@interface SunPadMetalRenderer : NSObject <MTKViewDelegate>
-- (instancetype)initWithDevice:(id<MTLDevice>)device;
-- (void)setScale:(float)scale;
+/* UIView whose backing layer is a CAMetalLayer: the ModernGekko Metal video
+ * backend renders directly into this layer (Dolphin owns the drawable). */
+@interface SunPadMetalSurfaceView : UIView
++ (Class)layerClass;
 @end
 
-@implementation SunPadMetalRenderer {
-    id<MTLDevice> _device;
-    id<MTLCommandQueue> _queue;
-    float _scale;
+@implementation SunPadMetalSurfaceView
++ (Class)layerClass {
+    return [CAMetalLayer class];
 }
-
-- (instancetype)initWithDevice:(id<MTLDevice>)device {
-    if ((self = [super init])) {
-        _device = device;
-        _queue = [device newCommandQueue];
-        _scale = 0.0f;
-    }
-    return self;
-}
-
-- (void)setScale:(float)scale {
-    _scale = scale;
-}
-
-- (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
-    (void)view;
-    (void)size;
-}
-
-- (void)drawInMTKView:(MTKView *)view {
-    MTLRenderPassDescriptor *pass = view.currentRenderPassDescriptor;
-    id<CAMetalDrawable> drawable = view.currentDrawable;
-    if (pass == nil || drawable == nil)
-        return;
-    // SunPad brand clear color; the game's EFB content replaces this once the
-    // shared runtime is attached to the surface.
-    pass.colorAttachments[0].clearColor = MTLClearColorMake(0.055, 0.42, 0.62, 1.0);
-    id<MTLCommandBuffer> buffer = [_queue commandBuffer];
-    id<MTLRenderCommandEncoder> encoder = [buffer renderCommandEncoderWithDescriptor:pass];
-    [encoder endEncoding];
-    [buffer presentDrawable:drawable];
-    [buffer commit];
-}
-
 @end
 
 @interface SunPadGameViewController () <SunPadGameOverlayDelegate>
 @end
 
 @implementation SunPadGameViewController {
-    MTKView *_gameView;
-    SunPadMetalRenderer *_renderer;
+    SunPadMetalSurfaceView *_gameView;
+    SunPadCoreHost *_coreHost;
     SunPadGameOverlay *_overlay;
     SunPadInputState _controllerInput;
+    dispatch_source_t _controllerTimer;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.blackColor;
 
-    id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-    _gameView = [[MTKView alloc] initWithFrame:self.view.bounds device:device];
+    _gameView = [[SunPadMetalSurfaceView alloc] initWithFrame:self.view.bounds];
     _gameView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _gameView.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
-    _renderer = [[SunPadMetalRenderer alloc] initWithDevice:device];
-    _gameView.delegate = _renderer;
     [self.view addSubview:_gameView];
+
+    CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
+    layer.device = MTLCreateSystemDefaultDevice();
+    layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    layer.framebufferOnly = YES;
+    layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * 2.0,
+                                    CGRectGetHeight(_gameView.bounds) * 2.0);
 
     _overlay = [[SunPadGameOverlay alloc] initWithFrame:self.view.bounds];
     _overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _overlay.delegate = self;
     [self.view addSubview:_overlay];
 
-    [self applyRenderScale];
     [self observeControllerConnection];
+    [self startGameIfProvisioned];
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    [self applyRenderScale];
+    CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
+    layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * 2.0,
+                                    CGRectGetHeight(_gameView.bounds) * 2.0);
 }
 
-- (void)applyRenderScale {
-    float scale = [SunPadSettings sharedSettings].renderScaleFloat;
-    [_renderer setScale:scale];
-    CGSize pointSize = self.view.bounds.size;
-    CGFloat screenScale = UIScreen.mainScreen.scale;
-    CGFloat pixelScale = MAX(1.0f, screenScale);
-    CGFloat multiplier = scale > 0.0f ? scale : pixelScale;
-    _gameView.drawableSize = CGSizeMake(pointSize.width * multiplier,
-                                        pointSize.height * multiplier);
+- (void)startGameIfProvisioned {
+    if (_coreHost != nil)
+        return;
+    NSBundle *bundle = NSBundle.mainBundle;
+    NSString *configPath = [bundle pathForResource:@"dev-config" ofType:@"plist"];
+    if (configPath == nil)
+        return; // Not a dev-provisioned build; import flow is a later stage.
+    NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
+    NSString *gameRoot = config[@"DevGameRoot"];
+    NSString *modulePath = config[@"DevModulePath"];
+    if (gameRoot.length == 0 || modulePath.length == 0)
+        return;
+
+    NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
+        NSApplicationSupportDirectory, NSUserDomainMask, YES);
+    NSString *userDirectory = [paths.firstObject stringByAppendingPathComponent:@"SunPad"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:userDirectory
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+
+    CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
+    _coreHost = [[SunPadCoreHost alloc] initWithLayer:layer];
+    __weak SunPadGameViewController *weakSelf = self;
+    [_coreHost startWithGameRoot:gameRoot
+                      modulePath:modulePath
+                   userDirectory:userDirectory
+                         onError:^(NSString *message) {
+        [weakSelf presentBootError:message];
+    }];
+}
+
+- (void)presentBootError:(NSString *)message {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"SunPad could not start"
+                                                                   message:message
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)observeControllerConnection {
@@ -113,20 +115,19 @@
 
 - (void)controllerConnected {
     // Poll controllers on a light timer and merge into the overlay input.
-    static dispatch_source_t timer;
-    if (timer)
-        dispatch_source_cancel(timer);
+    if (_controllerTimer)
+        dispatch_source_cancel(_controllerTimer);
     if (GCController.controllers.count == 0)
         return;
-    timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                   dispatch_get_main_queue());
-    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, 0),
+    _controllerTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                              dispatch_get_main_queue());
+    dispatch_source_set_timer(_controllerTimer, dispatch_time(DISPATCH_TIME_NOW, 0),
                               1.0 / 60.0 * NSEC_PER_SEC, 0);
     __weak SunPadGameViewController *weakSelf = self;
-    dispatch_source_set_event_handler(timer, ^{
+    dispatch_source_set_event_handler(_controllerTimer, ^{
         [weakSelf pollControllers];
     });
-    dispatch_resume(timer);
+    dispatch_resume(_controllerTimer);
 }
 
 - (void)pollControllers {
@@ -165,9 +166,12 @@
 
 - (void)gameOverlay:(SunPadGameOverlay *)overlay didUpdateInput:(SunPadInputState)input {
     (void)overlay;
-    (void)input;
-    // Merged input is published to the game runtime host. The runtime bridge
-    // consumes this snapshot on the game thread (BellPad's pattern).
+    SunPadInputState merged = input;
+    if (_controllerInput.connected) {
+        // Physical controller takes precedence over touch.
+        merged = _controllerInput;
+    }
+    [_coreHost publishInput:merged];
 }
 
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay {

@@ -99,3 +99,6 @@ ref/ModernGekko-Template/extracted/
 ref/ModernGekko-Template/build/
 ref/bellpad/
 __pycache__/
+
+# Local iOS provisioning (build products + host paths)
+apple/ios/Provisioned/
