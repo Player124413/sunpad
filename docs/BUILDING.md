@@ -1,6 +1,6 @@
 # Building
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Prerequisites
 
@@ -61,3 +61,24 @@ chunks (`ref/ModernGekko-Template/extracted/.../recomp/generated`) for the
 Simulator using the iOS toolchain, producing `/tmp/module-ios2/gGMSE01_recomp.dylib`
 (platform IOSSIMULATOR). The app loads it via `dlopen`; a statically linked
 module is the documented App Store-compatible follow-up.
+
+## Physical iOS / iPadOS device build (development)
+
+The physical-device core and matching GMSE01 module use the separate arm64
+iPhoneOS toolchain:
+
+```sh
+./scripts/ios-build-core-device.sh
+xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
+  -destination 'platform=iOS,id=<device-udid>' \
+  -derivedDataPath /tmp/SunPadDerivedData \
+  DEVELOPMENT_TEAM=<team-id> CODE_SIGN_STYLE=Automatic \
+  -allowProvisioningUpdates build
+```
+
+The script produces the device core archive, device module, and
+`apple/ios/Provisioned/dev-config.plist`. Installing user-owned game data and
+the generated module into a development device container remains a local
+provisioning step; neither is bundled or tracked. This path has booted on a
+physical iPad, but it is not distribution packaging and physical-device audio
+is currently broken as documented in [AUDIO_ISSUE.md](AUDIO_ISSUE.md).

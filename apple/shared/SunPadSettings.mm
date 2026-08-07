@@ -15,7 +15,9 @@
 
 - (instancetype)init {
     if ((self = [super init])) {
-        _controlSizeScales = [NSMutableDictionary dictionary];
+        NSDictionary *saved = [[NSUserDefaults standardUserDefaults]
+            dictionaryForKey:@"SunPadControlSizeScales"];
+        _controlSizeScales = saved ? [saved mutableCopy] : [NSMutableDictionary dictionary];
     }
     return self;
 }
@@ -23,13 +25,13 @@
 - (NSInteger)renderScale {
     NSNumber *value = [[NSUserDefaults standardUserDefaults] objectForKey:@"SunPadRenderScale"];
     if (value == nil)
-        return 0;
+        return 1;
     NSInteger scale = value.integerValue;
-    return scale < 0 ? 0 : (scale > 4 ? 4 : scale);
+    return scale < 1 ? 1 : (scale > 4 ? 4 : scale);
 }
 
 - (void)setRenderScale:(NSInteger)renderScale {
-    NSInteger clamped = renderScale < 0 ? 0 : (renderScale > 4 ? 4 : renderScale);
+    NSInteger clamped = renderScale < 1 ? 1 : (renderScale > 4 ? 4 : renderScale);
     [[NSUserDefaults standardUserDefaults] setInteger:clamped forKey:@"SunPadRenderScale"];
 }
 
@@ -39,8 +41,17 @@
     case 2: return 2.0f;
     case 3: return 3.0f;
     case 4: return 4.0f;
-    default: return 0.0f; // native drawable resolution
+    default: return 1.0f;
     }
+}
+
+- (BOOL)showFPSCounter {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"SunPadShowFPSCounter"];
+}
+
+- (void)setShowFPSCounter:(BOOL)showFPSCounter {
+    [[NSUserDefaults standardUserDefaults] setBool:showFPSCounter
+                                            forKey:@"SunPadShowFPSCounter"];
 }
 
 - (BOOL)hideTouchControlsWhenControllerConnected {
@@ -55,7 +66,7 @@
 - (CGFloat)controlOpacity {
     NSNumber *value = [[NSUserDefaults standardUserDefaults] objectForKey:@"SunPadControlOpacity"];
     if (value == nil)
-        return 1.0;
+        return 0.82;
     return MAX(0.25, MIN(1.0, value.doubleValue));
 }
 
@@ -93,6 +104,13 @@
 
 - (void)setSizeScale:(CGFloat)scale forControl:(NSString *)identifier {
     _controlSizeScales[identifier] = @(MAX(0.60, MIN(1.75, scale)));
+    [[NSUserDefaults standardUserDefaults] setObject:_controlSizeScales
+                                              forKey:@"SunPadControlSizeScales"];
+}
+
+- (void)resetControlSizeScales {
+    [_controlSizeScales removeAllObjects];
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"SunPadControlSizeScales"];
 }
 
 - (NSString *)retainedGameDataPath {

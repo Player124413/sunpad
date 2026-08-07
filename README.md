@@ -10,27 +10,28 @@ fully decompiled, and it does not depend on a runtime PowerPC JIT.
 
 This repository is ready for cross-machine handoff and acceptance testing. The
 proven ARM64 game core (DolRecomp-generated module + ModernGekko/Dolphin-derived
-runtime) packages as native **iPhone and iPad simulator apps** that boot Super
+runtime) packages as native **iPhone and iPad apps** that boot Super
 Mario Sunshine to the title screen, render gameplay through Metal, accept
 touch and GameController input, import user-owned game data through the Files
 document picker, extract it on-device, and persist per-device control and
 render-resolution settings. The same core launches on Apple Silicon desktop
-through `moderngekko-run`. Physical-device runtime, signing, broader scene
-coverage, and the native macOS app shell remain explicit follow-up work; this
+through `moderngekko-run`. Physical-iPad boot, rendering, ISO loading, and
+touch input are proven, but game-engine audio remains broken. Broader scene
+coverage and the native macOS app shell remain explicit follow-up work; this
 is a source release, not an App Store release or a claim of production
 completeness.
 
 ## Current status
 
-As of 2026-08-06:
+As of 2026-08-07:
 
 - A pinned ModernGekko + DolRecomp toolchain translates `main.dol` with
   **0 unknown instructions** (~901k decoded ops, 221 C chunks) and packages a
-  native arm64 `gGMSE01_recomp.dylib` for macOS and the iOS Simulator.
+  native arm64 `gGMSE01_recomp.dylib` for macOS, the iOS Simulator, and a
+  physical iOS device development build.
 - The ModernGekko / Dolphin-derived compatibility runtime builds for the iOS
-  Simulator (arm64, `platform IOSSIMULATOR`) with the **static-recomp CPU
-  path and no runtime JIT** (interpreter fallback + generic software vertex
-  loader).
+  Simulator and physical arm64 devices with the **static-recomp CPU path and
+  no runtime JIT** (interpreter fallback + generic software vertex loader).
 - The SunPad iOS/iPadOS app statically links the core and renders the game
   through Dolphin's Metal backend into a CAMetalLayer. Evidence on the iPhone
   17 Pro and iPad Pro 13-inch simulators (iOS 26.5): the SUPER MARIO SUNSHINE
@@ -43,11 +44,13 @@ As of 2026-08-06:
   picker → GameCube header validation (magic + `GMSE01`) → private Application
   Support retain → on-device extraction (174 files, matches the desktop tree)
   → boot from the imported image.
-- iOS audio is a native `AVAudioEngine` backend feeding the Dolphin Mixer at
-  48 kHz, so the game is audible on the Simulator.
+- Physical-iPad audio is a known blocker: THP video audio is generally audible,
+  while JAudio/DSP music, voices, and effects truncate or disappear. The same
+  ISO has complete audio in stock Dolphin; see
+  [docs/AUDIO_ISSUE.md](docs/AUDIO_ISSUE.md).
 - Touch + GameController merge through one thread-safe normalized GameCube
   state (ORed buttons with edge latching, strongest-wins sticks, max analog
-  triggers for FLUDD pressure), with Native/1×/2×/3×/4× render resolution
+  triggers for FLUDD pressure), with 1× native/2×/3×/4× render resolution
   applied live.
 - Desktop `moderngekko-run` reaches the title/intro at ~30 FPS and responds to
   pipe input. Delfino Plaza gameplay, objective completion, and save/reload
@@ -59,7 +62,7 @@ As of 2026-08-06:
 |---|---|
 | Apple Silicon macOS | Proven core + Metal launcher (`moderngekko-run`) reaches title/intro; native SunPad `.app` shell not started |
 | iPhone/iPad Simulator | Game boots to title and renders gameplay in landscape; import/extract/input/audio work; hands-on defect acceptance remains |
-| Physical iPhone / iPad | Not yet (document-picker import works; module provisioning for other discs + signing pending) |
+| Physical iPhone / iPad | Development iPad boot/render/ISO/touch proven; game-engine audio broken; distribution packaging pending |
 | Intel macOS, Windows, Linux | Upstream-reference platforms, not SunPad release targets |
 
 ## Game-data requirements
@@ -133,7 +136,7 @@ The mobile layout is landscape-only, inspired by BellPad and adapted for
 Sunshine: a left analog stick (movement), a C-stick (camera), A/B/X/Y/Z,
 START, L/R, and a D-pad. It scales from compact iPhones to an expanded iPad
 layout and respects safe areas. The top-right three-dot menu opens native
-settings: render resolution (Native plus 1×, 2×, 3×, 4× EFB scales), control
+settings: render resolution (1× native, 2×, 3×, 4× EFB scales), control
 opacity/size, hide-on-controller, Move-mode drag editing with persisted
 normalized positions, and Reset. Physical controllers auto-hide the touch
 controls on devices. Touch and GameController states merge through one
@@ -188,8 +191,8 @@ More detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Known issues
 
 See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). Highlights: physical-device
-audio/controllers/performance are untested; the module is provisioned from the
-Mac for a matching disc; desktop plaza/objective/save gates are open.
+game-engine audio is broken, the module is provisioned from the Mac for a
+matching disc, and desktop plaza/objective/save gates are open.
 
 ## Research and credits
 
@@ -224,6 +227,7 @@ upstream licenses of the dependency pins in
 - [docs/MACOS.md](docs/MACOS.md) — Stage 2 macOS app plan
 - [docs/IOS_IPADOS.md](docs/IOS_IPADOS.md) — iOS/iPadOS port details
 - [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — known limitations and workarounds
+- [docs/AUDIO_ISSUE.md](docs/AUDIO_ISSUE.md) — physical-iPad audio evidence and open leads
 - [docs/LEGAL_AND_PROVENANCE.md](docs/LEGAL_AND_PROVENANCE.md) — legal and provenance boundaries
 
 ## Contributing

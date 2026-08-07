@@ -1,6 +1,6 @@
 # iOS and iPadOS
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Current status
 
@@ -9,7 +9,8 @@ iPad Pro 13-inch simulators (iOS 26.5)** through the SunPad app: the
 ahead-of-time statically recompiled game module runs through the
 ModernGekko/Dolphin-derived compatibility runtime, rendered by Dolphin's Metal
 backend into a CAMetalLayer. Input advances the game. The on-device game-data
-import flow is implemented and verified; physical-device verification remains.
+import flow is implemented and verified. A signed development build also boots
+and renders on a physical iPad; game-engine audio is the major open defect.
 
 ## What is built
 
@@ -18,7 +19,7 @@ import flow is implemented and verified; physical-device verification remains.
 - `SunPadCoreHost` — boots the game on a background thread, owns the
   CAMetalLayer surface and the pipe-input bridge.
 - `SunPadGameOverlay` — BellPad-inspired overlay: three-dot menu with render
-  resolution (Native/1×/2×/3×/4×), touch-control settings (opacity, size,
+  resolution (1× native/2×/3×/4×), touch-control settings (opacity, size,
   hide-on-controller, edit-layout, reset), Game Data & Saves actions.
 - Sunshine touch controls: main stick, C-stick, A/B/X/Y/Z/Start/L/R.
 - Shared settings (`SunPadSettings`) and normalized input
@@ -27,7 +28,9 @@ import flow is implemented and verified; physical-device verification remains.
 ## Runtime port (no JIT)
 
 The ModernGekko core builds for the iOS Simulator via
-`scripts/ios-simulator-toolchain.cmake` and `scripts/ios-build-core.sh`.
+`scripts/ios-simulator-toolchain.cmake` and `scripts/ios-build-core.sh`, and
+for physical arm64 devices via `scripts/ios-device-toolchain.cmake` and
+`scripts/ios-build-core-device.sh`.
 SunPad-specific iOS changes (all in `ref/ModernGekko`):
 
 - `DolphinNoGUI/PlatformIOS.mm` — CAMetalLayer platform for the runtime.
@@ -41,9 +44,12 @@ SunPad-specific iOS changes (all in `ref/ModernGekko`):
   replaced by the generic software loader (`GFX_VERTEX_LOADER_TYPE=Software`).
 - Translocated-path (macOS-only) bundle code is skipped on iOS.
 
-Audio uses a native `AVAudioEngine` backend (`AudioEngineStream`) feeding the
-Dolphin Mixer at 48 kHz, and the persisted Native/1×-4× render-resolution
-choice is applied live through `Config::GFX_EFB_SCALE` (at boot and on change).
+The Apple audio output path receives data from the Dolphin Mixer, but physical
+iPad testing found that the upstream JAudio/DSP stream truncates after its
+initial buffers. THP video audio follows a separate CPU-mixed path and can
+remain audible. See [AUDIO_ISSUE.md](AUDIO_ISSUE.md) before changing output
+buffering again. The persisted 1×-4× render-resolution choice is applied live
+through `Config::GFX_EFB_SCALE` (at boot and on change).
 
 ## Game data on mobile
 

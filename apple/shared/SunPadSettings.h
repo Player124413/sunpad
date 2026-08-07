@@ -11,10 +11,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (instancetype)sharedSettings;
 
-/* Render-resolution scale. 0 = native drawable resolution, 1..4 = EFB scale
- * multiplier. Mirrors BellPad's Native/1x/2x/3x/4x render choices. */
+/* Render-resolution scale. 1 = native GameCube EFB, 2..4 = multiplier. */
 @property(nonatomic, assign) NSInteger renderScale;
 - (float)renderScaleFloat;
+
+/* Optional developer performance overlay. Off by default for normal play. */
+@property(nonatomic, assign) BOOL showFPSCounter;
 
 /* Touch-control presentation. */
 @property(nonatomic, assign) BOOL hideTouchControlsWhenControllerConnected;
@@ -25,6 +27,7 @@ NS_ASSUME_NONNULL_BEGIN
 /* Per-control size overrides (1.0 = default), keyed by control identifier. */
 - (CGFloat)sizeScaleForControl:(NSString *)identifier;
 - (void)setSizeScale:(CGFloat)scale forControl:(NSString *)identifier;
+- (void)resetControlSizeScales;
 
 /* Save/load the retained game-data path (Application Support on mobile). */
 @property(nonatomic, copy, nullable) NSString *retainedGameDataPath;

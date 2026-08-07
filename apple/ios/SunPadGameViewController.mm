@@ -13,6 +13,8 @@
 
 #include <cmath>
 
+static constexpr CGFloat SunPadDrawableScale = 1.0;
+
 /* UIView whose backing layer is a CAMetalLayer: the ModernGekko Metal video
  * backend renders directly into this layer (Dolphin owns the drawable). */
 @interface SunPadMetalSurfaceView : UIView
@@ -26,6 +28,8 @@
 @end
 
 @interface SunPadGameViewController () <SunPadGameOverlayDelegate, UIDocumentPickerDelegate>
+- (NSString *)modulePathFromConfiguration:(NSDictionary *)configuration;
+- (NSString *)resolvedImportTestPath:(NSString *)requestedPath;
 @end
 
 @implementation SunPadGameViewController {
@@ -60,8 +64,8 @@
     layer.device = MTLCreateSystemDefaultDevice();
     layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     layer.framebufferOnly = YES;
-    layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * 2.0,
-                                    CGRectGetHeight(_gameView.bounds) * 2.0);
+    layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * SunPadDrawableScale,
+                                    CGRectGetHeight(_gameView.bounds) * SunPadDrawableScale);
 
     _overlay = [[SunPadGameOverlay alloc] initWithFrame:self.view.bounds];
     _overlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -85,12 +89,44 @@
     NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;
     NSUInteger importIndex = [arguments indexOfObject:@"-sunpadImportTest"];
     if (importIndex != NSNotFound && importIndex + 1 < arguments.count) {
-        [self importGameDataFromURL:[NSURL fileURLWithPath:arguments[importIndex + 1]]];
+        NSString *imagePath = [self resolvedImportTestPath:arguments[importIndex + 1]];
+        NSLog(@"[SunPad] import test requested=%@ resolved=%@", arguments[importIndex + 1], imagePath);
+        [self startInputConsumer];
+        [self observeControllers];
+        [self importGameDataFromURL:[NSURL fileURLWithPath:imagePath]];
         return;
     }
     [self startGameIfProvisioned];
     [self startInputConsumer];
     [self observeControllers];
+}
+
+// Physical-device launches cannot refer to the host's /tmp. devicectl copies
+// into the app data container, whose actual temporary directory is returned by
+// NSTemporaryDirectory(). Keep the command-line hook usable for both the
+// Simulator's host path and the device's injected ISO.
+- (NSString *)resolvedImportTestPath:(NSString *)requestedPath {
+    if ([[NSFileManager defaultManager] fileExistsAtPath:requestedPath])
+        return requestedPath;
+    NSString *prefix = @"/tmp/";
+    if ([requestedPath hasPrefix:prefix]) {
+        NSString *relativePath = [requestedPath substringFromIndex:prefix.length];
+        NSString *sandboxPath = [NSTemporaryDirectory() stringByAppendingPathComponent:relativePath];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:sandboxPath])
+            return sandboxPath;
+    }
+    return requestedPath;
+}
+
+- (NSString *)modulePathFromConfiguration:(NSDictionary *)configuration {
+    NSString *hostPath = configuration[@"DevModulePath"];
+    if (hostPath.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:hostPath])
+        return hostPath;
+
+    NSString *deviceRelativePath = configuration[@"DeviceModuleRelativePath"];
+    if (deviceRelativePath.length > 0)
+        return [NSTemporaryDirectory() stringByAppendingPathComponent:deviceRelativePath];
+    return hostPath;
 }
 
 - (void)startFPSMonitor {
@@ -109,6 +145,10 @@
 }
 
 - (void)updateFPSLabel {
+    if (![SunPadSettings sharedSettings].showFPSCounter) {
+        _fpsLabel.hidden = YES;
+        return;
+    }
     double fps = [_coreHost currentFPS];
     if (fps > 0.0) {
         // Super Mario Sunshine runs at a 30 Hz NTSC frame rate, so FPS ~ 30 is
@@ -177,25 +217,27 @@
         if (state.triggerR > 30) state.buttons |= SunPadButtonR;
         [[SunPadInputMixer sharedMixer] setInputState:state fromTouch:NO];
     };
-    gamepad.valueChangedHandler(gamepad, nil);
+    gamepad.valueChangedHandler(gamepad, gamepad.buttonA);
 }
 
 - (void)settingsChanged:(NSNotification *)notification {
     (void)notification;
     [_coreHost setRenderScale:[SunPadSettings sharedSettings].renderScale];
+    [self updateFPSLabel];
 }
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
-    layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * 2.0,
-                                    CGRectGetHeight(_gameView.bounds) * 2.0);
+    layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * SunPadDrawableScale,
+                                    CGRectGetHeight(_gameView.bounds) * SunPadDrawableScale);
     NSLog(@"[SunPad] layout bounds=%@ game=%@ drawable=%@",
           NSStringFromCGRect(self.view.bounds),
           NSStringFromCGRect(_gameView.bounds),
           NSStringFromCGSize(layer.drawableSize));
-    _fpsLabel.frame = CGRectMake(CGRectGetMinX(self.view.bounds) + 8.0,
-                                 CGRectGetMinY(self.view.bounds) + 8.0,
+    CGRect safe = UIEdgeInsetsInsetRect(self.view.bounds, self.view.safeAreaInsets);
+    _fpsLabel.frame = CGRectMake(CGRectGetMinX(safe) + 8.0,
+                                 CGRectGetMinY(safe) + 8.0,
                                  140.0, 22.0);
 }
 
@@ -209,12 +251,28 @@
     NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
     // Prefer an extracted root produced from an imported image; fall back to
     // the dev-provisioned tree for acceptance testing on the Simulator.
-    NSString *gameRoot = [SunPadSettings sharedSettings].extractedGameRoot;
+    SunPadSettings *settings = [SunPadSettings sharedSettings];
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSString *gameRoot = settings.extractedGameRoot;
     BOOL rootValid = gameRoot.length > 0 &&
-        [[NSFileManager defaultManager] fileExistsAtPath:gameRoot];
-    if (!rootValid)
-        gameRoot = config[@"DevGameRoot"];
-    NSString *modulePath = config[@"DevModulePath"];
+        [fileManager fileExistsAtPath:gameRoot];
+    if (!rootValid) {
+        // An in-place dev install can change the app container UUID. Rebase
+        // imported game data onto the current sandbox instead of relying on
+        // the absolute path stored by a previous installation.
+        NSArray<NSString *> *supportPaths = NSSearchPathForDirectoriesInDomains(
+            NSApplicationSupportDirectory, NSUserDomainMask, YES);
+        NSString *currentContainerRoot = [supportPaths.firstObject
+            stringByAppendingPathComponent:@"SunPad/GameData/GMSE01"];
+        if ([fileManager fileExistsAtPath:currentContainerRoot]) {
+            gameRoot = currentContainerRoot;
+            settings.extractedGameRoot = gameRoot;
+            [settings synchronize];
+        } else {
+            gameRoot = config[@"DevGameRoot"];
+        }
+    }
+    NSString *modulePath = [self modulePathFromConfiguration:config];
     if (gameRoot.length == 0 || modulePath.length == 0)
         return;
 
@@ -226,10 +284,28 @@
                                                attributes:nil
                                                     error:nil];
 
+    // Boot from the retained image so Dolphin sees the exact FST, physical
+    // file offsets, and streaming layout from the user's disc. In-place app
+    // installs preserve the file but change the container UUID, so rebase the
+    // persisted absolute path when necessary.
+    NSString *discImagePath = settings.retainedGameDataPath;
+    if (discImagePath.length > 0 && ![fileManager fileExistsAtPath:discImagePath]) {
+        NSString *rebasedImage = [[userDirectory stringByAppendingPathComponent:@"GameData"]
+            stringByAppendingPathComponent:discImagePath.lastPathComponent];
+        if ([fileManager fileExistsAtPath:rebasedImage]) {
+            discImagePath = rebasedImage;
+            settings.retainedGameDataPath = rebasedImage;
+            [settings synchronize];
+        } else {
+            discImagePath = @"";
+        }
+    }
+
     CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
     _coreHost = [[SunPadCoreHost alloc] initWithLayer:layer];
     __weak SunPadGameViewController *weakSelf = self;
     [_coreHost startWithGameRoot:gameRoot
+                   discImagePath:discImagePath ?: @""
                       modulePath:modulePath
                    userDirectory:userDirectory
                          onError:^(NSString *message) {
@@ -349,9 +425,12 @@
         progressAlert.message = [NSString stringWithFormat:@"%@ (%.0f%%)", status, fraction * 100.0];
     }
                                  completion:^(BOOL ok, NSString *error) {
+        SunPadGameViewController *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
         [progressAlert dismissViewControllerAnimated:YES completion:nil];
         if (!ok) {
-            [weakSelf presentBootError:error ?: @"Extraction failed."];
+            [strongSelf presentBootError:error ?: @"Extraction failed."];
             return;
         }
         [SunPadSettings sharedSettings].extractedGameRoot = extractRoot;
@@ -360,8 +439,14 @@
         NSBundle *bundle = NSBundle.mainBundle;
         NSString *configPath = [bundle pathForResource:@"dev-config" ofType:@"plist"];
         NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
-        NSString *modulePath = config[@"DevModulePath"];
-        [_coreHost restartWithGameRoot:extractRoot modulePath:modulePath];
+        NSString *modulePath = [strongSelf modulePathFromConfiguration:config];
+        if (strongSelf->_coreHost != nil) {
+            [strongSelf->_coreHost restartWithGameRoot:extractRoot
+                                         discImagePath:destination
+                                            modulePath:modulePath];
+        } else {
+            [strongSelf startGameIfProvisioned];
+        }
     }];
 }
 

@@ -1,5 +1,6 @@
 #import "SunPadCoreHost.h"
 
+#import <AVFAudio/AVFAudio.h>
 #import <fcntl.h>
 #import <sys/stat.h>
 
@@ -45,6 +46,7 @@ namespace fs = std::filesystem;
 }
 
 - (void)startWithGameRoot:(NSString *)gameRoot
+            discImagePath:(NSString *)discImagePath
                modulePath:(NSString *)modulePath
              userDirectory:(NSString *)userDirectory
                    onError:(void (^)(NSString *))onError {
@@ -52,6 +54,14 @@ namespace fs = std::filesystem;
         return;
     _onError = [onError copy];
     *_stopRequested = false;
+
+    NSError *audioSessionError = nil;
+    AVAudioSession *audioSession = AVAudioSession.sharedInstance;
+    [audioSession setCategory:AVAudioSessionCategoryPlayback error:&audioSessionError];
+    if (!audioSessionError)
+        [audioSession setActive:YES error:&audioSessionError];
+    if (audioSessionError)
+        NSLog(@"[SunPad] audio session setup failed: %@", audioSessionError);
 
     NSString *pipeDir = [userDirectory stringByAppendingPathComponent:@"Pipes"];
     NSString *pipePath = [pipeDir stringByAppendingPathComponent:@"sunpad"];
@@ -63,20 +73,64 @@ namespace fs = std::filesystem;
     ::unlink(pipePath.fileSystemRepresentation);
     ::mkfifo(pipePath.fileSystemRepresentation, 0666);
 
-    *_gameThread = std::thread([self, gameRoot, modulePath, userDirectory] {
+    // This is a dedicated virtual GameCube controller. Dolphin's pipe backend
+    // is present in the iOS core, but it has no default bindings, so provide
+    // its stable mapping before the runtime initializes controllers.
+    NSString *configDirectory = [userDirectory stringByAppendingPathComponent:@"Config"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:configDirectory
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    NSString *padConfig =
+        @"[GCPad1]\n"
+         "Device = Pipe/0/sunpad\n"
+         "Buttons/A = `Button A`\n"
+         "Buttons/B = `Button B`\n"
+         "Buttons/X = `Button X`\n"
+         "Buttons/Y = `Button Y`\n"
+         "Buttons/Z = `Button Z`\n"
+         "Buttons/Start = `Button START`\n"
+         "Main Stick/Up = `Axis MAIN Y -`\n"
+         "Main Stick/Down = `Axis MAIN Y +`\n"
+         "Main Stick/Left = `Axis MAIN X -`\n"
+         "Main Stick/Right = `Axis MAIN X +`\n"
+         "Main Stick/Calibration = 100.00\n"
+         "C-Stick/Up = `Axis C Y -`\n"
+         "C-Stick/Down = `Axis C Y +`\n"
+         "C-Stick/Left = `Axis C X -`\n"
+         "C-Stick/Right = `Axis C X +`\n"
+         "C-Stick/Calibration = 100.00\n"
+         "Triggers/L = `Axis L +`\n"
+         "Triggers/R = `Axis R +`\n"
+         "Triggers/L-Analog = `Axis L +`\n"
+         "Triggers/R-Analog = `Axis R +`\n"
+         "D-Pad/Up = `Button D_UP`\n"
+         "D-Pad/Down = `Button D_DOWN`\n"
+         "D-Pad/Left = `Button D_LEFT`\n"
+         "D-Pad/Right = `Button D_RIGHT`\n";
+    [padConfig writeToFile:[configDirectory stringByAppendingPathComponent:@"GCPadNew.ini"]
+                 atomically:YES
+                   encoding:NSUTF8StringEncoding
+                      error:nil];
+
+    *_gameThread = std::thread([self, gameRoot, discImagePath, modulePath, userDirectory] {
         [self runGameWithGameRoot:gameRoot
+                    discImagePath:discImagePath
                        modulePath:modulePath
                     userDirectory:userDirectory];
     });
 }
 
 - (void)runGameWithGameRoot:(NSString *)gameRoot
+              discImagePath:(NSString *)discImagePath
                  modulePath:(NSString *)modulePath
               userDirectory:(NSString *)userDirectory {
     std::string errorMessage;
     @autoreleasepool {
         moderngekko::RuntimeConfig config;
         config.game_root = gameRoot.fileSystemRepresentation;
+        if (discImagePath.length > 0)
+            config.disc_image = discImagePath.fileSystemRepresentation;
         config.user_directory = userDirectory.fileSystemRepresentation;
         config.graphics.backend = "Metal";
         config.headless = false;
@@ -99,10 +153,12 @@ namespace fs = std::filesystem;
 
         // Apply the persisted render-resolution choice now that the runtime's
         // config layers exist.
-        NSInteger savedScale =
-            [[NSUserDefaults standardUserDefaults] integerForKey:@"SunPadRenderScale"];
+        NSNumber *savedScaleValue =
+            [[NSUserDefaults standardUserDefaults] objectForKey:@"SunPadRenderScale"];
+        NSInteger savedScale = savedScaleValue ? savedScaleValue.integerValue : 1;
         Config::SetCurrent(Config::GFX_EFB_SCALE,
-                           static_cast<int>(savedScale < 0 ? 0 : (savedScale > 4 ? 4 : savedScale)));
+                           static_cast<int>(savedScale < 1 ? 1 : (savedScale > 4 ? 4 : savedScale)));
+        Config::SetCurrent(Config::GFX_MAX_EFB_SCALE, 12);
 
         // Open the input FIFO for writing (blocks until the runtime reads it).
         NSString *pipePath = [[userDirectory stringByAppendingPathComponent:@"Pipes"]
@@ -178,7 +234,7 @@ namespace fs = std::filesystem;
 }
 
 - (void)setRenderScale:(NSInteger)scale {
-    NSInteger clamped = scale < 0 ? 0 : (scale > 4 ? 4 : scale);
+    NSInteger clamped = scale < 1 ? 1 : (scale > 4 ? 4 : scale);
     if (!_running->load())
         return; // Runtime not booted yet; the scale applies at boot.
     // Config::SetCurrent is mutex-protected and the video backend refreshes
@@ -212,7 +268,9 @@ namespace fs = std::filesystem;
         _gameThread->join();
 }
 
-- (void)restartWithGameRoot:(NSString *)gameRoot modulePath:(NSString *)modulePath {
+- (void)restartWithGameRoot:(NSString *)gameRoot
+              discImagePath:(NSString *)discImagePath
+                 modulePath:(NSString *)modulePath {
     if (*_running) {
         // Graceful stop; the runtime's Run returns and the thread joins.
         [self stop];
@@ -226,6 +284,7 @@ namespace fs = std::filesystem;
                                                     error:nil];
     __weak SunPadCoreHost *weakSelf = self;
     [self startWithGameRoot:gameRoot
+              discImagePath:discImagePath
                  modulePath:modulePath
               userDirectory:userDirectory
                     onError:^(NSString *message) {

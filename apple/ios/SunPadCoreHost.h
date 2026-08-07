@@ -18,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 /* Boots the game on a background thread. Returns immediately; the game runs
  * until -stop is called. Reports errors through onError. */
 - (void)startWithGameRoot:(NSString *)gameRoot
+            discImagePath:(NSString *)discImagePath
               modulePath:(NSString *)modulePath
               userDirectory:(NSString *)userDirectory
                   onError:(void (^)(NSString *message))onError;
@@ -27,13 +28,14 @@ NS_ASSUME_NONNULL_BEGIN
 /* Stops the current runtime (if any) and boots the game at gameRoot with the
  * given module. Used after an imported image is extracted. */
 - (void)restartWithGameRoot:(NSString *)gameRoot
+               discImagePath:(NSString *)discImagePath
                  modulePath:(NSString *)modulePath;
 
 /* Publishes the normalized input snapshot to the game through the pipe
  * device. Safe to call from any thread at ~60 Hz. */
 - (void)publishInput:(SunPadInputState)input;
 
-/* Applies the render-resolution scale (0 = native/default, 1..4 = EFB scale)
+/* Applies the render-resolution scale (1 = native GameCube EFB, 2..4 = scale)
  * to the running runtime. Safe to call from any thread. */
 - (void)setRenderScale:(NSInteger)scale;
 

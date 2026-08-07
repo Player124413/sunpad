@@ -1,12 +1,15 @@
 # Known Issues
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## iOS / iPadOS
 
-1. **Physical-device audio untested** — the AVAudioEngine backend runs on the
-   Simulator, but audio-session interruptions, background audio, and hardware
-   behavior on real devices are unverified.
+1. **Physical-device game audio is broken** — THP video audio is generally
+   audible, but game-engine music, voices, and effects truncate after their
+   initial buffers or remain silent. Raw DSP captures show the truncation
+   before the Apple output backend. The supported ISO has complete audio in
+   stock Dolphin. See [AUDIO_ISSUE.md](AUDIO_ISSUE.md) for measurements,
+   failed experiments, and the remaining static-recompiler timing lead.
 2. **Module provisioning** — import/extract/boot works on-device, but the
    recompiled module is provisioned from the Mac (`dev-config.plist`); iOS has
    no C compiler, so the module for a given disc must be produced by the Mac
@@ -16,16 +19,15 @@ Last updated: 2026-08-06
    (Stage 4 lifecycle gate).
 4. **Module loaded via `dlopen`** — works on Simulator; static linking of the
    generated module is the App Store-compatible target.
-5. **Simulator-only evidence** — physical-device signing, performance, memory,
-   and controller behavior are untested.
-6. **Interactive touch acceptance pending** — touch controls render and
-   `scripts/simdrag.swift` posts real drags to the Simulator; hands-on layout
-   acceptance on device is not complete.
-7. **Interpreter fallback speed** — un-recompiled/SMC regions fall back to the
+5. **Developer-only device provisioning** — the signed app, retained ISO,
+   extracted root, and generated module have run on an attached iPad, but the
+   module injection path is a development workflow rather than distribution
+   packaging.
+6. **Interpreter fallback speed** — un-recompiled/SMC regions fall back to the
    interpreter (no JIT by design); verify in demanding scenes.
-8. **Physical-device verification pending** — landscape rotation, audio
-   session behavior, controller auto-hide, and Metal performance are validated
-   on Simulators only so far.
+7. **Physical-controller acceptance pending** — touch controls have been used
+   on a physical iPad, but connect/disconnect and auto-hide behavior still need
+   hands-on controller coverage.
 
 ## Desktop Stage 1 gaps
 

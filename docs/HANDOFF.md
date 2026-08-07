@@ -1,15 +1,16 @@
 # Handoff
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## One-screen summary
 
-Super Mario Sunshine (`GMSE01`) now runs natively on the **iPhone and iPad
-simulators** through SunPad: the DolRecomp-generated module executes through
+Super Mario Sunshine (`GMSE01`) now runs natively on the **iPhone/iPad
+simulators and a physical iPad development build** through SunPad: the DolRecomp-generated module executes through
 the ModernGekko/Dolphin-derived compatibility runtime, rendered by Dolphin's
 Metal backend into a CAMetalLayer in the UIKit app. Desktop Stage 1 (title,
-intro, input) is also proven. The three-dot menu, Native/1x-4x render
-resolution, and Sunshine touch controls are implemented.
+intro, input) is also proven. The three-dot menu, 1x native/2x-4x render
+resolution, and Sunshine touch controls are implemented. Physical-iPad
+game-engine audio remains broken and is the highest-priority blocker.
 
 ## What works
 
@@ -21,12 +22,15 @@ resolution, and Sunshine touch controls are implemented.
   extraction → boot from the imported image (verified on the Simulator).
 - App UI: three-dot menu, render resolution choices, touch controls, settings
   persistence.
+- Physical iPad: signed install, ISO boot, Metal rendering, and touch-control
+  acceptance are proven.
 
 ## What does not
 
-- Physical-device runs (audio sessions, controllers, performance, memory);
-  module provisioning for discs beyond the dev-provisioned GMSE01 build;
-  lifecycle save-flushing and audio-interruption restoration.
+- Physical-iPad JAudio/DSP music, voices, and effects truncate or disappear;
+  see `docs/AUDIO_ISSUE.md`. Physical controllers, broader performance/memory,
+  module provisioning beyond the dev GMSE01 build, lifecycle save-flushing,
+  and audio-interruption restoration remain open.
 - Desktop Stage 1 gates: plaza gameplay, objective, save/reload.
 - Native macOS SunPad `.app` shell.
 
@@ -63,8 +67,8 @@ cd ref/ModernGekko-Template
 
 ## Next actions
 
-1. Physical-device verification (signing, audio sessions, controllers,
-   performance, memory) and interactive touch-control acceptance.
+1. Instrument and fix the JAudio/DSP producer failure described in
+   `docs/AUDIO_ISSUE.md`; require a continuous pre-output DSP capture.
 2. Module matching/provisioning for imported discs beyond the dev GMSE01
    build.
 3. Lifecycle hardening: save flushing before suspension, audio-interruption

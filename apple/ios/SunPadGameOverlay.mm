@@ -11,6 +11,7 @@
 @interface SunPadStickView : UIView
 @property(nonatomic, copy) void (^valueChanged)(float x, float y);
 @property(nonatomic, readonly) BOOL active;
+- (void)applyBaseColor:(UIColor *)baseColor thumbColor:(UIColor *)thumbColor;
 - (void)reset;
 @end
 
@@ -59,6 +60,11 @@
 
 - (BOOL)active {
     return _active;
+}
+
+- (void)applyBaseColor:(UIColor *)baseColor thumbColor:(UIColor *)thumbColor {
+    self.backgroundColor = baseColor;
+    _thumb.backgroundColor = thumbColor;
 }
 
 - (void)reset {
@@ -117,6 +123,20 @@
 @implementation SunPadGameButton
 @end
 
+@interface SunPadPassThroughView : UIView
+@end
+
+@implementation SunPadPassThroughView
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    UIView *hit = [super hitTest:point withEvent:event];
+    for (UIView *view = hit; view != nil && view != self; view = view.superview) {
+        if ([view isKindOfClass:UIControl.class])
+            return hit;
+    }
+    return nil;
+}
+@end
+
 @interface SunPadGameOverlay () <UIGestureRecognizerDelegate>
 @end
 
@@ -125,18 +145,22 @@
     SunPadStickView *_moveStick;
     SunPadStickView *_cStick;
     NSMutableArray<SunPadGameButton *> *_buttons;
-    NSMutableDictionary<NSString *, UIPanGestureRecognizer *> *_controlDrags;
-    NSMutableDictionary<NSString *, NSValue *> *_controlOrigins;
+    NSMutableArray<UIGestureRecognizer *> *_editGestures;
 
     UIView *_settingsPanel;
     UISegmentedControl *_renderScaleControl;
     UISlider *_opacitySlider;
     UISlider *_sizeSlider;
+    UISlider *_selectedSizeSlider;
     UISwitch *_hideControlsSwitch;
     UISwitch *_editLayoutSwitch;
+    UIView *_editorBar;
+    UILabel *_editorHintLabel;
+    __weak UIView *_selectedControl;
 
     SunPadInputState _touchState;
     BOOL _touchControlsHidden;
+    BOOL _editingLayout;
 }
 
 - (instancetype)initWithFrame:(CGRect)frame {
@@ -158,26 +182,34 @@
 #pragma mark - Three-dot menu
 
 - (void)buildMenuButton {
-    _menuButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [_menuButton setTitle:@"⋯" forState:UIControlStateNormal];
-    [_menuButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    _menuButton.titleLabel.font = [UIFont systemFontOfSize:26.0 weight:UIFontWeightBold];
+    _menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    UIImageSymbolConfiguration *symbol =
+        [UIImageSymbolConfiguration configurationWithPointSize:19.0
+                                                        weight:UIImageSymbolWeightBold];
+    UIImage *ellipsis = [UIImage systemImageNamed:@"ellipsis" withConfiguration:symbol];
+    [_menuButton setImage:ellipsis forState:UIControlStateNormal];
+    [_menuButton setImage:ellipsis forState:UIControlStateHighlighted];
+    [_menuButton setImage:ellipsis forState:UIControlStateFocused];
+    _menuButton.tintColor = UIColor.whiteColor;
     _menuButton.backgroundColor = [UIColor colorWithWhite:0.06 alpha:0.72];
     _menuButton.layer.cornerRadius = 20.0;
     _menuButton.layer.borderWidth = 1.0;
     _menuButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.30].CGColor;
+    _menuButton.layer.masksToBounds = YES;
     _menuButton.accessibilityLabel = @"Menu";
     _menuButton.showsMenuAsPrimaryAction = YES;
+    if (@available(iOS 15.0, *))
+        _menuButton.changesSelectionAsPrimaryAction = NO;
     _menuButton.menu = [self buildMenu];
     [self addSubview:_menuButton];
 }
 
 - (UIMenu *)buildMenu {
     __weak SunPadGameOverlay *weakSelf = self;
+    SunPadSettings *settings = [SunPadSettings sharedSettings];
 
     UIMenu *renderMenu = [UIMenu menuWithTitle:@"Render Resolution" children:@[
-        [self renderAction:@"Native" scale:0],
-        [self renderAction:@"1×" scale:1],
+        [self renderAction:@"1× (Native)" scale:1],
         [self renderAction:@"2×" scale:2],
         [self renderAction:@"3×" scale:3],
         [self renderAction:@"4×" scale:4],
@@ -198,8 +230,21 @@
         }],
     ]];
 
+    UIAction *fpsAction = [UIAction actionWithTitle:@"Show FPS Counter"
+                                              image:[UIImage systemImageNamed:@"speedometer"]
+                                         identifier:nil
+                                            handler:^(__kindof UIAction *action) {
+        (void)action;
+        SunPadSettings *currentSettings = [SunPadSettings sharedSettings];
+        currentSettings.showFPSCounter = !currentSettings.showFPSCounter;
+        [currentSettings synchronize];
+        [weakSelf refreshMenuButton];
+    }];
+    fpsAction.state = settings.showFPSCounter ? UIMenuElementStateOn : UIMenuElementStateOff;
+
     return [UIMenu menuWithTitle:@"SunPad" children:@[
         renderMenu,
+        fpsAction,
         [UIAction actionWithTitle:@"Touch Control Settings…"
                             image:[UIImage systemImageNamed:@"hand.draw"]
                        identifier:nil handler:^(__kindof UIAction *action) {
@@ -212,15 +257,19 @@
 
 - (UIAction *)renderAction:(NSString *)title scale:(NSInteger)scale {
     __weak SunPadGameOverlay *weakSelf = self;
-    return [UIAction actionWithTitle:title
-                               image:nil
-                          identifier:nil
-                             handler:^(__kindof UIAction *action) {
+    UIAction *renderAction = [UIAction actionWithTitle:title
+                                                 image:nil
+                                            identifier:nil
+                                               handler:^(__kindof UIAction *action) {
         (void)action;
         [SunPadSettings sharedSettings].renderScale = scale;
         [[SunPadSettings sharedSettings] synchronize];
+        [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
         [weakSelf refreshMenuButton];
     }];
+    renderAction.state = [SunPadSettings sharedSettings].renderScale == scale ?
+        UIMenuElementStateOn : UIMenuElementStateOff;
+    return renderAction;
 }
 
 - (void)refreshMenuButton {
@@ -249,13 +298,22 @@
 
 - (void)buildTouchControls {
     _buttons = [NSMutableArray array];
-    _controlDrags = [NSMutableDictionary dictionary];
-    _controlOrigins = [NSMutableDictionary dictionary];
+    _editGestures = [NSMutableArray array];
 
     _moveStick = [self makeStick];
     _cStick = [self makeStick];
+    _moveStick.accessibilityLabel = @"Move stick";
+    _moveStick.accessibilityIdentifier = @"move";
+    _cStick.accessibilityLabel = @"Camera stick";
+    _cStick.accessibilityIdentifier = @"c";
+    [_moveStick applyBaseColor:[UIColor colorWithWhite:0.13 alpha:0.86]
+                    thumbColor:[UIColor colorWithWhite:0.58 alpha:0.94]];
+    [_cStick applyBaseColor:[UIColor colorWithRed:0.91 green:0.66 blue:0.08 alpha:0.90]
+                 thumbColor:[UIColor colorWithRed:1.00 green:0.84 blue:0.25 alpha:0.98]];
     [self addSubview:_moveStick];
     [self addSubview:_cStick];
+    [self addEditGesturesToControl:_moveStick];
+    [self addEditGesturesToControl:_cStick];
 
     [self addButton:@"A" mask:SunPadButtonA];
     [self addButton:@"B" mask:SunPadButtonB];
@@ -275,8 +333,11 @@
 - (SunPadStickView *)makeStick {
     SunPadStickView *stick = [[SunPadStickView alloc] initWithFrame:CGRectMake(0, 0, 128, 128)];
     __weak SunPadGameOverlay *weakSelf = self;
+    __weak SunPadStickView *weakStick = stick;
     stick.valueChanged = ^(float x, float y) {
-        [weakSelf stickChanged:stick x:x y:y];
+        SunPadStickView *strongStick = weakStick;
+        if (strongStick != nil)
+            [weakSelf stickChanged:strongStick x:x y:y];
     };
     return stick;
 }
@@ -284,14 +345,38 @@
 - (void)addButton:(NSString *)label mask:(uint16_t)mask {
     SunPadGameButton *button = [SunPadGameButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:label forState:UIControlStateNormal];
-    [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    UIColor *fill = [UIColor colorWithWhite:0.22 alpha:0.88];
+    UIColor *titleColor = UIColor.whiteColor;
+    switch (mask) {
+    case SunPadButtonA:
+        fill = [UIColor colorWithRed:0.08 green:0.56 blue:0.29 alpha:0.92];
+        break;
+    case SunPadButtonB:
+        fill = [UIColor colorWithRed:0.78 green:0.10 blue:0.13 alpha:0.92];
+        break;
+    case SunPadButtonX:
+    case SunPadButtonY:
+        fill = [UIColor colorWithWhite:0.72 alpha:0.92];
+        titleColor = [UIColor colorWithWhite:0.12 alpha:1.0];
+        break;
+    case SunPadButtonZ:
+        fill = [UIColor colorWithRed:0.38 green:0.18 blue:0.58 alpha:0.94];
+        break;
+    case SunPadButtonStart:
+        fill = [UIColor colorWithWhite:0.28 alpha:0.92];
+        break;
+    default:
+        break;
+    }
+    [button setTitleColor:titleColor forState:UIControlStateNormal];
     button.titleLabel.font = [UIFont systemFontOfSize:18.0 weight:UIFontWeightBold];
-    button.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.16];
+    button.backgroundColor = fill;
     button.layer.cornerRadius = 28.0;
     button.layer.borderWidth = 2.0;
     button.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.36].CGColor;
     button.accessibilityLabel = label;
     button.inputMask = mask;
+    button.accessibilityIdentifier = [self identifierForMask:mask];
     [button addTarget:self action:@selector(buttonDown:)
      forControlEvents:UIControlEventTouchDown];
     [button addTarget:self action:@selector(buttonUp:)
@@ -299,10 +384,11 @@
                             UIControlEventTouchCancel];
     [_buttons addObject:button];
     [self addSubview:button];
+    [self addEditGesturesToControl:button];
 }
 
 - (void)stickChanged:(SunPadStickView *)stick x:(float)x y:(float)y {
-    if ([SunPadSettings sharedSettings].editingControlLayout)
+    if (_editingLayout)
         return;
     int8_t xi = (int8_t)std::lround(x * 127.0f);
     int8_t yi = (int8_t)std::lround(y * 127.0f);
@@ -318,7 +404,7 @@
 }
 
 - (void)buttonDown:(SunPadGameButton *)button {
-    if ([SunPadSettings sharedSettings].editingControlLayout)
+    if (_editingLayout)
         return;
     _touchState.buttons |= button.inputMask;
     if (button.inputMask == SunPadButtonL)
@@ -331,7 +417,7 @@
 }
 
 - (void)buttonUp:(SunPadGameButton *)button {
-    if ([SunPadSettings sharedSettings].editingControlLayout)
+    if (_editingLayout)
         return;
     _touchState.buttons &= ~button.inputMask;
     if (button.inputMask == SunPadButtonL)
@@ -344,12 +430,12 @@
 }
 
 - (void)clearTouchInput {
-    _touchState = (SunPadInputState){0};
-    [[SunPadInputMixer sharedMixer] clearInputFromTouch:YES];
     for (SunPadGameButton *button in _buttons)
         button.transform = CGAffineTransformIdentity;
     [_moveStick reset];
     [_cStick reset];
+    _touchState = (SunPadInputState){0};
+    [[SunPadInputMixer sharedMixer] clearInputFromTouch:YES];
 }
 
 #pragma mark - Layout
@@ -445,27 +531,40 @@
     }
 
     CGFloat settingsSide = 40.0;
-    _menuButton.frame = CGRectMake(CGRectGetMaxX(safe) - settingsSide,
-                                   CGRectGetMinY(safe) + 8.0,
+    CGFloat menuInset = 12.0;
+    _menuButton.frame = CGRectMake(CGRectGetMaxX(safe) - settingsSide - menuInset,
+                                   CGRectGetMinY(safe) + menuInset,
                                    settingsSide, settingsSide);
 
-    CGFloat alpha = _touchControlsHidden ? 0.0 : [SunPadSettings sharedSettings].controlOpacity;
-    for (UIView *view in self.subviews) {
-        if (view == _menuButton || view == _settingsPanel)
-            continue;
-        view.alpha = alpha;
-    }
-
     [self layoutSettingsPanelInSafeArea:safe];
+    CGFloat editorWidth = MIN(560.0, CGRectGetWidth(safe) - 24.0);
+    CGFloat editorHeight = 60.0;
+    _editorBar.frame = CGRectMake(CGRectGetMidX(safe) - editorWidth * 0.5,
+                                  CGRectGetMaxY(safe) - editorHeight - 12.0,
+                                  editorWidth, editorHeight);
+    [self updateControlAppearance];
+    if (!_settingsPanel.hidden)
+        [self bringSubviewToFront:_settingsPanel];
+    if (!_editorBar.hidden)
+        [self bringSubviewToFront:_editorBar];
+    [self bringSubviewToFront:_menuButton];
 }
 
 - (void)placeControl:(UIView *)control defaultFrame:(CGRect)defaultFrame identifier:(NSString *)identifier {
-    control.bounds = CGRectMake(0, 0, defaultFrame.size.width, defaultFrame.size.height);
+    CGFloat individualScale = [[SunPadSettings sharedSettings] sizeScaleForControl:identifier];
+    control.bounds = CGRectMake(0, 0, defaultFrame.size.width * individualScale,
+                                defaultFrame.size.height * individualScale);
     NSDictionary *saved = [[NSUserDefaults standardUserDefaults]
         dictionaryForKey:@"SunPadControlOrigins"];
-    NSValue *savedPoint = saved[identifier];
+    id savedPoint = saved[identifier];
     if (savedPoint != nil) {
-        CGPoint normalized = savedPoint.CGPointValue;
+        CGPoint normalized = CGPointZero;
+        if ([savedPoint isKindOfClass:NSString.class])
+            normalized = CGPointFromString(savedPoint);
+        else if ([savedPoint isKindOfClass:NSValue.class])
+            normalized = [savedPoint CGPointValue];
+        normalized.x = std::clamp<CGFloat>(normalized.x, 0.0, 1.0);
+        normalized.y = std::clamp<CGFloat>(normalized.y, 0.0, 1.0);
         CGRect safe = self.bounds;
         if (@available(iOS 11.0, *))
             safe = UIEdgeInsetsInsetRect(safe, self.safeAreaInsets);
@@ -492,8 +591,8 @@
 - (void)layoutSettingsPanelInSafeArea:(CGRect)safe {
     CGFloat width = MIN(360.0, CGRectGetWidth(safe) - 32.0);
     CGFloat height = MIN(430.0, CGRectGetHeight(safe) * 0.62);
-    _settingsPanel.frame = CGRectMake(CGRectGetMidX(safe) - width * 0.5,
-                                      CGRectGetMaxY(safe) - height - 16.0,
+    _settingsPanel.frame = CGRectMake(CGRectGetMaxX(safe) - width - 12.0,
+                                      CGRectGetMinY(safe) + 60.0,
                                       width, height);
 }
 
@@ -513,8 +612,28 @@
     title.textColor = UIColor.whiteColor;
     title.font = [UIFont systemFontOfSize:18.0 weight:UIFontWeightBold];
 
-    _renderScaleControl = [[UISegmentedControl alloc] initWithItems:@[@"Native", @"1×", @"2×", @"3×", @"4×"]];
-    _renderScaleControl.selectedSegmentIndex = [SunPadSettings sharedSettings].renderScale;
+    UIButton *close = [UIButton buttonWithType:UIButtonTypeCustom];
+    UIImageSymbolConfiguration *closeSymbol =
+        [UIImageSymbolConfiguration configurationWithPointSize:16.0
+                                                        weight:UIImageSymbolWeightBold];
+    [close setImage:[UIImage systemImageNamed:@"xmark" withConfiguration:closeSymbol]
+           forState:UIControlStateNormal];
+    close.tintColor = UIColor.whiteColor;
+    close.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+    close.layer.cornerRadius = 16.0;
+    close.accessibilityLabel = @"Close touch control settings";
+    [close addTarget:self action:@selector(closeSettingsPanel)
+      forControlEvents:UIControlEventTouchUpInside];
+
+    UIStackView *header = [[UIStackView alloc] initWithArrangedSubviews:@[title, close]];
+    header.translatesAutoresizingMaskIntoConstraints = NO;
+    header.axis = UILayoutConstraintAxisHorizontal;
+    header.alignment = UIStackViewAlignmentCenter;
+    header.spacing = 12.0;
+    [_settingsPanel addSubview:header];
+
+    _renderScaleControl = [[UISegmentedControl alloc] initWithItems:@[@"1×", @"2×", @"3×", @"4×"]];
+    _renderScaleControl.selectedSegmentIndex = [SunPadSettings sharedSettings].renderScale - 1;
     _renderScaleControl.accessibilityLabel = @"Render resolution";
     [_renderScaleControl addTarget:self action:@selector(renderScaleChanged:)
                   forControlEvents:UIControlEventValueChanged];
@@ -535,6 +654,15 @@
     [_sizeSlider addTarget:self action:@selector(sizeChanged:)
           forControlEvents:UIControlEventValueChanged];
 
+    _selectedSizeSlider = [UISlider new];
+    _selectedSizeSlider.minimumValue = 0.60;
+    _selectedSizeSlider.maximumValue = 1.75;
+    _selectedSizeSlider.value = 1.0;
+    _selectedSizeSlider.enabled = NO;
+    _selectedSizeSlider.accessibilityLabel = @"Selected control size";
+    [_selectedSizeSlider addTarget:self action:@selector(selectedSizeChanged:)
+                   forControlEvents:UIControlEventValueChanged];
+
     _hideControlsSwitch = [UISwitch new];
     _hideControlsSwitch.on = [SunPadSettings sharedSettings].hideTouchControlsWhenControllerConnected;
     _hideControlsSwitch.accessibilityLabel = @"Hide touch controls when controller connected";
@@ -542,7 +670,7 @@
                   forControlEvents:UIControlEventValueChanged];
 
     _editLayoutSwitch = [UISwitch new];
-    _editLayoutSwitch.on = [SunPadSettings sharedSettings].editingControlLayout;
+    _editLayoutSwitch.on = NO;
     _editLayoutSwitch.accessibilityLabel = @"Move touch controls";
     [_editLayoutSwitch addTarget:self action:@selector(editLayoutChanged:)
                 forControlEvents:UIControlEventValueChanged];
@@ -557,10 +685,9 @@
     forControlEvents:UIControlEventTouchUpInside];
 
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[
-        title,
         [self settingsRowWithTitle:@"Render" control:_renderScaleControl],
         [self settingsRowWithTitle:@"Opacity" control:_opacitySlider],
-        [self settingsRowWithTitle:@"Size" control:_sizeSlider],
+        [self settingsRowWithTitle:@"All sizes" control:_sizeSlider],
         [self settingsRowWithTitle:@"Hide on controller" control:_hideControlsSwitch],
         [self settingsRowWithTitle:@"Move controls" control:_editLayoutSwitch],
         reset,
@@ -571,12 +698,20 @@
 
     UIScrollView *scroll = [UIScrollView new];
     scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.alwaysBounceVertical = NO;
+    scroll.showsVerticalScrollIndicator = YES;
     [_settingsPanel addSubview:scroll];
     [scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
+        [header.leadingAnchor constraintEqualToAnchor:_settingsPanel.leadingAnchor constant:16.0],
+        [header.trailingAnchor constraintEqualToAnchor:_settingsPanel.trailingAnchor constant:-12.0],
+        [header.topAnchor constraintEqualToAnchor:_settingsPanel.topAnchor constant:8.0],
+        [header.heightAnchor constraintEqualToConstant:40.0],
+        [close.widthAnchor constraintEqualToConstant:32.0],
+        [close.heightAnchor constraintEqualToConstant:32.0],
         [scroll.leadingAnchor constraintEqualToAnchor:_settingsPanel.leadingAnchor],
         [scroll.trailingAnchor constraintEqualToAnchor:_settingsPanel.trailingAnchor],
-        [scroll.topAnchor constraintEqualToAnchor:_settingsPanel.topAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:2.0],
         [scroll.bottomAnchor constraintEqualToAnchor:_settingsPanel.bottomAnchor],
         [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16.0],
         [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16.0],
@@ -584,6 +719,53 @@
         [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-8.0],
         [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32.0],
         [reset.heightAnchor constraintEqualToConstant:40.0],
+    ]];
+
+    _editorBar = [SunPadPassThroughView new];
+    _editorBar.backgroundColor = [UIColor colorWithWhite:0.035 alpha:0.95];
+    _editorBar.layer.cornerRadius = 16.0;
+    _editorBar.layer.borderWidth = 1.0;
+    _editorBar.layer.borderColor =
+        [UIColor colorWithRed:1.0 green:0.78 blue:0.20 alpha:0.95].CGColor;
+    _editorBar.hidden = YES;
+    [self addSubview:_editorBar];
+
+    _editorHintLabel = [UILabel new];
+    _editorHintLabel.text = @"Drag controls • tap one to resize";
+    _editorHintLabel.textColor = UIColor.whiteColor;
+    _editorHintLabel.font = [UIFont systemFontOfSize:14.0 weight:UIFontWeightSemibold];
+    _editorHintLabel.adjustsFontSizeToFitWidth = YES;
+    _editorHintLabel.minimumScaleFactor = 0.75;
+
+    UIButton *done = [UIButton buttonWithType:UIButtonTypeSystem];
+    [done setTitle:@"Done" forState:UIControlStateNormal];
+    [done setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+    done.titleLabel.font = [UIFont systemFontOfSize:15.0 weight:UIFontWeightBold];
+    done.backgroundColor = [UIColor colorWithRed:0.12 green:0.48 blue:0.82 alpha:1.0];
+    done.layer.cornerRadius = 10.0;
+    done.accessibilityLabel = @"Finish moving touch controls";
+    [done addTarget:self action:@selector(finishLayoutEditing)
+      forControlEvents:UIControlEventTouchUpInside];
+
+    UIStackView *editorStack = [[UIStackView alloc]
+        initWithArrangedSubviews:@[_editorHintLabel, _selectedSizeSlider, done]];
+    editorStack.translatesAutoresizingMaskIntoConstraints = NO;
+    editorStack.axis = UILayoutConstraintAxisHorizontal;
+    editorStack.alignment = UIStackViewAlignmentCenter;
+    editorStack.spacing = 12.0;
+    [_editorBar addSubview:editorStack];
+    [_editorHintLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                     forAxis:UILayoutConstraintAxisHorizontal];
+    [_selectedSizeSlider setContentCompressionResistancePriority:UILayoutPriorityDefaultHigh
+                                                         forAxis:UILayoutConstraintAxisHorizontal];
+    [NSLayoutConstraint activateConstraints:@[
+        [editorStack.leadingAnchor constraintEqualToAnchor:_editorBar.leadingAnchor constant:14.0],
+        [editorStack.trailingAnchor constraintEqualToAnchor:_editorBar.trailingAnchor constant:-10.0],
+        [editorStack.topAnchor constraintEqualToAnchor:_editorBar.topAnchor constant:8.0],
+        [editorStack.bottomAnchor constraintEqualToAnchor:_editorBar.bottomAnchor constant:-8.0],
+        [_selectedSizeSlider.widthAnchor constraintGreaterThanOrEqualToConstant:150.0],
+        [done.widthAnchor constraintEqualToConstant:68.0],
+        [done.heightAnchor constraintEqualToConstant:40.0],
     ]];
 }
 
@@ -602,13 +784,26 @@
 }
 
 - (void)toggleSettingsPanel {
-    _settingsPanel.hidden = !_settingsPanel.hidden;
-    if (!_settingsPanel.hidden)
-        _renderScaleControl.selectedSegmentIndex = [SunPadSettings sharedSettings].renderScale;
+    if (_editingLayout)
+        [self finishLayoutEditing];
+    if (_settingsPanel.hidden) {
+        _settingsPanel.hidden = NO;
+        _renderScaleControl.selectedSegmentIndex = [SunPadSettings sharedSettings].renderScale - 1;
+        [self bringSubviewToFront:_settingsPanel];
+        [self bringSubviewToFront:_menuButton];
+    } else {
+        [self closeSettingsPanel];
+    }
+}
+
+- (void)closeSettingsPanel {
+    _settingsPanel.hidden = YES;
+    if (_editingLayout)
+        [self finishLayoutEditing];
 }
 
 - (void)renderScaleChanged:(UISegmentedControl *)control {
-    [SunPadSettings sharedSettings].renderScale = control.selectedSegmentIndex;
+    [SunPadSettings sharedSettings].renderScale = control.selectedSegmentIndex + 1;
     [[SunPadSettings sharedSettings] synchronize];
     [self refreshMenuButton];
 }
@@ -632,12 +827,15 @@
 }
 
 - (void)editLayoutChanged:(UISwitch *)switcher {
-    [SunPadSettings sharedSettings].editingControlLayout = switcher.on;
-    [[SunPadSettings sharedSettings] synchronize];
     if (switcher.on)
         [self beginLayoutEditing];
     else
         [self endLayoutEditing];
+}
+
+- (void)finishLayoutEditing {
+    _editLayoutSwitch.on = NO;
+    [self endLayoutEditing];
 }
 
 - (void)confirmResetLayout {
@@ -658,8 +856,10 @@
 - (void)resetLayout {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     [defaults removeObjectForKey:@"SunPadControlOrigins"];
+    [defaults removeObjectForKey:@"SunPadControlSizeScales"];
     [defaults removeObjectForKey:@"SunPadControlSizeScale"];
     [defaults removeObjectForKey:@"SunPadControlOpacity"];
+    [[SunPadSettings sharedSettings] resetControlSizeScales];
     [[SunPadSettings sharedSettings] synchronize];
     [self applySettings];
     [self setNeedsLayout];
@@ -667,44 +867,77 @@
 
 #pragma mark - Layout editing (drag + persist)
 
-- (void)beginLayoutEditing {
-    NSArray<NSString *> *identifiers = @[
-        @"move", @"c", @"A", @"B", @"X", @"Y", @"Z", @"Start", @"L", @"R",
-        @"D_U", @"D_D", @"D_L", @"D_R",
-    ];
-    for (NSString *identifier in identifiers) {
-        UIView *control = [self controlForIdentifier:identifier];
-        if (control == nil)
-            continue;
-        UIPanGestureRecognizer *drag = [[UIPanGestureRecognizer alloc] initWithTarget:self
-                                                                               action:@selector(controlDragged:)];
-        drag.delegate = self;
-        [control addGestureRecognizer:drag];
-        _controlDrags[identifier] = drag;
-        _controlOrigins[identifier] = [NSValue valueWithCGPoint:control.center];
+- (void)addEditGesturesToControl:(UIView *)control {
+    UIPanGestureRecognizer *drag = [[UIPanGestureRecognizer alloc]
+        initWithTarget:self action:@selector(controlDragged:)];
+    drag.enabled = NO;
+    drag.cancelsTouchesInView = YES;
+    drag.delegate = self;
+    [control addGestureRecognizer:drag];
+    [_editGestures addObject:drag];
+
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
+        initWithTarget:self action:@selector(controlSelected:)];
+    tap.enabled = NO;
+    tap.cancelsTouchesInView = YES;
+    [control addGestureRecognizer:tap];
+    [_editGestures addObject:tap];
+}
+
+- (NSArray<UIView *> *)gameplayControls {
+    NSMutableArray<UIView *> *controls = [NSMutableArray arrayWithArray:_buttons];
+    if (_moveStick != nil) [controls addObject:_moveStick];
+    if (_cStick != nil) [controls addObject:_cStick];
+    return controls;
+}
+
+- (void)updateControlAppearance {
+    BOOL hidden = _touchControlsHidden && !_editingLayout;
+    CGFloat alpha = _editingLayout ? 1.0 : [SunPadSettings sharedSettings].controlOpacity;
+    for (UIView *control in [self gameplayControls]) {
+        control.hidden = hidden;
+        control.userInteractionEnabled = !hidden;
+        control.alpha = hidden ? 0.0 : alpha;
+        UIColor *border = [UIColor colorWithWhite:1.0 alpha:0.68];
+        CGFloat borderWidth = 2.0;
+        if (_editingLayout) {
+            border = control == _selectedControl
+                ? [UIColor colorWithRed:0.20 green:0.78 blue:1.0 alpha:1.0]
+                : [UIColor colorWithRed:1.0 green:0.78 blue:0.20 alpha:0.95];
+            borderWidth = control == _selectedControl ? 4.0 : 3.0;
+        }
+        control.layer.borderColor = border.CGColor;
+        control.layer.borderWidth = borderWidth;
     }
+}
+
+- (void)beginLayoutEditing {
+    _editingLayout = YES;
+    _settingsPanel.hidden = YES;
+    _editorBar.hidden = NO;
+    _selectedControl = nil;
+    _selectedSizeSlider.enabled = NO;
+    _selectedSizeSlider.value = 1.0;
+    _editorHintLabel.text = @"Drag controls • tap one to resize";
+    [self clearTouchInput];
+    for (UIGestureRecognizer *gesture in _editGestures)
+        gesture.enabled = YES;
+    [self updateControlAppearance];
+    [self setNeedsLayout];
 }
 
 - (void)endLayoutEditing {
-    for (UIPanGestureRecognizer *drag in _controlDrags.allValues) {
-        [drag.view removeGestureRecognizer:drag];
-    }
-    [_controlDrags removeAllObjects];
-    [_controlOrigins removeAllObjects];
-}
-
-- (UIView *)controlForIdentifier:(NSString *)identifier {
-    if ([identifier isEqualToString:@"move"]) return _moveStick;
-    if ([identifier isEqualToString:@"c"]) return _cStick;
-    if ([identifier isEqualToString:@"D_U"]) return [self buttonWithMask:SunPadButtonDpadUp];
-    if ([identifier isEqualToString:@"D_D"]) return [self buttonWithMask:SunPadButtonDpadDown];
-    if ([identifier isEqualToString:@"D_L"]) return [self buttonWithMask:SunPadButtonDpadLeft];
-    if ([identifier isEqualToString:@"D_R"]) return [self buttonWithMask:SunPadButtonDpadRight];
-    for (SunPadGameButton *button in _buttons) {
-        if ([identifier isEqualToString:[self identifierForMask:button.inputMask]])
-            return button;
-    }
-    return nil;
+    [self clearTouchInput];
+    _editingLayout = NO;
+    _editorBar.hidden = YES;
+    for (UIGestureRecognizer *gesture in _editGestures)
+        gesture.enabled = NO;
+    _selectedControl = nil;
+    _selectedSizeSlider.enabled = NO;
+    _selectedSizeSlider.value = 1.0;
+    _editorHintLabel.text = @"Drag controls • tap one to resize";
+    [self applyControllerVisibility];
+    [self updateControlAppearance];
 }
 
 - (NSString *)identifierForMask:(uint16_t)mask {
@@ -726,49 +959,83 @@
 }
 
 - (void)controlDragged:(UIPanGestureRecognizer *)drag {
-    NSString *identifier = nil;
-    for (NSString *key in _controlDrags.allKeys) {
-        if (_controlDrags[key] == drag) {
-            identifier = key;
-            break;
-        }
-    }
-    if (identifier == nil)
+    if (!_editingLayout || drag.view == nil)
         return;
+    UIView *control = drag.view;
+    if (drag.state == UIGestureRecognizerStateBegan)
+        [self selectControlForEditing:control];
     CGPoint translation = [drag translationInView:self];
-    NSValue *originValue = _controlOrigins[identifier];
-    if (originValue == nil)
-        return;
-    CGPoint origin = originValue.CGPointValue;
-    drag.view.center = CGPointMake(origin.x + translation.x, origin.y + translation.y);
+    CGPoint center = CGPointMake(control.center.x + translation.x,
+                                 control.center.y + translation.y);
+    [drag setTranslation:CGPointZero inView:self];
+
+    CGRect safe = self.bounds;
+    if (@available(iOS 11.0, *))
+        safe = UIEdgeInsetsInsetRect(safe, self.safeAreaInsets);
+    CGFloat halfWidth = MIN(control.bounds.size.width * 0.5, safe.size.width * 0.5);
+    CGFloat halfHeight = MIN(control.bounds.size.height * 0.5, safe.size.height * 0.5);
+    center.x = std::clamp(center.x, CGRectGetMinX(safe) + halfWidth,
+                          CGRectGetMaxX(safe) - halfWidth);
+    center.y = std::clamp(center.y, CGRectGetMinY(safe) + halfHeight,
+                          CGRectGetMaxY(safe) - halfHeight);
+    control.center = center;
 
     if (drag.state == UIGestureRecognizerStateEnded ||
         drag.state == UIGestureRecognizerStateCancelled) {
-        CGRect safe = self.bounds;
-        if (@available(iOS 11.0, *))
-            safe = UIEdgeInsetsInsetRect(safe, self.safeAreaInsets);
+        NSString *identifier = control.accessibilityIdentifier;
+        if (identifier.length == 0 || safe.size.width <= 0.0 || safe.size.height <= 0.0)
+            return;
         CGPoint normalized = CGPointMake(
-            (drag.view.center.x - CGRectGetMinX(safe)) / safe.size.width,
-            (drag.view.center.y - CGRectGetMinY(safe)) / safe.size.height);
+            (center.x - CGRectGetMinX(safe)) / safe.size.width,
+            (center.y - CGRectGetMinY(safe)) / safe.size.height);
         NSMutableDictionary *saved = [[[NSUserDefaults standardUserDefaults]
             dictionaryForKey:@"SunPadControlOrigins"] mutableCopy];
         if (saved == nil)
             saved = [NSMutableDictionary dictionary];
-        saved[identifier] = [NSValue valueWithCGPoint:normalized];
+        saved[identifier] = NSStringFromCGPoint(normalized);
         [[NSUserDefaults standardUserDefaults] setObject:saved forKey:@"SunPadControlOrigins"];
         [[SunPadSettings sharedSettings] synchronize];
     }
+}
+
+- (void)controlSelected:(UITapGestureRecognizer *)tap {
+    if (tap.state == UIGestureRecognizerStateEnded)
+        [self selectControlForEditing:tap.view];
+}
+
+- (void)selectControlForEditing:(UIView *)control {
+    if (!_editingLayout || control.accessibilityIdentifier.length == 0)
+        return;
+    _selectedControl = control;
+    _selectedSizeSlider.value = [[SunPadSettings sharedSettings]
+        sizeScaleForControl:control.accessibilityIdentifier];
+    _selectedSizeSlider.enabled = YES;
+    _selectedSizeSlider.accessibilityLabel = [NSString stringWithFormat:@"%@ size",
+                                               control.accessibilityLabel];
+    _editorHintLabel.text = [NSString stringWithFormat:@"%@ size", control.accessibilityLabel];
+    [self updateControlAppearance];
+}
+
+- (void)selectedSizeChanged:(UISlider *)slider {
+    NSString *identifier = _selectedControl.accessibilityIdentifier;
+    if (!_editingLayout || identifier.length == 0)
+        return;
+    [[SunPadSettings sharedSettings] setSizeScale:slider.value forControl:identifier];
+    [[SunPadSettings sharedSettings] synchronize];
+    [self setNeedsLayout];
 }
 
 #pragma mark - Settings application
 
 - (void)applySettings {
     SunPadSettings *settings = [SunPadSettings sharedSettings];
-    _renderScaleControl.selectedSegmentIndex = settings.renderScale;
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"SunPadEditingControlLayout"];
+    _renderScaleControl.selectedSegmentIndex = settings.renderScale - 1;
     _opacitySlider.value = settings.controlOpacity;
     _sizeSlider.value = settings.controlSizeScale;
     _hideControlsSwitch.on = settings.hideTouchControlsWhenControllerConnected;
-    _editLayoutSwitch.on = settings.editingControlLayout;
+    _editLayoutSwitch.on = NO;
+    [self endLayoutEditing];
     [self setNeedsLayout];
 }
 
@@ -792,7 +1059,7 @@
         }
     }
 #endif
-    BOOL shouldHide = controllerConnected &&
+    BOOL shouldHide = !_editingLayout && controllerConnected &&
         [SunPadSettings sharedSettings].hideTouchControlsWhenControllerConnected;
     [self setTouchControlsHidden:shouldHide animated:YES];
     if (controllerConnected)

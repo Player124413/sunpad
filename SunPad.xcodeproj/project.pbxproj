@@ -33,6 +33,7 @@
 		AA000000000000000000011E /* UniformTypeIdentifiers.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022B /* UniformTypeIdentifiers.framework */; };
 		AA000000000000000000011F /* SunPadDiscExtractor.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022C /* SunPadDiscExtractor.mm */; };
 		AA0000000000000000000120 /* SunPadInputMixer.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022E /* SunPadInputMixer.mm */; };
+		AA0000000000000000000121 /* Sys in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000230 /* Sys */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -71,6 +72,7 @@
 		AA000000000000000000022D /* SunPadDiscExtractor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadDiscExtractor.h; sourceTree = "<group>"; };
 		AA000000000000000000022E /* SunPadInputMixer.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadInputMixer.mm; sourceTree = "<group>"; };
 		AA000000000000000000022F /* SunPadInputMixer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadInputMixer.h; sourceTree = "<group>"; };
+		AA0000000000000000000230 /* Sys */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Sys; path = ref/ModernGekko/vendor/dolphin/Data/Sys; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -105,6 +107,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000402 /* apple */,
+				AA0000000000000000000230 /* Sys */,
 				AA0000000000000000000403 /* Frameworks */,
 				AA0000000000000000000404 /* Products */,
 			);
@@ -239,6 +242,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000000121 /* Sys in Resources */,
 				AA0000000000000000000114 /* dev-config.plist in Resources */,
 				AA0000000000000000000105 /* Assets.xcassets in Resources */,
 			);

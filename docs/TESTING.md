@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 ## Principles
 
@@ -30,7 +30,7 @@ Last updated: 2026-08-06
 | Boot from imported image | Pass | iPhone Simulator boots intro from on-device-extracted root and advances on input |
 | Landscape presentation | Pass | App is landscape-only; BellPad-style layout verified on iPhone and iPad Simulators |
 | Merged input + D-pad | Pass | Mixer (OR buttons/latching, strongest sticks, max triggers); D-pad renders; input advances the game |
-| iOS audio backend | Pass | AVAudioEngine + AVAudioSourceNode at 48 kHz; no audio-related crash |
+| Simulator audio output | Pass | AVAudioEngine + AVAudioSourceNode at 48 kHz; no audio-related crash |
 | Startup stability | Pass | Render-scale pre-boot crash fixed; app stays alive across relaunches |
 | Runtime diagnostics | Pass | Overlay FPS readout (30.0 at 640x528 EFB) and EFB resolution via PerformanceMetrics |
 
@@ -69,6 +69,21 @@ static archive) and `xcodebuild` app build:
 
 Screenshots: `artifacts/screenshots/2026-08-06/reverify-2026-08-06-splash.png`,
 `artifacts/screenshots/2026-08-06/reverify-2026-08-06-cabin-intro-after-start.png`.
+
+## Physical iPad evidence (2026-08-07)
+
+| Check | Result | Evidence |
+|---|---|---|
+| Device core + GMSE01 module build | Pass | arm64 iPhoneOS core archive and signed GMSE01 dylib built locally |
+| Signed install and launch | Pass | `com.sunpad.SunPad` installed and launched on iPad Pro (12.9-inch, 6th generation) |
+| Retained ISO boot | Pass | supported 1,459,978,240-byte GMSE01 image retained and supplied as the boot disc |
+| Metal rendering and touch input | Pass | intro/title/gameplay render; touch controls and layout editor used on hardware |
+| Game-engine audio | **Fail** | title/menu music and voices truncate or disappear; raw DSP output stops after roughly 39-53 ms |
+| Same ISO in stock Dolphin 2606 | Pass | complete title voice and music, ruling out damaged source media |
+
+The physical-device audio failure and its pre-output DSP measurements are
+documented in [AUDIO_ISSUE.md](AUDIO_ISSUE.md). A successful Apple output
+callback is not an audio acceptance pass.
 
 ## Stage 1 desktop checklist
 

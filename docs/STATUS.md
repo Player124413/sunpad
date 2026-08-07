@@ -1,13 +1,12 @@
 # Status
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
-Current phase: **SunPad now runs Super Mario Sunshine on the iPhone and iPad
-simulators** as an ahead-of-time statically recompiled game module through the
-Dolphin-derived compatibility runtime (ModernGekko) with the Metal backend.
-The iOS/iPadOS app has the BellPad-inspired three-dot menu, render-resolution
-choices, and Sunshine touch controls. The remaining desktop gameplay gates
-(plaza/objective/save) and the native macOS app shell are next.
+Current phase: **SunPad now boots Super Mario Sunshine on a physical iPad as
+well as the iPhone and iPad simulators** as an ahead-of-time statically
+recompiled game module through the Dolphin-derived compatibility runtime
+(ModernGekko) with the Metal backend. Rendering and touch controls work on the
+iPad, but game-engine audio remains a confirmed release blocker.
 
 ## Confirmed local materials
 
@@ -33,16 +32,17 @@ code-generating loader).
 |---|---|---|
 | 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress — title/intro/input proven; plaza/objective/save open** |
 | 2 | Native Apple Silicon macOS `.app` proof | Not started (moderngekko-run is the current desktop shell) |
-| 3 | Mobile-runtime hardening | **In progress — iOS Simulator core built; JIT disabled; interpreter + software-vertex fallbacks** |
-| 4 | iPhone + iPad apps | **In progress — GMSE01 boots to title and renders gameplay on iPhone and iPad simulators** |
+| 3 | Mobile-runtime hardening | **In progress — Simulator/device core built; JIT disabled; interpreter + software-vertex fallbacks** |
+| 4 | iPhone + iPad apps | **In progress — physical iPad boot/render/input proven; audio blocker open** |
 
 ## What works right now
 
 ### iOS / iPadOS (new)
 
-1. The ModernGekko / Dolphin-derived runtime builds as an arm64 iOS Simulator
-   binary (`platform IOSSIMULATOR`, minos 16.0, sdk 26.5).
-2. The GMSE01 recompiled module builds for the iOS Simulator (arm64).
+1. The ModernGekko / Dolphin-derived runtime builds as arm64 iOS Simulator and
+   physical-device binaries (minimum iOS 16.0).
+2. The GMSE01 recompiled module builds for the Simulator and a physical arm64
+   device development workflow.
 3. The SunPad iOS app links the core statically, boots the game on a
    background thread, and renders through Dolphin's Metal backend into a
    CAMetalLayer surface.
@@ -54,7 +54,7 @@ code-generating loader).
 6. Input works end-to-end on iOS: normalized touch/GameController state is
    written to the Dolphin pipe device and advances the game (START presses
    moved the game from the title into gameplay rendering).
-7. BellPad-inspired overlay: three-dot menu, Native/1x/2x/3x/4x render
+7. BellPad-inspired overlay: three-dot menu, 1x native/2x/3x/4x render
    resolution, touch controls, opacity/size/hide/edit-layout settings.
 8. No runtime PowerPC JIT on iOS: interpreter fallback + software vertex
    loader.
@@ -67,8 +67,9 @@ code-generating loader).
 11. **BellPad-style input merging**: touch + GameController through one
     thread-safe normalized GameCube state (ORed buttons with edge latching,
     strongest-wins sticks, max analog triggers / FLUDD pressure).
-12. **iOS audio**: native AVAudioEngine backend feeding the Dolphin Mixer at
-    48 kHz (audible on the Simulator).
+12. **iOS audio output exists**, and THP video audio is audible on the
+    physical iPad, but JAudio/DSP-driven music, voices, and effects are
+    incomplete. See `docs/AUDIO_ISSUE.md`.
 13. **Runtime diagnostics**: the overlay shows live FPS (30.0 on the iPhone
     17 Pro Simulator at 640x528 EFB) and the current EFB resolution.
 
@@ -82,26 +83,26 @@ code-generating loader).
 
 ## What does not work / not yet proven
 
-- Physical-device iOS audio is untested: the AVAudioEngine backend runs on the
-  Simulator, but audio-session interruptions, backgrounding, and hardware
-  behavior on real devices are not yet verified.
+- Physical-device iOS audio is tested and broken: the raw DSP stream truncates
+  game-engine audio after roughly three JAudio buffers. This is not explained
+  by the ISO or Apple output buffering; root cause remains unproven.
 - The recompiled module is provisioned from the Mac toolchain (iOS has no C
   compiler); import/extract/boot works on-device, but provisioning a module
   for a disc other than the dev-provisioned GMSE01 build is not implemented.
-- Physical-device runs (signing, performance, memory) are not yet done.
+- Physical-iPad signing, install, launch, Metal rendering, ISO boot, and touch
+  input are proven. Broader performance and memory acceptance remain open.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
 - No SunPad-native macOS app shell yet.
-- Interactive touch-control acceptance is not yet complete: controls render and
-  a drag tool (`scripts/simdrag.swift`) exists, but hands-on layout acceptance
-  remains.
+- Touch controls are usable on physical iPad, including move mode, individual
+  sizing, opacity, GameCube-style colors, and a closable settings panel.
 - App lifecycle hardening is partial: backgrounding/pause hooks exist but
   save-flushing before suspension and audio-interruption restoration are not
   implemented.
 
 ## Next highest-priority tasks
 
-1. Physical-device verification (signing, audio sessions, controllers,
-   performance, memory) and interactive touch-control acceptance.
+1. Fix and prove continuous JAudio/DSP output on physical iPad; use the
+   pre-output capture gate in `docs/AUDIO_ISSUE.md`.
 2. Module provisioning for imported discs beyond the dev GMSE01 build
    (game-ID matching against the provisioned module).
 3. App lifecycle: save flushing before suspension, audio-interruption
