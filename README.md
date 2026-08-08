@@ -1,238 +1,251 @@
 # SunPad
 
-SunPad is an experimental, native Apple ARM64 source port project for the
-original US revision of Super Mario Sunshine for Nintendo GameCube. It runs
-the game's PowerPC code as **ahead-of-time statically recompiled host code
-through a GameCube compatibility runtime**. It is not a claim that Sunshine is
-fully decompiled, and it does not depend on a runtime PowerPC JIT.
+<p align="center">
+  <strong>Super Mario Sunshine on iPhone and iPad through static recompilation and Metal.</strong><br>
+  Native landscape rendering, touch controls, controller support, and Files-based game-data setup.
+</p>
 
-<p align="center"><img src="apple/ios/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="160" alt="SunPad sunrise app icon"></p>
+<p align="center">
+  <img src="apple/ios/Assets.xcassets/AppIcon.appiconset/AppIcon.png" width="180" alt="SunPad cartoon sun app icon">
+</p>
 
-This repository is ready for cross-machine handoff and acceptance testing. The
-proven ARM64 game core (DolRecomp-generated module + ModernGekko/Dolphin-derived
-runtime) packages as native **iPhone and iPad apps** that boot Super
-Mario Sunshine to the title screen, render gameplay through Metal, accept
-touch and GameController input, import user-owned game data through the Files
-document picker, extract it on-device, and persist per-device control and
-render-resolution settings. The same core launches on Apple Silicon desktop
-through `moderngekko-run`. Physical-iPad boot, rendering, ISO loading, and
-touch input are proven, but game-engine audio remains broken. Broader scene
-coverage and the native macOS app shell remain explicit follow-up work; this
-is a source release, not an App Store release or a claim of production
-completeness.
+<p align="center">
+  <img alt="iOS 16+" src="https://img.shields.io/badge/iOS%20%2F%20iPadOS-16%2B-0A84FF?logo=apple">
+  <img alt="Metal renderer" src="https://img.shields.io/badge/renderer-Metal-5E5CE6">
+  <img alt="Ahead-of-time static recompilation" src="https://img.shields.io/badge/PowerPC-static%20recompilation-FF9F0A">
+  <img alt="Physical iPad tested" src="https://img.shields.io/badge/physical%20iPad-tested-30D158">
+  <img alt="Game data not included" src="https://img.shields.io/badge/game%20data-not%20included-FF453A">
+</p>
+
+![SunPad running Super Mario Sunshine in Delfino Plaza on iPad](docs/readme/sunpad-delfino-plaza.jpg)
+
+SunPad packages a native Apple ARM64 app around a
+[DolRecomp](https://github.com/encounter/dolrecomp)-generated Super Mario
+Sunshine module and the ModernGekko/Dolphin-derived compatibility runtime.
+The original PowerPC code runs as ahead-of-time recompiled host code, without
+a runtime PowerPC JIT, while Dolphin's Metal backend renders into the iOS app.
+
+The app imports a user-provided supported GameCube image through Files,
+extracts it on-device, and provides a landscape touch controller alongside
+iOS GameController support. This repository contains the Apple integration,
+patches, and reproducible tooling. It does **not** contain Super Mario
+Sunshine, a GameCube image, extracted Nintendo assets, saves, or a generated
+game module.
 
 ## Current status
 
-As of 2026-08-07:
-
-- A pinned ModernGekko + DolRecomp toolchain translates `main.dol` with
-  **0 unknown instructions** (~901k decoded ops, 221 C chunks) and packages a
-  native arm64 `gGMSE01_recomp.dylib` for macOS, the iOS Simulator, and a
-  physical iOS device development build.
-- The ModernGekko / Dolphin-derived compatibility runtime builds for the iOS
-  Simulator and physical arm64 devices with the **static-recomp CPU path and
-  no runtime JIT** (interpreter fallback + generic software vertex loader).
-- The SunPad iOS/iPadOS app statically links the core and renders the game
-  through Dolphin's Metal backend into a CAMetalLayer. Evidence on the iPhone
-  17 Pro and iPad Pro 13-inch simulators (iOS 26.5): the SUPER MARIO SUNSHINE
-  title screen, the attract/demo sequence, and gameplay rendering; input
-  advances the intro (cabin/map → Peach cutscene → Isle Delfino).
-- The app is **landscape-only** with a BellPad-style control layout: move
-  stick bottom-left, D-pad to its right, camera stick bottom-right, A/B/X/Y
-  diamond, L/R/Z shoulders, START, and the three-dot menu.
-- Game-data import is implemented and verified on-device: Files document
-  picker → GameCube header validation (magic + `GMSE01`) → private Application
-  Support retain → on-device extraction (174 files, matches the desktop tree)
-  → boot from the imported image.
-- The long-standing game-engine audio blocker was root-caused (2026-08-08) to
-  a guest-timebase rate bug in the static-recomp CPU core and fixed
-  (`patches/ModernGekko-dolphin/`); continuous audio is verified on desktop
-  parity runs and the iOS Simulator app. Physical-iPad re-acceptance is
-  pending; see [docs/AUDIO_ISSUE.md](docs/AUDIO_ISSUE.md).
-- Touch + GameController merge through one thread-safe normalized GameCube
-  state (ORed buttons with edge latching, strongest-wins sticks, max analog
-  triggers for FLUDD pressure), with 1× native/2×/3×/4× render resolution
-  applied live.
-- Desktop `moderngekko-run` reaches the title/intro at ~30 FPS and responds to
-  pipe input. Delfino Plaza gameplay, objective completion, and save/reload
-  evidence remain open Stage 1 gates.
-
-## Supported platforms
-
-| Platform | Status |
+| Area | Current result |
 |---|---|
-| Apple Silicon macOS | Proven core + Metal launcher (`moderngekko-run`) reaches title/intro; native SunPad `.app` shell not started |
-| iPhone/iPad Simulator | Game boots to title and renders gameplay in landscape; import/extract/input/audio work; hands-on defect acceptance remains |
-| Physical iPhone / iPad | Development iPad boot/render/ISO/touch proven; audio timebase fix awaiting on-device re-acceptance; distribution packaging pending |
-| Intel macOS, Windows, Linux | Upstream-reference platforms, not SunPad release targets |
+| Native app | Universal arm64 iPhone/iPad target for iOS and iPadOS 16+ |
+| Rendering | Dolphin Metal backend reaches the title sequence and playable Delfino Plaza gameplay |
+| Game setup | Files picker, GMSE01 validation, private retention, and on-device extraction work |
+| Touch | Move stick, C-stick, D-pad, A/B/X/Y/Z, L/R, Start, and a persistent settings menu |
+| Controllers | Touch and iOS GameController input merge through one normalized GameCube state |
+| Settings | Live 1×–4× render scale, control opacity/size, hide-on-controller, and movable layouts |
+| Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
+| Distribution | Source/development build only; no public IPA, TestFlight, or App Store release |
 
-## Game-data requirements
+The current development build has been signed, installed, and played on a
+12.9-inch iPad Pro (6th generation). Physical-device boot, Metal rendering,
+Files import, on-device extraction, touch input, gameplay, and in-place app
+updates have been exercised. See [the testing ledger](docs/TESTING.md) for the
+dated evidence and the checks that remain.
 
-SunPad will never include a GameCube image, extracted Nintendo assets, or
-generated game-derived modules. Users must supply their own legally obtained,
-supported retail data.
+## Get started
 
-The initial compatibility target is:
+You need:
 
-- Game ID: `GMSE01`
-- Region: USA
-- Revision: 0
+- an Apple Silicon Mac with Xcode 26.x and its command-line tools;
+- CMake, Ninja, ripgrep, Git, and Python 3;
+- an Apple ID configured in Xcode for physical-device signing; and
+- your own legally obtained Super Mario Sunshine USA revision 0 image
+  (`GMSE01`).
 
-The development target image is `ref/Super Mario Sunshine.iso` (SHA-256
-`67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d`). Raw
-ISO/GCM are recognized; compressed formats are hardening work.
+Clone the repository, place your local inputs under the ignored `ref/` tree,
+and follow the exact extraction and recompilation steps in
+[`docs/BUILDING.md`](docs/BUILDING.md).
 
-Never add game data to this repository. Root ignore rules cover common disc,
-extracted-data, and save formats, and generated recompilation output stays
-local and reproducible from the user's disc.
-
-## Game-data import flow
-
-```text
-Files document picker
-→ validate GameCube header (magic + GMSE01)
-→ stage and retain a private Application Support copy
-→ extract on-device (sys/ + files/, Dolphin DiscIO)
-→ boot the extracted root with the provisioned module
-```
-
-This flow is runtime-proven on the iPhone Simulator for a raw GMSE01 ISO. A
-valid retained copy and extracted root are reused after relaunch; an invalid
-image shows an actionable error and does not replace existing data. The
-three-dot menu can request change/reimport while preserving the current image
-until the replacement validates, or explicitly remove the retained data. The
-recompiled module is produced by the Mac toolchain for the matching disc (iOS
-has no C compiler); matching a provisioned module to an imported disc is the
-remaining gap.
-
-## Build instructions
-
-On an Apple Silicon Mac with Xcode 26.x, CMake, Ninja, ripgrep, Git, and a
-legally obtained GMSE01 ISO:
+Build the iOS Simulator core and app:
 
 ```sh
-git clone https://github.com/chrissotraidis/sunpad.git
-cd sunpad
-# Desktop reproduction (Stage 1)
-cd ref/ModernGekko-Template && make check FETCH=0
-# ... see docs/BUILDING.md for the exact extract/recompile/run commands ...
-cd ../..
-# iOS / iPadOS Simulator app (one command provisions core + module)
 ./scripts/ios-build-core.sh
 xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -derivedDataPath /tmp/sunpad-ddp build
-xcrun simctl boot "iPhone 17 Pro"
-xcrun simctl install "iPhone 17 Pro" /tmp/sunpad-ddp/Build/Products/Debug-iphonesimulator/SunPad.app
-xcrun simctl launch "iPhone 17 Pro" com.sunpad.SunPad
 ```
 
-Run one Simulator at a time. Exact commands, pins, and known issues:
-[docs/BUILDING.md](docs/BUILDING.md), [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md),
-[docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+Build for a physical iPhone or iPad:
 
-## Controls
+```sh
+./scripts/ios-build-core-device.sh
+xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
+  -destination 'platform=iOS,id=<device-udid>' \
+  -derivedDataPath /tmp/SunPadDerivedData \
+  DEVELOPMENT_TEAM=<team-id> CODE_SIGN_STYLE=Automatic \
+  -allowProvisioningUpdates build
+```
 
-The mobile layout is landscape-only, inspired by BellPad and adapted for
-Sunshine: a left analog stick (movement), a C-stick (camera), A/B/X/Y/Z,
-START, L/R, and a D-pad. It scales from compact iPhones to an expanded iPad
-layout and respects safe areas. The top-right three-dot menu opens native
-settings: render resolution (1× native, 2×, 3×, 4× EFB scales), control
-opacity/size, hide-on-controller, Move-mode drag editing with persisted
-normalized positions, and Reset. Physical controllers auto-hide the touch
-controls on devices. Touch and GameController states merge through one
-thread-safe normalized GameCube state: ORed buttons with rising-edge latching,
-strongest-wins sticks, and maximum analog triggers (FLUDD pressure on the
-analog R trigger). The GameController mapping puts analog triggers on the
-trigger buttons, Z on the right shoulder, Start on Menu, and the D-pad on the
-D-pad.
+Generated source trees, build products, GameCube data, saves, signing
+material, and locally recompiled modules are ignored and must never be
+committed.
 
-Desktop keyboard mapping (via the ModernGekko pipe/ini configuration) maps
-A/B/X/Y/Start/Z/L/R, WASD movement, arrow-key C-stick, and Q/E triggers.
+## First launch
 
-## Saves
+SunPad never downloads or bundles game data.
 
-The desktop path persists a Dolphin-compatible memory card under the
-ModernGekko user directory (`~/.local/share/moderngekko/GC/USA/Card A/`).
-Memory-card save/reload evidence inside the game (save point → quit →
-relaunch → load) is an open Stage 1 gate. Mobile GCI persistence and the
-save-export flow are follow-up work modeled on the same Dolphin GCI format.
-No user save belongs in Git, an app bundle, or an IPA.
+1. Launch SunPad and open the **•••** menu.
+2. Choose **Game Data & Saves → Change or Reimport**.
+3. Select your supported raw ISO/GCM image in Files.
+4. Leave SunPad open while it validates and extracts the image locally.
+5. Start playing when the game finishes booting.
 
-## Architecture
+SunPad validates the GameCube header and `GMSE01` game code before replacing
+the retained image. The private copy and extracted tree stay in the app
+container and are reused on later launches.
+
+## Touch controls
+
+SunPad uses a landscape layout designed separately for compact iPhones and
+larger iPads:
+
+- **Left:** movement stick, D-pad, and L within thumb reach.
+- **Right:** camera stick, A/B/X/Y diamond, Z, R, and Start.
+- **Menu:** the persistent **•••** button opens render, control, game-data,
+  and save settings.
+- **Customize:** Move mode lets controls be dragged and saves normalized
+  positions per device class; Reset restores the default layout.
+- **Controller handoff:** a connected physical controller can hide the touch
+  overlay automatically.
+
+Touch and GameController input merge through the same thread-safe GameCube
+state. Button presses are edge-latched, the strongest stick input wins, and
+analog triggers preserve FLUDD pressure control.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/readme/sunpad-plaza-conversation.jpg" alt="SunPad gameplay and touch controls during a Delfino Plaza conversation">
+    </td>
+    <td width="50%">
+      <img src="docs/readme/sunpad-isle-delfino-map.jpg" alt="SunPad showing the Isle Delfino map with touch controls">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Playable on iPad</strong><br>Native Metal gameplay with the full touch layout.</td>
+    <td align="center"><strong>Menus remain usable</strong><br>Every GameCube control stays available without a separate controller.</td>
+  </tr>
+</table>
+
+All screenshots come from the current physical iPad development build using
+game data supplied locally by the device owner. No game data or save is part
+of this repository.
+
+## Supported game data
+
+| Game ID | Region | Revision | Status |
+|---|---|---|---|
+| `GMSE01` | USA | 0 | Initial supported target |
+
+Raw ISO/GCM images are recognized. Compressed image formats and automatic
+module matching remain hardening work. The development target SHA-256 is
+recorded in [the legal and provenance boundary](docs/LEGAL_AND_PROVENANCE.md)
+for identification; the image itself is never tracked or distributed.
+
+## How the local pipeline works
 
 ```text
-UIKit / Files / GCController / AVAudioSession
-                    ↓
-          SunPad Apple adapter
-                    ↓
-       locally generated recompiled module (DolRecomp)
-                    ↓
- ModernGekko / Dolphin-derived compatibility runtime
-                    ↓
-        Dolphin Metal backend (VideoCommon)
-                    ↓
-                  Metal
+Your GMSE01 image on the Mac
+        ↓
+DolRecomp-generated ARM64 module + ModernGekko/Dolphin runtime
+        ↓
+Signed SunPad development app
+        +
+Your GMSE01 image selected through Files after installation
+        ↓
+Private on-device extraction → Metal rendering → local gameplay and saves
 ```
 
-More detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The compile path and first-launch import are deliberately separate. Building
+the app never adds the retail disc image, extracted game files, or a user save
+to the bundle.
 
-## Testing
+## Frequently asked questions
 
-- iOS/iPadOS evidence (2026-08-06): screenshots in
-  `artifacts/screenshots/2026-08-06/`; core/module platform verified with
-  `vtool` (`platform IOSSIMULATOR`, arm64); landscape boot, gameplay
-  rendering, input, import/extract, audio, and the control layout observed on
-  the iPhone 17 Pro Simulator.
-- Desktop Stage 1 evidence: title/intro rendering at ~30 FPS; pipe input
-  advances the game.
-- See [docs/TESTING.md](docs/TESTING.md) for dated checklists, commands, and
-  remaining defects.
+### Does this repository include Super Mario Sunshine?
 
-## Known issues
+No. You must supply your own legally obtained supported GameCube image. Do
+not open issues requesting game data or download links.
 
-See [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md). Highlights: physical-device
-game-engine audio is broken, the module is provisioned from the Mac for a
-matching disc, and desktop plaza/objective/save gates are open.
+### Is SunPad a GameCube emulator?
+
+No. SunPad is a game-specific static-recompilation integration. It combines a
+locally generated `GMSE01` module with a Dolphin-derived compatibility runtime;
+it is not a general-purpose loader for other GameCube games.
+
+### Does it use a JIT on iPhone or iPad?
+
+No runtime PowerPC JIT is used. The supported game's PowerPC code is
+ahead-of-time recompiled for ARM64, with the runtime interpreter handling
+unrecompiled regions.
+
+### Can I download an IPA?
+
+Not currently. The repository supports local development builds signed with
+your Apple development team. No public IPA, TestFlight, AltStore, or App Store
+release has been announced.
+
+### Do saves survive an app update?
+
+An in-place development install preserves the app container. Clean uninstall,
+bundle-identifier changes, and some signing changes can remove or disconnect
+local data, so back up the device container before changing those boundaries.
+No save belongs in Git or a release artifact.
+
+### Is everything finished?
+
+No. The current build is playable and useful for development testing, but
+physical-device audio re-acceptance, broader scene coverage, lifecycle/save
+hardening, compressed image support, distribution packaging, and the native
+macOS shell remain explicit work.
+
+## Project map
+
+| Path | Purpose |
+|---|---|
+| [`scripts/ios-build-core.sh`](scripts/ios-build-core.sh) | Build and provision the Simulator core/module |
+| [`scripts/ios-build-core-device.sh`](scripts/ios-build-core-device.sh) | Build and provision the physical-device core/module |
+| [`apple/ios/`](apple/ios/) | UIKit app shell, Files import, touch UI, and Apple adapter |
+| [`patches/ModernGekko-dolphin/`](patches/ModernGekko-dolphin/) | Maintained upstream runtime fixes |
+| [`docs/BUILDING.md`](docs/BUILDING.md) | Exact desktop, Simulator, and device build commands |
+| [`docs/TESTING.md`](docs/TESTING.md) | Dated evidence and remaining acceptance gates |
+| [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) | Current limitations and workarounds |
+| [`docs/LEGAL_AND_PROVENANCE.md`](docs/LEGAL_AND_PROVENANCE.md) | Asset, game-data, attribution, and license boundary |
+| `ref/` | Ignored local game data and pinned/generated source worktrees |
 
 ## Research and credits
 
-The recompilation path follows the public ExpansionPak ecosystem (DolRecomp,
-ModernGekko, ModernGekko-Template, RecompCore) and uses
-[doldecomp/sms](https://github.com/doldecomp/sms) as a research reference.
-"ReShine" is treated as non-public/community-reported; SunPad reproduces the
-generic pipeline from the local GMSE01 image. See
-[docs/RESEARCH.md](docs/RESEARCH.md).
+The recompilation path follows the public ExpansionPak ecosystem: DolRecomp,
+ModernGekko, ModernGekko-Template, RecompCore, and their contributors. Dolphin
+provides the compatibility-runtime foundation and Metal backend. The
+[doldecomp/sms](https://github.com/doldecomp/sms) project is used as a research
+reference. See [`docs/RESEARCH.md`](docs/RESEARCH.md) and
+[`docs/DEPENDENCIES.md`](docs/DEPENDENCIES.md) for pins and attribution.
 
 ## Legal
 
-SunPad is unofficial and is not affiliated with or endorsed by Nintendo.
-Super Mario Sunshine, Nintendo, and GameCube names are used only to describe
-compatibility. No disc image, original copyrighted game asset, extracted data,
-or generated game-derived module is included in this repository or any
-release. Users are responsible for supplying their own legally obtained
-supported game data. See
-[docs/LEGAL_AND_PROVENANCE.md](docs/LEGAL_AND_PROVENANCE.md) and the mixed
-upstream licenses of the dependency pins in
-[docs/DEPENDENCIES.md](docs/DEPENDENCIES.md).
-
-## Documentation
-
-- [docs/STATUS.md](docs/STATUS.md) — where the project stands, platform by platform
-- [docs/HANDOFF.md](docs/HANDOFF.md) — exact resume commands and next actions
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — layering and separation rules
-- [docs/RESEARCH.md](docs/RESEARCH.md) — ecosystem research and ReShine findings
-- [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) — pinned external revisions and licenses
-- [docs/BUILDING.md](docs/BUILDING.md) — exact extract/recompile/build/run commands
-- [docs/TESTING.md](docs/TESTING.md) — dated evidence and checklists
-- [docs/MACOS.md](docs/MACOS.md) — Stage 2 macOS app plan
-- [docs/IOS_IPADOS.md](docs/IOS_IPADOS.md) — iOS/iPadOS port details
-- [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) — known limitations and workarounds
-- [docs/AUDIO_ISSUE.md](docs/AUDIO_ISSUE.md) — physical-iPad audio evidence and open leads
-- [docs/LEGAL_AND_PROVENANCE.md](docs/LEGAL_AND_PROVENANCE.md) — legal and provenance boundaries
+SunPad is an unofficial community project and is not affiliated with or
+endorsed by Nintendo. Super Mario Sunshine, Nintendo, and GameCube names and
+screenshots are used only to identify compatibility and demonstrate the
+project. No disc image, extracted Nintendo asset, generated game-derived
+module, or user save is included in the repository or a release. Each upstream
+component retains its own license and copyright. See
+[`docs/LEGAL_AND_PROVENANCE.md`](docs/LEGAL_AND_PROVENANCE.md).
 
 ## Contributing
 
-SunPad is a research/experimental project. The best way to help is to test a
-Simulator build with your own legally obtained GMSE01 image and file defects
-with the evidence template in [docs/TESTING.md](docs/TESTING.md).
+SunPad is an experimental source project. The most useful contributions are
+reproducible device reports against the checklist in
+[`docs/TESTING.md`](docs/TESTING.md). Never attach game data, extracted assets,
+generated modules, or saves to an issue or pull request.
