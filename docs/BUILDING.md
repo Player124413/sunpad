@@ -92,3 +92,14 @@ the generated module into a development device container remains a local
 provisioning step; neither is bundled or tracked. This path has booted on a
 physical iPad, but it is not distribution packaging and physical-device audio
 is currently broken as documented in [AUDIO_ISSUE.md](AUDIO_ISSUE.md).
+
+Sign the generated module with the same Apple Development identity as the app,
+then copy it to the root of the app container's temporary directory:
+
+```sh
+codesign --force --sign <development-identity> --timestamp=none \
+  --identifier gGMSE01_recomp /tmp/module-ios-device/gGMSE01_recomp.dylib
+xcrun devicectl device copy to --device <device-udid> \
+  --domain-type appDataContainer --domain-identifier com.sunpad.SunPad \
+  --source /tmp/module-ios-device/gGMSE01_recomp.dylib --destination tmp
+```

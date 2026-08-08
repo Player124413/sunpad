@@ -99,9 +99,10 @@ libtool -static -o "$LIBS_DIR/libSunPadCore.a" "${LIBS[@]}"
 echo "merged: $LIBS_DIR/libSunPadCore.a"
 
 # Dev provisioning manifest. DevModulePath is sandbox-relative: inside the app
-# sandbox /tmp maps to the app container's tmp/ directory, so the module is
-# injected at tmp/module-ios-device/ on the device. DevGameRoot is unused on a
-# real device (the import flow prefers the extracted root it produces).
+# sandbox /tmp maps to the app container's tmp/ directory. Keep the device
+# filename at the root of tmp because devicectl flattens directory uploads.
+# DevGameRoot is unused on a real device (the import flow prefers the extracted
+# root it produces).
 GAME_ROOT="$TPL/extracted/Super-Mario-Sunshine"
 MODULE="/tmp/module-ios-device/gGMSE01_recomp.dylib"
 cat > "$OUT/dev-config.plist" <<PLIST
@@ -114,7 +115,7 @@ cat > "$OUT/dev-config.plist" <<PLIST
 	<key>DevModulePath</key>
 	<string>$MODULE</string>
 	<key>DeviceModuleRelativePath</key>
-	<string>module-ios-device/gGMSE01_recomp.dylib</string>
+	<string>gGMSE01_recomp.dylib</string>
 </dict>
 </plist>
 PLIST
