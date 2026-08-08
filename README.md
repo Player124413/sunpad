@@ -44,10 +44,11 @@ As of 2026-08-07:
   picker → GameCube header validation (magic + `GMSE01`) → private Application
   Support retain → on-device extraction (174 files, matches the desktop tree)
   → boot from the imported image.
-- Physical-iPad audio is a known blocker: THP video audio is generally audible,
-  while JAudio/DSP music, voices, and effects truncate or disappear. The same
-  ISO has complete audio in stock Dolphin; see
-  [docs/AUDIO_ISSUE.md](docs/AUDIO_ISSUE.md).
+- The long-standing game-engine audio blocker was root-caused (2026-08-08) to
+  a guest-timebase rate bug in the static-recomp CPU core and fixed
+  (`patches/ModernGekko-dolphin/`); continuous audio is verified on desktop
+  parity runs and the iOS Simulator app. Physical-iPad re-acceptance is
+  pending; see [docs/AUDIO_ISSUE.md](docs/AUDIO_ISSUE.md).
 - Touch + GameController merge through one thread-safe normalized GameCube
   state (ORed buttons with edge latching, strongest-wins sticks, max analog
   triggers for FLUDD pressure), with 1× native/2×/3×/4× render resolution
@@ -62,7 +63,7 @@ As of 2026-08-07:
 |---|---|
 | Apple Silicon macOS | Proven core + Metal launcher (`moderngekko-run`) reaches title/intro; native SunPad `.app` shell not started |
 | iPhone/iPad Simulator | Game boots to title and renders gameplay in landscape; import/extract/input/audio work; hands-on defect acceptance remains |
-| Physical iPhone / iPad | Development iPad boot/render/ISO/touch proven; game-engine audio broken; distribution packaging pending |
+| Physical iPhone / iPad | Development iPad boot/render/ISO/touch proven; audio timebase fix awaiting on-device re-acceptance; distribution packaging pending |
 | Intel macOS, Windows, Linux | Upstream-reference platforms, not SunPad release targets |
 
 ## Game-data requirements

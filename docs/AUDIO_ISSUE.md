@@ -1,107 +1,100 @@
-# Physical-iPad Audio Investigation
+# Game-Engine Audio Investigation
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Status
 
-Super Mario Sunshine boots and renders on a physical iPad, but its game-engine
-audio is not correct. This remains an unresolved release blocker. The problem
-is reproducible with the supported GMSE01 USA Rev 0 image and is not reproduced
-when that same image runs in stock Dolphin 2606 on the same Mac.
+**Root cause found and fixed in the static-recomp CPU core; physical-iPad
+re-acceptance pending.** The StaticRecomp core advanced the guest timebase at
+1 tick per CPU cycle, while the real Gekko timebase ticks once per 12 CPU
+cycles (`SystemTimers::TIMER_RATIO`). Because `SyncIn()` re-seeds the guest
+timebase from `GetFakeTimeBase()` at every native-burst boundary, guest
+`mftb` ran 12× fast inside a burst and then jumped **backwards** at the next
+boundary — a permanently non-monotonic sawtooth clock, with excursions up to
+roughly 18k TB ticks (~0.45 ms) per timing slice.
 
-This document records the observed behavior and the evidence gathered so that
-future work starts from the signal path rather than repeatedly tuning the iOS
-output buffer.
+Super Mario Sunshine's JAudio driver is exactly the kind of code this breaks:
+`JASystem::TDSPChannel::updateAll()` measures per-subframe `OSGetTick()`
+deltas and force-stops active DSP voices (`breakLowerActive(126)`, i.e.
+almost every music/voice/effect channel) when the measured ratio drops under
+`DSP_LIMIT_RATIO = 1.1`; the SDK AI driver and `__OSInitAudioSystem` also do
+tick-delta busy-waits during audio bring-up (doldecomp/sms:
+`JASDSPChannel.cpp`, `dolphin/ai/ai.c`, `os/OSAudioSystem.c`).
 
-## Player-visible behavior
+The fix (see `patches/ModernGekko-dolphin/0001-...patch`):
 
-- The opening THP videos generally play their audio.
-- Game-engine sounds begin, then are cut short or become silent.
-- Mario's spoken "Super Mario Sunshine" title call is missing or truncated.
-- The title-screen music and file-select music are absent or incomplete.
-- Some short effects remain audible, which can make the failure sound like an
-  output underrun even though the missing samples occur earlier in the pipeline.
+- advance `ctx->timebase` as `tb_at_SyncIn + charged_cycles / TIMER_RATIO`
+  (monotonic within a burst, agrees with `GetFakeTimeBase()` at boundaries),
+  in both the burst and host-call paths of `StaticRecompCore::Run()`;
+- materialize live `SPR_TL`/`SPR_TU` in `HookSPRRead` (previously returned
+  Dolphin's stale cached values);
+- add `STATICRECOMP_NO_FALLBACK_JIT=1` so desktop runs can reproduce the iOS
+  execution contract (see "Why desktop never showed this" below).
 
-## What the captures establish
+## Verified evidence (2026-08-08, this Mac)
 
-The physical-device build and stock Dolphin were run with the same image and
-their raw Dolphin DSP output was captured before the Apple output backend.
-Both captures are 32,028 Hz stereo.
+Producer-side captures via Dolphin's `[DSP] DumpAudio` (`dspdump.wav`,
+32,028 Hz stereo — the same pre-output tap as the original investigation):
 
-| Sample | Stock Dolphin duration | SunPad duration |
-|---|---:|---:|
-| Engine sound 1 | 0.919 s | 0.051 s |
-| Engine sound 2 | 0.822 s | 0.053 s |
-| Engine sound 3 | 0.504 s | 0.039 s |
+| Run | Core path | Result |
+|---|---|---|
+| Desktop, fallback JIT enabled (old default) | JitArm64 executed almost everything (682 module dispatches total) | continuous audio — but not a static-recomp test at all |
+| Desktop, `STATICRECOMP_NO_FALLBACK_JIT=1`, unfixed | module-dominant (518M dispatches, 53.7B cycles) | continuous audio at RMS level (84.6% loud / 113 s) |
+| Desktop, parity mode, **fixed** | module-dominant (643M dispatches) | continuous audio (91.8% loud / 113 s), no regression |
+| Desktop, parity mode, unfixed, CPU throttled to ~7% real-time (E-cores) | module-dominant | producer stream still complete in virtual time — slowness alone does not silence the producer |
+| **iOS Simulator app, fixed core** (no JIT, full iOS audio stack) | module-dominant | **continuous audio, 92.8% loud over 139 s, boot → title → attract** |
 
-For the first roughly 45 ms, corresponding signals correlate at 0.95-0.96.
-The SunPad capture then becomes zero while stock Dolphin continues. This puts
-the primary failure upstream of AVAudioSession, RemoteIO/AVAudioEngine, sample
-rate conversion, and the iPad speaker.
+## Why desktop never showed this
 
-Sunshine's JAudio path uses 560-sample frames at approximately 32,028.5 Hz:
+The fallback JIT's yield hook (`StaticRecompShouldYieldAt`) is only wired
+into the **Jit64 (x86)** dispatcher. On Apple Silicon, JitArm64 never yields
+back to the module, so every previous desktop "static recomp" run silently
+executed almost entirely in Dolphin's JIT — with the JIT's correct timebase.
+Only iOS (which builds no JIT) actually ran the module, which is why the
+symptom looked iOS-only. `STATICRECOMP_NO_FALLBACK_JIT=1` now exposes the
+honest module + interpreter contract on desktop. Wiring the yield hook into
+JitArm64 is separate follow-up work.
 
-```text
-560 / 32028.5 = 17.48 ms per frame
-3 buffers = 52.45 ms
-```
+## Reassessment of the 2026-08-06/07 device evidence
 
-That three-buffer duration closely matches the observed cutoff. The evidence
-therefore points to the emulated JAudio/DSP producer ceasing to advance after
-its initial buffers, rather than the Apple output consumer starving a healthy
-audio stream.
+The surviving physical-iPad producer dump
+(`GMSE01_2026-08-06_20-16-17_dspdump.wav`, captured on the iPad Pro M2 with
+the same DumpAudio tap) contains **89 s of continuous game audio** (89.6%
+loud), and TESTING.md records the device running at a full 30 FPS. This
+contradicts the earlier conclusion that "the emulated JAudio/DSP producer
+ceases to advance after its initial buffers": at minimum, music-level output
+was present in the raw producer stream on the device.
 
-## Why video audio can still work
+The three truncated engine-sound comparison WAVs behind that conclusion were
+not retained, so they cannot be re-examined. Two readings are consistent with
+all surviving evidence:
 
-THP movie audio follows a different route. It is decoded by the emulated CPU
-and mixed through an external callback after `JASDSPBuf::mixDSP`. The title,
-menu, voice, and effect paths depend on the normal JAudio/DSP frame and
-interrupt sequence. Successful movie audio therefore does not prove that the
-DSP scheduler is healthy.
+1. individual lower-priority voices were being force-stopped (~50 ms ≈ 3
+   JAudio frames) by the `updateAll` limiter under the sawtooth clock while
+   higher-priority music channels survived — per-voice truncation inside an
+   RMS-healthy stream; and/or
+2. the audible device symptom was dominated by the output/consumer chain
+   (the iOS Mixer prebuffer/zero-fill modifications and the
+   AudioQueue/CoreAudio backends added during earlier debugging).
 
-## Investigated and not sufficient
+Either way the sawtooth clock was a real, load-bearing CPU-contract defect —
+the docs' own leading suspect ("the static recompiler's CPU/timing
+contract") — and it is now fixed and verified against the full iOS stack in
+the Simulator. Note: `DSPThread = True` found in the device config is inert —
+DSP HLE ignores the thread flag.
 
-The following changes did not restore complete title/menu music or voices:
+## Acceptance gate (unchanged)
 
-- activating an iOS playback `AVAudioSession`;
-- increasing the Dolphin audio buffer and enabling gap filling;
-- replacing the initial Apple output path with a 48 kHz RemoteIO path;
-- booting from the retained ISO instead of relying only on extracted files;
-- rebuilding and reinjecting the matching GMSE01 native module;
-- verifying the same ISO has complete audio in stock Dolphin;
-- forcing Sunshine's `OSDisableInterrupts`, `OSEnableInterrupts`, and
-  `OSRestoreInterrupts` range (`0x803458AC-0x803458F8`) through Dolphin's
-  interpreter.
-
-The targeted interrupt fallback was a diagnostic experiment, not a fix, and
-is not enabled in the checked-in app configuration.
-
-## Leading area for future work
-
-The strongest remaining lead is the static recompiler's CPU/timing contract,
-especially interrupt delivery around `mtmsr` and the DSP frame-mail callbacks.
-Stock Dolphin ends the translated block and checks pending external exceptions
-when `mtmsr` changes interrupt state. The generated static code updates `msr`
-inline, while the static core normally observes external interrupts at timing
-slice boundaries.
-
-That mismatch is consistent with the JAudio producer stopping after its
-initial triple buffer, but the narrow interpreter-range experiment did not fix
-the hardware behavior. A durable correction should therefore be proven with
-instrumentation at these boundaries before changing more output code:
-
-1. AID `syncAudio` message delivery and `updateDac` cadence.
-2. DSP frame-mail delivery, seven subframe updates, and `finishDSPFrame`.
-3. Pending external exception state immediately before and after every
-   generated `mtmsr`.
-4. DSP ring-buffer write position versus the mixer read position.
-
-The next successful investigation should produce a continuous pre-output DSP
-dump matching stock Dolphin before it is described as an iOS audio fix.
+A physical-iPad run with the fixed core must show a continuous pre-output
+DSP dump (DumpAudio) **and** audibly complete title music, the "Super Mario
+Sunshine!" title call, and untruncated gameplay effects. If audible problems
+persist while the dump is clean, the remaining defect is in the iOS
+output/consumer chain (Mixer iOS modifications, AudioQueue/CoreAudio), not
+the emulated producer, and should be debugged there — do not re-tune the
+producer.
 
 ## Evidence boundary
 
-The WAV captures, retail image, extracted game data, generated module, device
-container, and device console logs are local and intentionally gitignored.
-This repository contains only the findings and the source-side integration;
-it does not contain Nintendo data or generated game-derived binaries.
+WAV captures, the retail image, extracted game data, generated modules,
+device containers, and device console logs remain local and gitignored. This
+repository contains only findings, patches, and source-side integration.

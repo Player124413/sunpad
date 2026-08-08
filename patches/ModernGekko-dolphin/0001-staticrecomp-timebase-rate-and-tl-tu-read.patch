@@ -1,0 +1,67 @@
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
+index ed47204d2f..743bd5c6d3 100644
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
+@@ -187,2 +187,6 @@ void StaticRecompCore::Init()
+-#ifdef _M_ARM_64
+-  m_fallback_jit = std::make_unique<JitArm64>(m_system);
++  // STATICRECOMP_NO_FALLBACK_JIT reproduces the iOS execution contract
++  // (module + interpreter only) on desktop for parity testing.
++  if (!std::getenv("STATICRECOMP_NO_FALLBACK_JIT"))
++  {
++#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
++    m_fallback_jit = std::make_unique<JitArm64>(m_system);
+@@ -190 +194 @@ void StaticRecompCore::Init()
+-  m_fallback_jit = std::make_unique<Jit64>(m_system);
++    m_fallback_jit = std::make_unique<Jit64>(m_system);
+@@ -191,0 +196 @@ void StaticRecompCore::Init()
++  }
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.h b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.h
+index 28276fcd1c..b2f0827439 100644
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.h
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.h
+@@ -167,0 +168,7 @@ private:
++  // ctx->timebase is in TB ticks (1 tick per SystemTimers::TIMER_RATIO CPU
++  // cycles), while module charges are CPU cycles. Deriving in-burst TB from a
++  // SyncIn snapshot plus accumulated cycles keeps guest mftb monotonic and in
++  // agreement with GetFakeTimeBase() at burst boundaries.
++  u64 m_burst_tb_base = 0;    // GetFakeTimeBase() at the last SyncIn
++  u64 m_burst_tb_cycles = 0;  // CPU cycles charged since that snapshot
++
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp
+index 886d51aeaf..6f7a7b07db 100644
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Hooks.cpp
+@@ -212,0 +213,11 @@ u32 StaticRecompCore::HookSPRRead(CPUState* cpu, u16 spr, u32 cia)
++  case SPR_TL:
++  case SPR_TU:
++  {
++    // spr[TL/TU] is a stale cache; materialize the live timebase the same way
++    // the interpreter's mfspr does (honoring the lockstep TB pin).
++    const u64 time_base = StaticRecompLockstep::g_tb_override_active ?
++                              StaticRecompLockstep::g_tb_override_value :
++                              core->m_system.GetSystemTimers().GetFakeTimeBase();
++    core->m_system.GetPowerPC().WriteFullTimeBaseValue(time_base);
++    break;
++  }
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Run.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Run.cpp
+index 92562235ba..713a4060cf 100644
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Run.cpp
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Run.cpp
+@@ -100 +100,4 @@ void StaticRecompCore::Run()
+-          m_guest.timebase += static_cast<u64>(charge > 0 ? charge : 1);
++          // TB ticks once per TIMER_RATIO CPU cycles; derive from the SyncIn
++          // snapshot so guest mftb stays monotonic across burst boundaries.
++          m_burst_tb_cycles += static_cast<u64>(charge > 0 ? charge : 1);
++          m_guest.timebase = m_burst_tb_base + m_burst_tb_cycles / SystemTimers::TIMER_RATIO;
+@@ -143 +146,2 @@ void StaticRecompCore::Run()
+-            m_guest.timebase += static_cast<u64>(charge > 0 ? charge : 1);
++            m_burst_tb_cycles += static_cast<u64>(charge > 0 ? charge : 1);
++            m_guest.timebase = m_burst_tb_base + m_burst_tb_cycles / SystemTimers::TIMER_RATIO;
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp
+index c2482a7458..a17b72991c 100644
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore_Sync.cpp
+@@ -69,0 +70,2 @@ void StaticRecompCore::SyncIn()
++  m_burst_tb_base = m_guest.timebase;
++  m_burst_tb_cycles = 0;

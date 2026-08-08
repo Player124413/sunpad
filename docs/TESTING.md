@@ -85,6 +85,23 @@ The physical-device audio failure and its pre-output DSP measurements are
 documented in [AUDIO_ISSUE.md](AUDIO_ISSUE.md). A successful Apple output
 callback is not an audio acceptance pass.
 
+## Audio root-cause verification (2026-08-08, Apple Silicon Mac)
+
+All rows use Dolphin's producer-side `[DSP] DumpAudio` capture
+(`dspdump.wav`, 32,028 Hz) analyzed as 250 ms RMS windows; "loud" =
+RMS > 40. Desktop rows run `moderngekko-run` in iOS-parity mode
+(`STATICRECOMP_NO_FALLBACK_JIT=1`), which is required on Apple Silicon
+because the fallback JIT otherwise takes over execution (yield hook is
+Jit64-only).
+
+| Check | Result | Evidence |
+|---|---|---|
+| Desktop parity, unfixed timebase | Audio continuous at RMS level | 84.6% loud / 113 s; 518M module dispatches |
+| Desktop parity, fixed timebase | Pass, no regression | 91.8% loud / 113 s; 643M module dispatches |
+| Desktop parity, unfixed, ~7% speed (E-cores) | Producer complete in virtual time | 20.7 s virtual captured over 300 s wall, content matches full-speed run |
+| iOS Simulator app, fixed core | **Pass** | 92.8% loud over 139 s, boot → title → attract; iPhone 17 Pro sim |
+| Physical iPad re-acceptance | **Open** | requires `scripts/ios-build-core-device.sh` rebuild + on-device run |
+
 ## Stage 1 desktop checklist
 
 | Check | Status | Evidence |

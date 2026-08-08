@@ -67,9 +67,12 @@ code-generating loader).
 11. **BellPad-style input merging**: touch + GameController through one
     thread-safe normalized GameCube state (ORed buttons with edge latching,
     strongest-wins sticks, max analog triggers / FLUDD pressure).
-12. **iOS audio output exists**, and THP video audio is audible on the
-    physical iPad, but JAudio/DSP-driven music, voices, and effects are
-    incomplete. See `docs/AUDIO_ISSUE.md`.
+12. **Game-engine audio root cause fixed (2026-08-08)**: the static-recomp
+    core's guest timebase ran 12× fast inside native bursts and snapped
+    backwards at burst boundaries, tripping JAudio's tick-delta voice
+    limiter. With the fix, producer-side DSP dumps are continuous on desktop
+    parity runs and in the iOS Simulator app (92.8% audible over 139 s).
+    Physical-iPad re-acceptance is pending. See `docs/AUDIO_ISSUE.md`.
 13. **Runtime diagnostics**: the overlay shows live FPS (30.0 on the iPhone
     17 Pro Simulator at 640x528 EFB) and the current EFB resolution.
 
@@ -83,9 +86,14 @@ code-generating loader).
 
 ## What does not work / not yet proven
 
-- Physical-device iOS audio is tested and broken: the raw DSP stream truncates
-  game-engine audio after roughly three JAudio buffers. This is not explained
-  by the ISO or Apple output buffering; root cause remains unproven.
+- Physical-iPad audio re-acceptance with the fixed core has not run yet; the
+  2026-08-08 timebase fix is verified on desktop parity runs and the iOS
+  Simulator app only. Note the surviving device DSP dump from 2026-08-06 was
+  already continuous at music level, so any residual audible defect on
+  device should be debugged in the iOS output/consumer chain.
+- Desktop caveat: on Apple Silicon the fallback JIT never yields back to the
+  recompiled module (yield hook is Jit64-only), so desktop static-recomp
+  evidence requires `STATICRECOMP_NO_FALLBACK_JIT=1`.
 - The recompiled module is provisioned from the Mac toolchain (iOS has no C
   compiler); import/extract/boot works on-device, but provisioning a module
   for a disc other than the dev-provisioned GMSE01 build is not implemented.
@@ -101,8 +109,9 @@ code-generating loader).
 
 ## Next highest-priority tasks
 
-1. Fix and prove continuous JAudio/DSP output on physical iPad; use the
-   pre-output capture gate in `docs/AUDIO_ISSUE.md`.
+1. Re-run physical-iPad audio acceptance with the fixed core (rebuild via
+   `scripts/ios-build-core-device.sh`); use the pre-output capture gate plus
+   audible checks in `docs/AUDIO_ISSUE.md`.
 2. Module provisioning for imported discs beyond the dev GMSE01 build
    (game-ID matching against the provisioned module).
 3. App lifecycle: save flushing before suspension, audio-interruption

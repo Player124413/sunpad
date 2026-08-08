@@ -4,12 +4,15 @@ Last updated: 2026-08-07
 
 ## iOS / iPadOS
 
-1. **Physical-device game audio is broken** — THP video audio is generally
-   audible, but game-engine music, voices, and effects truncate after their
-   initial buffers or remain silent. Raw DSP captures show the truncation
-   before the Apple output backend. The supported ISO has complete audio in
-   stock Dolphin. See [AUDIO_ISSUE.md](AUDIO_ISSUE.md) for measurements,
-   failed experiments, and the remaining static-recompiler timing lead.
+1. **Game audio: timebase bug fixed, device re-acceptance pending** — the
+   static-recomp core ran the guest timebase 12× fast inside native bursts
+   and snapped it backwards at burst boundaries, breaking JAudio's
+   tick-delta-based voice limiter. Fixed 2026-08-08
+   (`patches/ModernGekko-dolphin/`); producer-side audio verified continuous
+   on desktop parity runs and the iOS Simulator app. A physical-iPad
+   re-acceptance run is still required; if audible defects persist there
+   with a clean DSP dump, debug the iOS output/consumer chain (Mixer iOS
+   modifications, AudioQueue/CoreAudio). See [AUDIO_ISSUE.md](AUDIO_ISSUE.md).
 2. **Module provisioning** — import/extract/boot works on-device, but the
    recompiled module is provisioned from the Mac (`dev-config.plist`); iOS has
    no C compiler, so the module for a given disc must be produced by the Mac
@@ -31,6 +34,13 @@ Last updated: 2026-08-07
 
 ## Desktop Stage 1 gaps
 
+0. **Fallback JIT hogs execution on Apple Silicon** — the JIT-to-module
+   yield hook (`StaticRecompShouldYieldAt`) is only wired into the Jit64
+   (x86) dispatcher, so on arm64 desktops the fallback JitArm64 takes over
+   at the first non-module address and never returns; prior desktop
+   "static recomp" evidence mostly exercised Dolphin's JIT. Run with
+   `STATICRECOMP_NO_FALLBACK_JIT=1` for the true module + interpreter
+   contract (matches iOS). Wiring the yield hook into JitArm64 is open work.
 1. **Input path not fully proven** — pipe input advances menus, but the
    file-select cursor interaction was worked around rather than cleanly
    understood; interactive plaza/objective/save gates remain open.

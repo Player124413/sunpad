@@ -27,8 +27,9 @@ game-engine audio remains broken and is the highest-priority blocker.
 
 ## What does not
 
-- Physical-iPad JAudio/DSP music, voices, and effects truncate or disappear;
-  see `docs/AUDIO_ISSUE.md`. Physical controllers, broader performance/memory,
+- Physical-iPad audio re-acceptance with the 2026-08-08 timebase fix has not
+  run yet (fix verified on desktop parity + iOS Simulator; see
+  `docs/AUDIO_ISSUE.md`). Physical controllers, broader performance/memory,
   module provisioning beyond the dev GMSE01 build, lifecycle save-flushing,
   and audio-interruption restoration remain open.
 - Desktop Stage 1 gates: plaza gameplay, objective, save/reload.
@@ -67,8 +68,10 @@ cd ref/ModernGekko-Template
 
 ## Next actions
 
-1. Instrument and fix the JAudio/DSP producer failure described in
-   `docs/AUDIO_ISSUE.md`; require a continuous pre-output DSP capture.
+1. Physical-iPad audio re-acceptance with the fixed core
+   (`scripts/ios-build-core-device.sh`, then the capture + audible gate in
+   `docs/AUDIO_ISSUE.md`). Desktop parity runs need
+   `STATICRECOMP_NO_FALLBACK_JIT=1`.
 2. Module matching/provisioning for imported discs beyond the dev GMSE01
    build.
 3. Lifecycle hardening: save flushing before suspension, audio-interruption
