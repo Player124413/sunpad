@@ -4,6 +4,7 @@
 #import <UIKit/UIKit.h>
 
 #include "SunPadInputState.h"
+#import "SunPadSettings.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -38,6 +39,10 @@ NS_ASSUME_NONNULL_BEGIN
 /* Applies the render-resolution scale (1 = native GameCube EFB, 2..4 = scale)
  * to the running runtime. Safe to call from any thread. */
 - (void)setRenderScale:(NSInteger)scale;
+
+/* Applies the output aspect ratio without resizing the Metal view or touch
+ * overlay. Safe to call from any thread. */
+- (void)setAspectRatioMode:(SunPadAspectRatioMode)mode;
 
 /* Current emulated FPS from the runtime (0 if not booted). */
 - (double)currentFPS;

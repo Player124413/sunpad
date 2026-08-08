@@ -45,6 +45,22 @@
     }
 }
 
+- (SunPadAspectRatioMode)aspectRatioMode {
+    NSInteger mode = [[NSUserDefaults standardUserDefaults]
+        integerForKey:@"SunPadAspectRatioMode"];
+    if (mode < SunPadAspectRatioOriginal || mode > SunPadAspectRatioFillScreen)
+        return SunPadAspectRatioOriginal;
+    return (SunPadAspectRatioMode)mode;
+}
+
+- (void)setAspectRatioMode:(SunPadAspectRatioMode)aspectRatioMode {
+    NSInteger mode = aspectRatioMode;
+    if (mode < SunPadAspectRatioOriginal || mode > SunPadAspectRatioFillScreen)
+        mode = SunPadAspectRatioOriginal;
+    [[NSUserDefaults standardUserDefaults] setInteger:mode
+                                               forKey:@"SunPadAspectRatioMode"];
+}
+
 - (BOOL)showFPSCounter {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"SunPadShowFPSCounter"];
 }

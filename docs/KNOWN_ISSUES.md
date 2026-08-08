@@ -1,6 +1,6 @@
 # Known Issues
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## iOS / iPadOS
 
@@ -31,6 +31,17 @@ Last updated: 2026-08-07
 7. **Physical-controller acceptance pending** — touch controls have been used
    on a physical iPad, but connect/disconnect and auto-hide behavior still need
    hands-on controller coverage.
+8. **Physical iPhone performance is less than ideal** — an iPhone 14 can run
+   substantially below full speed even at 1×. The runtime and module are
+   release-optimized; the portable software vertex loader and interpreter
+   fallback remain likely CPU costs. Profile native dispatch and fallback
+   counters before attempting device-specific tuning. The current iPad target
+   provides the better mobile experience.
+9. **Experimental wide output** — Original 4:3 is the stable default on both
+   iPhone and iPad. The 16:9 and Fill Screen menu choices use Dolphin's
+   widescreen/custom-aspect paths and can expose projection, culling, or
+   stretching defects. They change game rendering only; touch controls keep
+   their normal device layout.
 
 ## Desktop Stage 1 gaps
 

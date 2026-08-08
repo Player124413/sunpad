@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 Current phase: **SunPad now boots Super Mario Sunshine on a physical iPad as
 well as the iPhone and iPad simulators** as an ahead-of-time statically
@@ -31,7 +31,7 @@ code-generating loader).
 | Stage | Goal | Status |
 |---|---|---|
 | 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress — title/intro/input proven; plaza/objective/save open** |
-| 2 | Native Apple Silicon macOS `.app` proof | Not started (moderngekko-run is the current desktop shell) |
+| 2 | Native Apple Silicon macOS `.app` proof | **App bundle built, signed, and launched; gameplay acceptance remains** |
 | 3 | Mobile-runtime hardening | **In progress — Simulator/device core built; JIT disabled; interpreter + software-vertex fallbacks** |
 | 4 | iPhone + iPad apps | **In progress — physical iPad boot/render/input proven; audio blocker open** |
 
@@ -55,7 +55,9 @@ code-generating loader).
    written to the Dolphin pipe device and advances the game (START presses
    moved the game from the title into gameplay rendering).
 7. BellPad-inspired overlay: three-dot menu, 1x native/2x/3x/4x render
-   resolution, touch controls, opacity/size/hide/edit-layout settings.
+   resolution, original 4:3 plus experimental 16:9/Fill Screen output, touch
+   controls, opacity/size/hide/edit-layout settings. Aspect changes do not
+   move the separate touch overlay.
 8. No runtime PowerPC JIT on iOS: interpreter fallback + software vertex
    loader.
 9. **On-device game-data import** is implemented and verified: document
@@ -83,6 +85,10 @@ code-generating loader).
 3. Host module packaging: arm64 `gGMSE01_recomp.dylib`.
 4. `moderngekko-run` launches on Apple Silicon with Metal at 30 FPS through
    the title/intro sequences and responds to pipe input.
+5. A local arm64 `SunPad.app` packages the native launcher/runner/module,
+   defaults to Metal, exposes resolution/fullscreen settings, seeds WASD +
+   keyboard controls, and allows a connected controller profile to replace
+   them. The app bundle passes ad-hoc signing verification and launches.
 
 ## What does not work / not yet proven
 
@@ -100,7 +106,8 @@ code-generating loader).
 - Physical-iPad signing, install, launch, Metal rendering, ISO boot, and touch
   input are proven. Broader performance and memory acceptance remain open.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
-- No SunPad-native macOS app shell yet.
+- The macOS app shell is proven, but plaza gameplay, objective completion,
+  save/reload, and extended-session acceptance remain open.
 - Touch controls are usable on physical iPad, including move mode, individual
   sizing, opacity, GameCube-style colors, and a closable settings panel.
 - App lifecycle hardening is partial: backgrounding/pause hooks exist but
@@ -116,8 +123,8 @@ code-generating loader).
    (game-ID matching against the provisioned module).
 3. App lifecycle: save flushing before suspension, audio-interruption
    restoration, controller connect/disconnect during gameplay.
-4. Stage 2: native macOS SunPad `.app` shell on the shared runtime layer.
-5. Desktop Stage 1 gates: plaza gameplay, objective, save/reload evidence.
+4. Desktop/macOS app gates: plaza gameplay, objective, save/reload, connected
+   controller, and extended-session evidence.
 
 ## Evidence locations (local, gitignored)
 

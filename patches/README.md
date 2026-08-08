@@ -11,6 +11,12 @@ SunPad-owned patches, kept separate from generic upstream tooling:
 
 ## Applied patches
 
+`ModernGekko/` holds small SunPad-owned frontend deltas against the
+ModernGekko root:
+
+- `0001-macos-metal-frontend.patch` — exposes Metal as the only graphics
+  backend in the macOS launcher and makes it the desktop default.
+
 `ModernGekko-dolphin/` holds the SunPad-owned deltas against the vendored
 Dolphin (`ref/ModernGekko/vendor/dolphin`). They are generic runtime patches,
 not Sunshine-specific:

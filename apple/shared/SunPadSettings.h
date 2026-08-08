@@ -4,6 +4,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSInteger, SunPadAspectRatioMode) {
+    SunPadAspectRatioOriginal = 0,
+    SunPadAspectRatioWidescreen = 1,
+    SunPadAspectRatioFillScreen = 2,
+};
+
 /* Persisted SunPad settings shared by macOS, iOS, and iPadOS. Stored in
  * NSUserDefaults so each platform keeps the same user-facing options.
  */
@@ -14,6 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
 /* Render-resolution scale. 1 = native GameCube EFB, 2..4 = multiplier. */
 @property(nonatomic, assign) NSInteger renderScale;
 - (float)renderScaleFloat;
+
+/* Output aspect ratio. Original 4:3 is the stable default; wider modes are
+ * experimental and affect only game rendering, never touch-control layout. */
+@property(nonatomic, assign) SunPadAspectRatioMode aspectRatioMode;
 
 /* Optional developer performance overlay. Off by default for normal play. */
 @property(nonatomic, assign) BOOL showFPSCounter;

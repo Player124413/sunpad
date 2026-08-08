@@ -1,6 +1,6 @@
 # Building
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Prerequisites
 
@@ -22,6 +22,16 @@ ninja -C lib/ModernGekko/build moderngekko-port moderngekko-run -j8
 ./lib/ModernGekko/build/moderngekko-run --game extracted/Super-Mario-Sunshine \
   --module "$(cat build/modules/GMSE01/active-module.txt)" --graphics Metal
 ```
+
+Package the proven desktop outputs as a local Apple Silicon app:
+
+```sh
+./scripts/package-macos-app.sh
+open build-macos/SunPad.app
+```
+
+This local bundle includes the locally generated module but no disc image or
+save. It is gitignored and must not be distributed.
 
 ## iOS / iPadOS Simulator build (proven)
 

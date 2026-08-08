@@ -1,6 +1,6 @@
 # iOS and iPadOS
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Current status
 
@@ -19,7 +19,8 @@ and renders on a physical iPad; game-engine audio is the major open defect.
 - `SunPadCoreHost` — boots the game on a background thread, owns the
   CAMetalLayer surface and the pipe-input bridge.
 - `SunPadGameOverlay` — BellPad-inspired overlay: three-dot menu with render
-  resolution (1× native/2×/3×/4×), touch-control settings (opacity, size,
+  resolution (1× native/2×/3×/4×), aspect ratio (original 4:3 plus experimental
+  16:9 and Fill Screen), touch-control settings (opacity, size,
   hide-on-controller, edit-layout, reset), Game Data & Saves actions.
 - Sunshine touch controls: main stick, C-stick, A/B/X/Y/Z/Start/L/R.
 - Shared settings (`SunPadSettings`) and normalized input
@@ -50,6 +51,9 @@ initial buffers. THP video audio follows a separate CPU-mixed path and can
 remain audible. See [AUDIO_ISSUE.md](AUDIO_ISSUE.md) before changing output
 buffering again. The persisted 1×-4× render-resolution choice is applied live
 through `Config::GFX_EFB_SCALE` (at boot and on change).
+Aspect changes are applied through Dolphin's graphics config without resizing
+the Metal surface or its separate UIKit touch overlay, so control placement is
+unchanged. Original 4:3 is the default on iPhone and iPad.
 
 ## Game data on mobile
 
