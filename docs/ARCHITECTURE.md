@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-08-06
+Last updated: 2026-08-08
 
 ## Goal architecture
 
@@ -16,7 +16,7 @@ User-owned GMSE01 disc image
         ▼
  ModernGekko / shared GameCube compatibility runtime
         │
-        ├── macOS app shell (Stage 2, pending)
+        ├── macOS app bundle (launcher + runner)
         ├── iOS app shell (SunPad.xcodeproj)
         └── iPadOS app shell (same universal target)
 ```
@@ -31,7 +31,7 @@ sunpad/
   apple/
     shared/             SunPadSettings, SunPadInputState (macOS+iOS)
     ios/                UIKit app, game overlay, core host, Xcode assets
-    macos/              (future macOS app)
+    macos/              macOS bundle metadata, wrapper, and keyboard defaults
   SunPad.xcodeproj      universal iPhone/iPad target
   ref/                  external clones + local disc (gitignored wholesale; see docs/DEPENDENCIES.md)
   tests/                test index and harness pointers (see docs/TESTING.md)

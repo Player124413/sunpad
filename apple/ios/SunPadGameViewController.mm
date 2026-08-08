@@ -222,7 +222,9 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 
 - (void)settingsChanged:(NSNotification *)notification {
     (void)notification;
-    [_coreHost setRenderScale:[SunPadSettings sharedSettings].renderScale];
+    SunPadSettings *settings = [SunPadSettings sharedSettings];
+    [_coreHost setRenderScale:settings.renderScale];
+    [_coreHost setAspectRatioMode:settings.aspectRatioMode];
     [self updateFPSLabel];
 }
 

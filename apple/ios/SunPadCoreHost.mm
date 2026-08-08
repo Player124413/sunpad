@@ -6,6 +6,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -20,6 +21,11 @@ namespace fs = std::filesystem;
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/System.h"
 #include "VideoCommon/PerformanceMetrics.h"
+#include "VideoCommon/VideoConfig.h"
+
+@interface SunPadCoreHost ()
+- (void)applyAspectRatioMode:(SunPadAspectRatioMode)mode;
+@end
 
 @implementation SunPadCoreHost {
     CAMetalLayer *_layer;
@@ -160,6 +166,12 @@ namespace fs = std::filesystem;
                            static_cast<int>(savedScale < 1 ? 1 : (savedScale > 4 ? 4 : savedScale)));
         Config::SetCurrent(Config::GFX_MAX_EFB_SCALE, 12);
 
+        NSNumber *savedAspectValue = [[NSUserDefaults standardUserDefaults]
+            objectForKey:@"SunPadAspectRatioMode"];
+        SunPadAspectRatioMode savedAspect = savedAspectValue ?
+            (SunPadAspectRatioMode)savedAspectValue.integerValue : SunPadAspectRatioOriginal;
+        [self applyAspectRatioMode:savedAspect];
+
         // Open the input FIFO for writing (blocks until the runtime reads it).
         NSString *pipePath = [[userDirectory stringByAppendingPathComponent:@"Pipes"]
             stringByAppendingPathComponent:@"sunpad"];
@@ -240,6 +252,36 @@ namespace fs = std::filesystem;
     // Config::SetCurrent is mutex-protected and the video backend refreshes
     // g_ActiveConfig on the next config callback.
     Config::SetCurrent(Config::GFX_EFB_SCALE, static_cast<int>(clamped));
+}
+
+- (void)applyAspectRatioMode:(SunPadAspectRatioMode)mode {
+    switch (mode) {
+    case SunPadAspectRatioWidescreen:
+        Config::SetCurrent(Config::GFX_ASPECT_RATIO, AspectMode::ForceWide);
+        Config::SetCurrent(Config::GFX_WIDESCREEN_HACK, true);
+        break;
+    case SunPadAspectRatioFillScreen: {
+        CGSize size = _layer.drawableSize;
+        int width = MAX(1, (int)std::lround(size.width));
+        int height = MAX(1, (int)std::lround(size.height));
+        Config::SetCurrent(Config::GFX_CUSTOM_ASPECT_RATIO_WIDTH, width);
+        Config::SetCurrent(Config::GFX_CUSTOM_ASPECT_RATIO_HEIGHT, height);
+        Config::SetCurrent(Config::GFX_ASPECT_RATIO, AspectMode::CustomStretch);
+        Config::SetCurrent(Config::GFX_WIDESCREEN_HACK, true);
+        break;
+    }
+    case SunPadAspectRatioOriginal:
+    default:
+        Config::SetCurrent(Config::GFX_ASPECT_RATIO, AspectMode::ForceStandard);
+        Config::SetCurrent(Config::GFX_WIDESCREEN_HACK, false);
+        break;
+    }
+}
+
+- (void)setAspectRatioMode:(SunPadAspectRatioMode)mode {
+    if (!_running->load())
+        return; // Runtime not booted yet; the mode applies at boot.
+    [self applyAspectRatioMode:mode];
 }
 
 - (double)currentFPS {

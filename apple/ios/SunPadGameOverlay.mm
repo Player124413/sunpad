@@ -215,6 +215,12 @@
         [self renderAction:@"4×" scale:4],
     ]];
 
+    UIMenu *aspectMenu = [UIMenu menuWithTitle:@"Aspect Ratio" children:@[
+        [self aspectRatioAction:@"Original 4:3" mode:SunPadAspectRatioOriginal],
+        [self aspectRatioAction:@"16:9 (Experimental)" mode:SunPadAspectRatioWidescreen],
+        [self aspectRatioAction:@"Fill Screen (Experimental)" mode:SunPadAspectRatioFillScreen],
+    ]];
+
     UIMenu *dataMenu = [UIMenu menuWithTitle:@"Game Data & Saves" children:@[
         [UIAction actionWithTitle:@"Change or Reimport Game Data"
                             image:[UIImage systemImageNamed:@"arrow.triangle.2.circlepath"]
@@ -244,6 +250,7 @@
 
     return [UIMenu menuWithTitle:@"SunPad" children:@[
         renderMenu,
+        aspectMenu,
         fpsAction,
         [UIAction actionWithTitle:@"Touch Control Settings…"
                             image:[UIImage systemImageNamed:@"hand.draw"]
@@ -253,6 +260,23 @@
         }],
         dataMenu,
     ]];
+}
+
+- (UIAction *)aspectRatioAction:(NSString *)title mode:(SunPadAspectRatioMode)mode {
+    __weak SunPadGameOverlay *weakSelf = self;
+    UIAction *aspectAction = [UIAction actionWithTitle:title
+                                                 image:nil
+                                            identifier:nil
+                                               handler:^(__kindof UIAction *action) {
+        (void)action;
+        [SunPadSettings sharedSettings].aspectRatioMode = mode;
+        [[SunPadSettings sharedSettings] synchronize];
+        [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+        [weakSelf refreshMenuButton];
+    }];
+    aspectAction.state = [SunPadSettings sharedSettings].aspectRatioMode == mode ?
+        UIMenuElementStateOn : UIMenuElementStateOff;
+    return aspectAction;
 }
 
 - (UIAction *)renderAction:(NSString *)title scale:(NSInteger)scale {

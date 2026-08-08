@@ -1,8 +1,8 @@
 # SunPad
 
 <p align="center">
-  <strong>Super Mario Sunshine on iPhone and iPad through static recompilation and Metal.</strong><br>
-  Native landscape rendering, touch controls, controller support, and Files-based game-data setup.
+  <strong>Super Mario Sunshine on iPhone, iPad, and Apple Silicon Mac through static recompilation and Metal.</strong><br>
+  Touch controls on mobile, keyboard/controller input on Mac, and local user-supplied game-data setup.
 </p>
 
 <p align="center">
@@ -11,6 +11,7 @@
 
 <p align="center">
   <img alt="iOS 16+" src="https://img.shields.io/badge/iOS%20%2F%20iPadOS-16%2B-0A84FF?logo=apple">
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0A84FF?logo=apple">
   <img alt="Metal renderer" src="https://img.shields.io/badge/renderer-Metal-5E5CE6">
   <img alt="Ahead-of-time static recompilation" src="https://img.shields.io/badge/PowerPC-static%20recompilation-FF9F0A">
   <img alt="Physical iPad tested" src="https://img.shields.io/badge/physical%20iPad-tested-30D158">
@@ -25,9 +26,11 @@ Sunshine module and the ModernGekko/Dolphin-derived compatibility runtime.
 The original PowerPC code runs as ahead-of-time recompiled host code, without
 a runtime PowerPC JIT, while Dolphin's Metal backend renders into the iOS app.
 
-The app imports a user-provided supported GameCube image through Files,
+The mobile app imports a user-provided supported GameCube image through Files,
 extracts it on-device, and provides a landscape touch controller alongside
-iOS GameController support. This repository contains the Apple integration,
+iOS GameController support. The local macOS app provides a Metal launcher,
+internal-resolution and fullscreen options, keyboard controls, and controller
+selection. This repository contains the Apple integration,
 patches, and reproducible tooling. It does **not** contain Super Mario
 Sunshine, a GameCube image, extracted Nintendo assets, saves, or a generated
 game module.
@@ -36,20 +39,24 @@ game module.
 
 | Area | Current result |
 |---|---|
-| Native app | Universal arm64 iPhone/iPad target for iOS and iPadOS 16+ |
+| Native app | Universal arm64 iPhone/iPad target plus a local Apple Silicon `SunPad.app` packager |
 | Rendering | Dolphin Metal backend reaches the title sequence and playable Delfino Plaza gameplay |
 | Game setup | Files picker, GMSE01 validation, private retention, and on-device extraction work |
 | Touch | Move stick, C-stick, D-pad, A/B/X/Y/Z, L/R, Start, and a persistent settings menu |
-| Controllers | Touch and iOS GameController input merge through one normalized GameCube state |
-| Settings | Live 1×–4× render scale, control opacity/size, hide-on-controller, and movable layouts |
+| Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS |
+| Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
 | Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
 | Distribution | Source/development build only; no public IPA, TestFlight, or App Store release |
 
-The current development build has been signed, installed, and played on a
+The mobile development build has been signed, installed, and played on a
 12.9-inch iPad Pro (6th generation). Physical-device boot, Metal rendering,
 Files import, on-device extraction, touch input, gameplay, and in-place app
-updates have been exercised. See [the testing ledger](docs/TESTING.md) for the
-dated evidence and the checks that remain.
+updates have been exercised. A signed development build has also launched on
+an iPhone 14, where performance is currently below the iPad experience even at
+1×. The local arm64 macOS app bundle has been built, signed ad hoc, and
+launched with its Metal and keyboard defaults. See
+[the testing ledger](docs/TESTING.md) for the dated evidence and remaining
+hands-on acceptance checks.
 
 ## Get started
 
@@ -85,11 +92,23 @@ xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
   -allowProvisioningUpdates build
 ```
 
+Build the local Apple Silicon macOS app after producing the desktop GMSE01
+module from [`docs/BUILDING.md`](docs/BUILDING.md):
+
+```sh
+./scripts/package-macos-app.sh
+open build-macos/SunPad.app
+```
+
+The local package may contain your locally generated game module. The package
+is ignored, is not a release artifact, and must not be committed or
+distributed.
+
 Generated source trees, build products, GameCube data, saves, signing
 material, and locally recompiled modules are ignored and must never be
 committed.
 
-## First launch
+## First launch on iPhone or iPad
 
 SunPad never downloads or bundles game data.
 
@@ -103,6 +122,16 @@ SunPad validates the GameCube header and `GMSE01` game code before replacing
 the retained image. The private copy and extracted tree stay in the app
 container and are reused on later launches.
 
+## First launch on Mac
+
+Open the locally built `SunPad.app`, choose your legally obtained supported
+disc image, then use **Extract and Play**. The launcher uses Metal and offers
+internal-resolution and fullscreen options. It starts with keyboard controls:
+WASD to move, arrow keys for the camera, J/K/U/I/O for A/B/X/Y/Z, Q/E for L/R,
+and Return for Start. Connect a controller and choose it in the launcher to
+replace the keyboard profile. Mac game data, configuration, and saves stay in
+`~/Library/Application Support/SunPad`.
+
 ## Touch controls
 
 SunPad uses a landscape layout designed separately for compact iPhones and
@@ -110,8 +139,9 @@ larger iPads:
 
 - **Left:** movement stick, D-pad, and L within thumb reach.
 - **Right:** camera stick, A/B/X/Y diamond, Z, R, and Start.
-- **Menu:** the persistent **•••** button opens render, control, game-data,
-  and save settings.
+- **Menu:** the persistent **•••** button opens render resolution, aspect
+  ratio, control, game-data, and save settings. Original 4:3 is the default;
+  16:9 and Fill Screen are marked experimental.
 - **Customize:** Move mode lets controls be dragged and saves normalized
   positions per device class; Reset restores the default layout.
 - **Controller handoff:** a connected physical controller can hide the touch
@@ -206,9 +236,9 @@ No save belongs in Git or a release artifact.
 ### Is everything finished?
 
 No. The current build is playable and useful for development testing, but
-physical-device audio re-acceptance, broader scene coverage, lifecycle/save
-hardening, compressed image support, distribution packaging, and the native
-macOS shell remain explicit work.
+physical-device audio re-acceptance, iPhone performance, broader scene
+coverage, lifecycle/save hardening, compressed image support, distribution
+packaging, and broader macOS gameplay acceptance remain explicit work.
 
 ## Project map
 
@@ -216,7 +246,9 @@ macOS shell remain explicit work.
 |---|---|
 | [`scripts/ios-build-core.sh`](scripts/ios-build-core.sh) | Build and provision the Simulator core/module |
 | [`scripts/ios-build-core-device.sh`](scripts/ios-build-core-device.sh) | Build and provision the physical-device core/module |
+| [`scripts/package-macos-app.sh`](scripts/package-macos-app.sh) | Build the local Apple Silicon `SunPad.app` bundle |
 | [`apple/ios/`](apple/ios/) | UIKit app shell, Files import, touch UI, and Apple adapter |
+| [`apple/macos/`](apple/macos/) | macOS bundle metadata, launcher wrapper, and keyboard defaults |
 | [`patches/ModernGekko-dolphin/`](patches/ModernGekko-dolphin/) | Maintained upstream runtime fixes |
 | [`docs/BUILDING.md`](docs/BUILDING.md) | Exact desktop, Simulator, and device build commands |
 | [`docs/TESTING.md`](docs/TESTING.md) | Dated evidence and remaining acceptance gates |

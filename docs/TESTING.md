@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ## Principles
 
@@ -116,3 +116,15 @@ Jit64-only).
 | Load playable area | Partial | airstrip gameplay reached on desktop; plaza pending |
 | Objective / save / reload | Pending | |
 | Extended session | Partial | multi-minute holds; multi-hour not done |
+
+## macOS app evidence (2026-08-08)
+
+| Check | Result | Evidence |
+|---|---|---|
+| Local `SunPad.app` package | Pass | `scripts/package-macos-app.sh` completed |
+| Apple Silicon binaries | Pass | launcher, runner, and local GMSE01 module are arm64 Mach-O |
+| Bundle signing | Pass | ad-hoc `codesign --verify --deep --strict` |
+| GUI launch | Pass | `SunPadFrontend` live from the app bundle |
+| Desktop defaults | Pass | Metal, 1920×1080 internal resolution, Quartz keyboard profile |
+| Keyboard mapping | Configured | WASD movement, arrow camera, face/trigger/Start/D-pad keys; hands-on gameplay acceptance remains |
+| Connected controller | Configured | launcher can replace the keyboard profile; hands-on acceptance remains |
