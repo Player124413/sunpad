@@ -273,6 +273,25 @@
 }
 
 - (void)shareDiagnosticLog {
+    UIViewController *presenter = self.window.rootViewController;
+    UIAlertController *confirmation =
+        [UIAlertController alertControllerWithTitle:@"Share Diagnostic Log?"
+                                            message:@"The log can include your iOS version, display and controller details, game-image filename, app-container paths, and runtime errors. It never includes the game image, extracted files, or saves. Review the destination before sharing."
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [confirmation addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                                       style:UIAlertActionStyleCancel
+                                                     handler:nil]];
+    __weak SunPadGameOverlay *weakSelf = self;
+    [confirmation addAction:[UIAlertAction actionWithTitle:@"Continue"
+                                                       style:UIAlertActionStyleDefault
+                                                     handler:^(UIAlertAction *action) {
+        (void)action;
+        [weakSelf presentDiagnosticLogShareSheet];
+    }]];
+    [presenter presentViewController:confirmation animated:YES completion:nil];
+}
+
+- (void)presentDiagnosticLogShareSheet {
     SunPadLog(@"diagnostic log share requested");
     NSError *error = nil;
     NSURL *snapshotURL = SunPadDiagnosticsSnapshotURL(&error);
@@ -340,16 +359,13 @@
     __weak SunPadGameOverlay *weakSelf = self;
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"Remove Stored Game Data?"
-                                            message:@"The retained game image will be removed on the next launch. Your save files are not affected."
+                                            message:@"The retained game image and extracted game files will be removed now. Your save files and control settings are not affected."
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"Remove" style:UIAlertActionStyleDestructive
                                             handler:^(UIAlertAction *action) {
         (void)action;
-        [[SunPadSettings sharedSettings] setRetainedGameDataPath:nil];
-        [[SunPadSettings sharedSettings] setExtractedGameRoot:nil];
-        [[SunPadSettings sharedSettings] synchronize];
-        [weakSelf.delegate gameOverlayRequestsGameDataChange:weakSelf];
+        [weakSelf.delegate gameOverlayRequestsGameDataRemoval:weakSelf];
     }]];
     [self.window.rootViewController presentViewController:alert animated:YES completion:nil];
 }

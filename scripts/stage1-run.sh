@@ -2,9 +2,9 @@
 set -euo pipefail
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TPL="$ROOT/ref/ModernGekko-Template"
-PORT="$TPL/lib/ModernGekko/build/moderngekko-port"
+PORT="$ROOT/ref/ModernGekko/build-desktop-tools-public/moderngekko-port"
 GAME="$TPL/extracted/Super-Mario-Sunshine"
-OUT="$TPL/build/modules"
+OUT="$TPL/build/modules-macos14"
 LOGDIR="$ROOT/artifacts/runtime"
 mkdir -p "$LOGDIR"
 if [[ ! -x "$PORT" ]]; then

@@ -10,9 +10,9 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 MG="$ROOT/ref/ModernGekko"
 TPL="$ROOT/ref/ModernGekko-Template"
-IOS_BUILD="$MG/build-ios3"
+IOS_BUILD="$MG/build-ios-iphonesimulator-public"
 OUT="$ROOT/apple/ios/Provisioned"
-LIBS_DIR="$OUT/libs"
+LIBS_DIR="$OUT/iphonesimulator/libs"
 
 mkdir -p "$LIBS_DIR"
 
@@ -56,9 +56,9 @@ LIBS=(
   "$IOS_BUILD/vendor/dolphin/Externals/cpp-optparse/libcpp-optparse.a"
   "$IOS_BUILD/vendor/dolphin/Externals/minizip-ng/minizip-ng/libminizip-ng.a"
   "$IOS_BUILD/vendor/dolphin/Externals/liblzma/liblzma.a"
-  "/tmp/sunpad-ios-libs2/libfmt.a"
-  "/tmp/sunpad-ios-libs2/liblz4.a"
-  "/tmp/sunpad-ios-libs2/libzstd.a"
+  "$IOS_BUILD/vendor/dolphin/Externals/fmt/fmt/libfmt.a"
+  "$IOS_BUILD/vendor/dolphin/Externals/lz4/lz4/build/cmake/liblz4.a"
+  "$IOS_BUILD/vendor/dolphin/Externals/zstd/zstd/build/cmake/lib/libzstd.a"
 )
 
 MISSING=()
@@ -80,7 +80,7 @@ echo "merged: $LIBS_DIR/libSunPadCore.a"
 # filesystem for acceptance testing). Replaced by the document-picker import
 # flow on real devices.
 GAME_ROOT="$TPL/extracted/Super-Mario-Sunshine"
-MODULE="/tmp/module-ios2/gGMSE01_recomp.dylib"
+MODULE="/tmp/sunpad-module-ios-simulator/gGMSE01_recomp.dylib"
 cat > "$OUT/dev-config.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Goal architecture
 
@@ -27,7 +27,7 @@ User-owned GMSE01 disc image
 sunpad/
   docs/                 first-class documentation
   scripts/              build/test helpers (iOS toolchain, core build, provisioning)
-  patches/              SunPad-owned patches (generic vs Sunshine-specific) — see patches/README.md
+  patches/              Complete reviewed snapshots for the ignored upstream trees
   apple/
     shared/             SunPadSettings, SunPadInputState (macOS+iOS)
     ios/                UIKit app, game overlay, core host, Xcode assets
@@ -68,7 +68,11 @@ SunPadGameViewController
 3. Shared runtime is separate from platform lifecycle/UI.
 4. BellPad is a pattern reference, not a fork source.
 
-## iOS port deltas (in ref/ModernGekko)
+## iOS port deltas (recreated under ref/ModernGekko)
+
+The ignored upstream trees are recreated from their pinned commits by
+`scripts/bootstrap-dependencies.sh`; every required delta is represented by
+the two complete snapshots indexed in [patches/README.md](../patches/README.md).
 
 - `PlatformIOS.mm` (CAMetalLayer platform), Metal backend AppKit guards,
   cubeb/libusb/hidapi/Quartz/watcher/AGL gating, GCAdapter + FilesystemWatcher

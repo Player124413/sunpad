@@ -1,12 +1,13 @@
 # Status
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 Current phase: **SunPad now boots Super Mario Sunshine on a physical iPad as
 well as the iPhone and iPad simulators** as an ahead-of-time statically
 recompiled game module through the Dolphin-derived compatibility runtime
 (ModernGekko) with the Metal backend. Rendering and touch controls work on the
-iPad, but game-engine audio remains a confirmed release blocker.
+iPad. The guest-timebase audio defect is fixed and verified on desktop and the
+iOS Simulator; fresh physical-device audio re-acceptance remains open.
 
 ## Confirmed local materials
 
@@ -33,14 +34,16 @@ code-generating loader).
 | 1 | Reproduce Sunshine recompilation to playable desktop session | **In progress — title/intro/input proven; plaza/objective/save open** |
 | 2 | Native Apple Silicon macOS `.app` proof | **App bundle built, signed, and launched; gameplay acceptance remains** |
 | 3 | Mobile-runtime hardening | **In progress — Simulator/device core built; JIT disabled; interpreter + software-vertex fallbacks** |
-| 4 | iPhone + iPad apps | **In progress — physical iPad boot/render/input proven; audio blocker open** |
+| 4 | iPhone + iPad apps | **In progress — physical iPad boot/render/input proven; fixed audio awaits device re-acceptance** |
 
 ## What works right now
 
 ### iOS / iPadOS (new)
 
-1. The ModernGekko / Dolphin-derived runtime builds as arm64 iOS Simulator and
-   physical-device binaries (minimum iOS 16.0).
+1. The ModernGekko / Dolphin-derived runtime is configured to build as arm64
+   iOS Simulator and physical-device binaries with an iOS 16.0 deployment
+   target. Fresh complete artifacts and oldest-OS runtime acceptance are still
+   required before claiming verified iOS 16 compatibility.
 2. The GMSE01 recompiled module builds for the Simulator and a physical arm64
    device development workflow.
 3. The SunPad iOS app links the core statically, boots the game on a
@@ -60,9 +63,13 @@ code-generating loader).
    move the separate touch overlay.
 8. No runtime PowerPC JIT on iOS: interpreter fallback + software vertex
    loader.
-9. **On-device game-data import** is implemented and verified: document
-   picker → GMSE01 validation → private retain → on-device extraction
-   (174 files, matches the desktop tree) → boot from the imported image.
+9. **On-device game-data import** is implemented: security-scoped document
+   access → exact raw size, GameCube magic, `GMSE01`, disc 0 and revision 0
+   validation → unique private staging → on-device extraction → required-tree
+   verification → atomic activation. The earlier import/extract/boot path was
+   verified; the hardened replacement/reimport path needs a fresh acceptance
+   run. Confirmed removal now deletes the retained image and extracted tree
+   while leaving saves separate.
 10. **Landscape-only presentation** with a BellPad-style control layout
     (move stick, D-pad, camera stick, A/B/X/Y, L/R/Z, START, three-dot menu);
     verified on iPhone and iPad simulators.
@@ -76,7 +83,9 @@ code-generating loader).
     parity runs and in the iOS Simulator app (92.8% audible over 139 s).
     Physical-iPad re-acceptance is pending. See `docs/AUDIO_ISSUE.md`.
 13. **Runtime diagnostics**: the overlay shows live FPS (30.0 on the iPhone
-    17 Pro Simulator at 640x528 EFB) and the current EFB resolution.
+    17 Pro Simulator at 640x528 EFB) and the current EFB resolution. Persistent
+    logs redact current app-container and temporary-directory prefixes, and
+    sharing requires a metadata disclosure confirmation before the share sheet.
 
 ### Desktop (previously proven)
 
@@ -105,6 +114,10 @@ code-generating loader).
   for a disc other than the dev-provisioned GMSE01 build is not implemented.
 - Physical-iPad signing, install, launch, Metal rendering, ISO boot, and touch
   input are proven. Broader performance and memory acceptance remain open.
+- iPhone 14 boot is proven but performance is below the iPad experience even
+  at 1×; iPhone 15 Pro or newer is recommended for iPhone development testing.
+- iOS 16.0 and macOS 14.0 deployment targets are configured, but fresh final
+  artifacts still need minimum-OS inspection and oldest-target runtime checks.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
 - The macOS app shell is proven, but plaza gameplay, objective completion,
   save/reload, and extended-session acceptance remain open.
@@ -132,5 +145,5 @@ code-generating loader).
   - `iphone-title-screen.png`, `iphone-title-logo.png`,
     `iphone-gameplay-after-input.png`, `ipad-isle-delfino.png`,
     `ipad-title-screen.png`
-- iOS core build: `ref/ModernGekko/build-ios3/`
-- Simulator module: `/tmp/module-ios2/gGMSE01_recomp.dylib`
+- iOS core build: `ref/ModernGekko/build-ios-iphonesimulator-public/`
+- Simulator module: `/tmp/sunpad-module-ios-simulator/gGMSE01_recomp.dylib`

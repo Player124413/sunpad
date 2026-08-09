@@ -11,6 +11,8 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol SunPadGameOverlayDelegate <NSObject>
 /* The user asked to change or reimport the game data image. */
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay;
+/* The user confirmed removal of the retained image and extracted game tree. */
+- (void)gameOverlayRequestsGameDataRemoval:(SunPadGameOverlay *)overlay;
 @end
 
 /* UIKit overlay above the game render surface: the three-dot menu, render

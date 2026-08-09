@@ -1,26 +1,48 @@
 # Building
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Prerequisites
 
 Apple Silicon Mac with Xcode 26.x, CMake, Ninja, pkg-config, Git, Python 3,
 and a legally obtained Super Mario Sunshine USA ISO (`GMSE01`).
 
-## Stage 1 desktop reproduction (proven)
+## Clean-clone preparation
+
+Recreate the complete ignored dependency tree at the reviewed revisions:
 
 ```sh
-cd ref/ModernGekko-Template
-make check FETCH=0
-cmake -S lib/ModernGekko -B lib/ModernGekko/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DENABLE_QT=OFF -DENABLE_TESTS=OFF -DUSE_DISCORD_PRESENCE=OFF -DUSE_MGBA=OFF \
-  -DUSE_RETRO_ACHIEVEMENTS=OFF -DENABLE_AUTOUPDATE=OFF -DENABLE_ANALYTICS=OFF -DUSE_UPNP=OFF
-ninja -C lib/ModernGekko/build moderngekko-port moderngekko-run -j8
-./lib/DolRecomp/build/dolrecomp extract "../../Super Mario Sunshine.iso" extracted/Super-Mario-Sunshine
-./lib/ModernGekko/build/moderngekko-port build extracted/Super-Mario-Sunshine \
-  --backend c --toolchain clang --output build/modules
-./lib/ModernGekko/build/moderngekko-run --game extracted/Super-Mario-Sunshine \
-  --module "$(cat build/modules/GMSE01/active-module.txt)" --graphics Metal
+./scripts/bootstrap-dependencies.sh
+```
+
+The bootstrap script clones ModernGekko recursively (including its Dolphin and
+DolRecomp submodules) plus ModernGekko-Template, verifies their exact commits, and applies
+the two complete patch snapshots listed in [the patch index](../patches/README.md).
+It is idempotent for an unchanged prepared tree and never downloads game data.
+If an existing ignored checkout is on another revision or a patch cannot be
+applied cleanly, it stops instead of modifying an unknown tree.
+
+Validate and prepare the supported local image:
+
+```sh
+./scripts/prepare-game.sh /path/to/GMSE01.iso
+```
+
+`prepare-game.sh` also calls the bootstrap safely, checks the image against the
+documented SHA-256 for `GMSE01` USA revision 0, builds the recursively pinned
+DolRecomp tool and desktop ModernGekko tools,
+extracts into
+`ref/ModernGekko-Template/extracted/Super-Mario-Sunshine`, and writes generated
+module output below `ref/ModernGekko-Template/build/modules-macos14`. These inputs and
+outputs are ignored. The command rejects another revision before extraction.
+
+To run the prepared desktop development build directly:
+
+```sh
+ref/ModernGekko/build-desktop-tools-public/moderngekko-run \
+  --game ref/ModernGekko-Template/extracted/Super-Mario-Sunshine \
+  --module "$(cat ref/ModernGekko-Template/build/modules-macos14/GMSE01/active-module.txt)" \
+  --graphics Metal
 ```
 
 Package the proven desktop outputs as a local Apple Silicon app:
@@ -33,9 +55,10 @@ open build-macos/SunPad.app
 This local bundle includes the locally generated module but no disc image or
 save. It is gitignored and must not be distributed.
 
-## iOS / iPadOS Simulator build (proven)
+## iOS / iPadOS Simulator development build
 
-One command provisions the whole app: the iOS Simulator core (ModernGekko +
+Run the clean-clone preparation above first. One command then provisions the
+whole app: the iOS Simulator core (ModernGekko +
 Dolphin runtime), the GMSE01 simulator module, and the merged static archive
 the Xcode project links.
 
@@ -67,15 +90,15 @@ Notes:
 ## Simulator module (what it is)
 
 `scripts/ios-build-core.sh` recompiles the locally generated DolRecomp C
-chunks (`ref/ModernGekko-Template/extracted/.../recomp/generated`) for the
-Simulator using the iOS toolchain, producing `/tmp/module-ios2/gGMSE01_recomp.dylib`
+chunks next to the active macOS 14 module artifact for the
+Simulator using the iOS toolchain, producing `/tmp/sunpad-module-ios-simulator/gGMSE01_recomp.dylib`
 (platform IOSSIMULATOR). The app loads it via `dlopen`; a statically linked
 module is the documented App Store-compatible follow-up.
 
-## Physical iOS / iPadOS device build (development)
+## Physical iOS / iPadOS device build (development only)
 
-The physical-device core and matching GMSE01 module use the separate arm64
-iPhoneOS toolchain:
+Run the clean-clone preparation above first. The physical-device core and
+matching GMSE01 module use the separate arm64 iPhoneOS toolchain:
 
 ```sh
 ./scripts/ios-build-core-device.sh
@@ -90,16 +113,30 @@ The script produces the device core archive, device module, and
 `apple/ios/Provisioned/dev-config.plist`. Installing user-owned game data and
 the generated module into a development device container remains a local
 provisioning step; neither is bundled or tracked. This path has booted on a
-physical iPad, but it is not distribution packaging and physical-device audio
-is currently broken as documented in [AUDIO_ISSUE.md](AUDIO_ISSUE.md).
+physical iPad. The guest-timebase audio defect is fixed on desktop and the
+Simulator, but fresh physical-device audio acceptance remains as documented in
+[AUDIO_ISSUE.md](AUDIO_ISSUE.md).
 
 Sign the generated module with the same Apple Development identity as the app,
 then copy it to the root of the app container's temporary directory:
 
 ```sh
 codesign --force --sign <development-identity> --timestamp=none \
-  --identifier gGMSE01_recomp /tmp/module-ios-device/gGMSE01_recomp.dylib
+  --identifier gGMSE01_recomp /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib
 xcrun devicectl device copy to --device <device-udid> \
   --domain-type appDataContainer --domain-identifier com.sunpad.SunPad \
-  --source /tmp/module-ios-device/gGMSE01_recomp.dylib --destination tmp
+  --source /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib --destination tmp
 ```
+
+This produces a locally signed source/developer build, not a distributable
+IPA. The runtime module is generated from the user's local disc-derived inputs
+and provisioned separately into the development app container.
+
+## Deployment targets and verification boundary
+
+The Xcode app, iOS core and iOS module configurations set iOS 16.0. The desktop
+core, generated module and macOS package configuration set macOS 14.0. These
+are configured targets only. The deployment-target fixes have not yet been
+validated across a fresh complete build by inspecting every final Mach-O and
+running on the oldest OS/hardware combination, so do not describe iOS 16 or
+macOS 14 compatibility as physically accepted yet.

@@ -1,6 +1,6 @@
 # Game-Engine Audio Investigation
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Status
 
@@ -21,7 +21,9 @@ almost every music/voice/effect channel) when the measured ratio drops under
 tick-delta busy-waits during audio bring-up (doldecomp/sms:
 `JASDSPChannel.cpp`, `dolphin/ai/ai.c`, `os/OSAudioSystem.c`).
 
-The fix (see `patches/ModernGekko-dolphin/0001-...patch`):
+The fix is included in the complete
+[`0001-sunpad-ios-runtime.patch`](../patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch)
+snapshot:
 
 - advance `ctx->timebase` as `tb_at_SyncIn + charged_cycles / TIMER_RATIO`
   (monotonic within a burst, agrees with `GetFakeTimeBase()` at boundaries),
@@ -75,7 +77,7 @@ all surviving evidence:
    RMS-healthy stream; and/or
 2. the audible device symptom was dominated by the output/consumer chain
    (the iOS Mixer prebuffer/zero-fill modifications and the
-   AudioQueue/CoreAudio backends added during earlier debugging).
+   earlier AudioQueue experiments or the current CoreAudio backend).
 
 Either way the sawtooth clock was a real, load-bearing CPU-contract defect —
 the docs' own leading suspect ("the static recompiler's CPU/timing
@@ -89,7 +91,7 @@ A physical-iPad run with the fixed core must show a continuous pre-output
 DSP dump (DumpAudio) **and** audibly complete title music, the "Super Mario
 Sunshine!" title call, and untruncated gameplay effects. If audible problems
 persist while the dump is clean, the remaining defect is in the iOS
-output/consumer chain (Mixer iOS modifications, AudioQueue/CoreAudio), not
+output/consumer chain (Mixer iOS modifications or CoreAudio), not
 the emulated producer, and should be debugged there — do not re-tune the
 producer.
 

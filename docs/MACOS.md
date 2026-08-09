@@ -1,6 +1,6 @@
 # macOS
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Current status
 
@@ -20,12 +20,19 @@ After completing the desktop extraction/recompilation steps in
 [BUILDING.md](BUILDING.md):
 
 ```sh
+./scripts/bootstrap-dependencies.sh
+./scripts/prepare-game.sh /path/to/GMSE01.iso
 ./scripts/package-macos-app.sh
 open build-macos/SunPad.app
 ```
 
 The output bundle and its locally generated game module are ignored local
 artifacts and must not be committed or distributed.
+
+The desktop core, generated module, launcher, and runner are now configured
+with a macOS 14.0 deployment target. A fresh complete package still needs each
+final Mach-O inspected and runtime acceptance on macOS 14 before this becomes a
+verified compatibility claim.
 
 ## Controls and data
 

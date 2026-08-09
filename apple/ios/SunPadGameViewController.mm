@@ -7,6 +7,7 @@
 #import "SunPadInputMixer.h"
 #import "SunPadSettings.h"
 
+#import <CommonCrypto/CommonDigest.h>
 #import <GameController/GameController.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
@@ -16,6 +17,59 @@
 #include <cmath>
 
 static constexpr CGFloat SunPadDrawableScale = 1.0;
+static NSString *const SunPadSupportedImageSHA256 =
+    @"67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d";
+
+static NSString *_Nullable SunPadSHA256ForFile(NSString *path, NSError **error) {
+    NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
+    if (handle == nil) {
+        if (error != nil) {
+            *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                         code:NSFileReadNoSuchFileError
+                                     userInfo:@{NSFilePathErrorKey: path}];
+        }
+        return nil;
+    }
+
+    CC_SHA256_CTX context;
+    CC_SHA256_Init(&context);
+    while (true) {
+        NSError *readError = nil;
+        NSData *data = [handle readDataUpToLength:4 * 1024 * 1024 error:&readError];
+        if (data == nil || readError != nil) {
+            [handle closeFile];
+            if (error != nil)
+                *error = readError;
+            return nil;
+        }
+        if (data.length == 0)
+            break;
+        CC_SHA256_Update(&context, data.bytes, (CC_LONG)data.length);
+    }
+    [handle closeFile];
+
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256_Final(digest, &context);
+    NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (unsigned char byte : digest)
+        [hex appendFormat:@"%02x", byte];
+    return hex;
+}
+
+static NSUInteger SunPadRegularFileCount(NSString *directory) {
+    NSDirectoryEnumerator<NSString *> *enumerator =
+        [[NSFileManager defaultManager] enumeratorAtPath:directory];
+    NSUInteger count = 0;
+    for (NSString *relative in enumerator) {
+        BOOL isDirectory = NO;
+        [[NSFileManager defaultManager]
+            fileExistsAtPath:[directory stringByAppendingPathComponent:relative]
+                 isDirectory:&isDirectory];
+        if (!isDirectory)
+            ++count;
+    }
+    return count;
+}
 
 /* UIView whose backing layer is a CAMetalLayer: the ModernGekko Metal video
  * backend renders directly into this layer (Dolphin owns the drawable). */
@@ -32,6 +86,7 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 @interface SunPadGameViewController () <SunPadGameOverlayDelegate, UIDocumentPickerDelegate>
 - (NSString *)modulePathFromConfiguration:(NSDictionary *)configuration;
 - (NSString *)resolvedImportTestPath:(NSString *)requestedPath;
+- (NSString *)sunPadSupportRoot;
 @end
 
 @implementation SunPadGameViewController {
@@ -321,9 +376,7 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     // App updates can relocate the data-container UUID. On physical devices,
     // derive imported data from the current sandbox instead of trusting an
     // absolute path persisted by a previous installation.
-    NSString *supportRoot = [[NSHomeDirectory()
-        stringByAppendingPathComponent:@"Library/Application Support"]
-        stringByAppendingPathComponent:@"SunPad"];
+    NSString *supportRoot = [self sunPadSupportRoot];
     NSString *gameDataDirectory = [supportRoot stringByAppendingPathComponent:@"GameData"];
     NSString *currentContainerRoot = [gameDataDirectory stringByAppendingPathComponent:@"GMSE01"];
     BOOL currentRootExists = [fileManager fileExistsAtPath:currentContainerRoot];
@@ -441,6 +494,33 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     [self presentGameDataImport];
 }
 
+- (void)gameOverlayRequestsGameDataRemoval:(SunPadGameOverlay *)overlay {
+    (void)overlay;
+    if (_coreHost != nil) {
+        [_coreHost stop];
+        _coreHost = nil;
+    }
+
+    NSString *dataDirectory = [[self sunPadSupportRoot]
+        stringByAppendingPathComponent:@"GameData"];
+    NSError *error = nil;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:dataDirectory] &&
+        ![[NSFileManager defaultManager] removeItemAtPath:dataDirectory error:&error]) {
+        [self startGameIfProvisioned];
+        [self presentBootError:[NSString stringWithFormat:
+            @"Could not remove stored game data: %@", error.localizedDescription]];
+        return;
+    }
+
+    SunPadSettings *settings = [SunPadSettings sharedSettings];
+    settings.retainedGameDataPath = nil;
+    settings.extractedGameRoot = nil;
+    [settings synchronize];
+    _bootStatusLabel.hidden = NO;
+    _bootStatusLabel.text = @"Stored game data removed.\nUse the ••• menu to import it again.";
+    SunPadLog(@"stored game data removed");
+}
+
 - (void)presentGameDataImport {
     NSArray<UTType *> *types = @[
         [UTType typeWithFilenameExtension:@"iso"],
@@ -466,79 +546,148 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 }
 
 - (void)importGameDataFromURL:(NSURL *)url {
-    NSLog(@"[SunPad] import start: %@", url.path);
-    NSString *message = [self validateGameDataAtURL:url];
-    if (message != nil) {
-        NSLog(@"[SunPad] import validation failed: %@", message);
-        [self presentBootError:message];
-        return;
-    }
-
-    // Stage the image into private Application Support (never the bundle).
-    NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    NSString *dataDir = [paths.firstObject stringByAppendingPathComponent:@"SunPad/GameData"];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dataDir
-                              withIntermediateDirectories:YES
-                                               attributes:nil
-                                                    error:nil];
-    NSString *destination =
-        [dataDir stringByAppendingPathComponent:url.lastPathComponent];
-    NSError *copyError = nil;
-    if (![[NSFileManager defaultManager] copyItemAtPath:url.path
-                                                 toPath:destination
-                                                  error:&copyError]) {
-        NSLog(@"[SunPad] import copy failed: %@", copyError);
-        [self presentBootError:[NSString stringWithFormat:@"Could not retain the game image: %@",
-                                                          copyError.localizedDescription]];
-        return;
-    }
-    NSLog(@"[SunPad] import retained at %@", destination);
-    [SunPadSettings sharedSettings].retainedGameDataPath = destination;
-    [[SunPadSettings sharedSettings] synchronize];
-
-    NSArray<NSString *> *extractPaths = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    NSString *extractRoot = [[extractPaths.firstObject
-        stringByAppendingPathComponent:@"SunPad/GameData"]
-        stringByAppendingPathComponent:@"GMSE01"];
-
     UIAlertController *progressAlert =
         [UIAlertController alertControllerWithTitle:@"Importing Game Data"
-                                            message:@"Extracting the disc…"
+                                            message:@"Validating and copying the disc…"
                                      preferredStyle:UIAlertControllerStyleAlert];
     [self presentViewController:progressAlert animated:YES completion:nil];
 
+    NSString *supportRoot = [self sunPadSupportRoot];
+    NSString *stagingDirectory = [supportRoot stringByAppendingPathComponent:
+        [NSString stringWithFormat:@"GameData.import-%@", NSUUID.UUID.UUIDString]];
+    NSString *stagedImage = [stagingDirectory stringByAppendingPathComponent:@"GMSE01.iso"];
+    NSString *stagedRoot = [stagingDirectory stringByAppendingPathComponent:@"GMSE01"];
     __weak SunPadGameViewController *weakSelf = self;
-    [SunPadDiscExtractor extractImageAtPath:destination
-                               toDirectory:extractRoot
-                                   progress:^(NSString *status, double fraction) {
-        progressAlert.message = [NSString stringWithFormat:@"%@ (%.0f%%)", status, fraction * 100.0];
-    }
-                                 completion:^(BOOL ok, NSString *error) {
-        SunPadGameViewController *strongSelf = weakSelf;
-        if (strongSelf == nil)
-            return;
-        [progressAlert dismissViewControllerAnimated:YES completion:nil];
-        if (!ok) {
-            [strongSelf presentBootError:error ?: @"Extraction failed."];
-            return;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<NSString *> *supportEntries = [[NSFileManager defaultManager]
+            contentsOfDirectoryAtPath:supportRoot error:nil];
+        for (NSString *entry in supportEntries) {
+            if ([entry hasPrefix:@"GameData.import-"] &&
+                ![[supportRoot stringByAppendingPathComponent:entry]
+                    isEqualToString:stagingDirectory]) {
+                [[NSFileManager defaultManager]
+                    removeItemAtPath:[supportRoot stringByAppendingPathComponent:entry]
+                              error:nil];
+            }
         }
-        [SunPadSettings sharedSettings].extractedGameRoot = extractRoot;
-        [[SunPadSettings sharedSettings] synchronize];
 
-        NSBundle *bundle = NSBundle.mainBundle;
-        NSString *configPath = [bundle pathForResource:@"dev-config" ofType:@"plist"];
-        NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
-        NSString *modulePath = [strongSelf modulePathFromConfiguration:config];
-        if (strongSelf->_coreHost != nil) {
-            [strongSelf->_coreHost restartWithGameRoot:extractRoot
-                                         discImagePath:destination
-                                            modulePath:modulePath];
-        } else {
-            [strongSelf startGameIfProvisioned];
+        BOOL securityScoped = [url startAccessingSecurityScopedResource];
+        NSString *validationError = [weakSelf validateGameDataAtURL:url];
+        NSError *copyError = nil;
+        if (validationError == nil) {
+            [[NSFileManager defaultManager] createDirectoryAtPath:stagingDirectory
+                                      withIntermediateDirectories:YES
+                                                       attributes:nil
+                                                            error:&copyError];
         }
-    }];
+        if (validationError == nil && copyError == nil) {
+            [[NSFileManager defaultManager] copyItemAtURL:url
+                                                    toURL:[NSURL fileURLWithPath:stagedImage]
+                                                    error:&copyError];
+        }
+        if (validationError == nil && copyError == nil) {
+            NSString *hash = SunPadSHA256ForFile(stagedImage, &copyError);
+            if (copyError == nil && ![hash isEqualToString:SunPadSupportedImageSHA256])
+                validationError = @"The image SHA-256 does not match supported GMSE01 USA revision 0 data.";
+        }
+        if (securityScoped)
+            [url stopAccessingSecurityScopedResource];
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            SunPadGameViewController *strongSelf = weakSelf;
+            if (strongSelf == nil)
+                return;
+            if (validationError != nil || copyError != nil) {
+                [[NSFileManager defaultManager] removeItemAtPath:stagingDirectory error:nil];
+                [progressAlert dismissViewControllerAnimated:YES completion:^{
+                    [strongSelf presentBootError:validationError ?: [NSString stringWithFormat:
+                        @"Could not retain the game image: %@", copyError.localizedDescription]];
+                }];
+                return;
+            }
+
+            progressAlert.message = @"Extracting the disc…";
+            [SunPadDiscExtractor extractImageAtPath:stagedImage
+                                       toDirectory:stagedRoot
+                                           progress:^(NSString *status, double fraction) {
+                progressAlert.message = [NSString stringWithFormat:@"%@ (%.0f%%)",
+                                         status, fraction * 100.0];
+            }
+                                         completion:^(BOOL ok, NSString *error) {
+                SunPadGameViewController *completedSelf = weakSelf;
+                if (completedSelf == nil)
+                    return;
+                if (!ok) {
+                    [[NSFileManager defaultManager] removeItemAtPath:stagingDirectory error:nil];
+                    [progressAlert dismissViewControllerAnimated:YES completion:^{
+                        [completedSelf presentBootError:error ?: @"Extraction failed."];
+                    }];
+                    return;
+                }
+
+                NSArray<NSString *> *required = @[
+                    @"sys/boot.bin", @"sys/bi2.bin", @"sys/apploader.img",
+                    @"sys/fst.bin", @"sys/main.dol", @"files/opening.bnr",
+                    @"files/AudioRes/mSound.asn", @"files/data/common.szs",
+                ];
+                for (NSString *relative in required) {
+                    if (![[NSFileManager defaultManager] fileExistsAtPath:
+                          [stagedRoot stringByAppendingPathComponent:relative]]) {
+                        [[NSFileManager defaultManager] removeItemAtPath:stagingDirectory error:nil];
+                        [progressAlert dismissViewControllerAnimated:YES completion:^{
+                            [completedSelf presentBootError:@"The extracted game data is incomplete."];
+                        }];
+                        return;
+                    }
+                }
+                if (SunPadRegularFileCount([stagedRoot stringByAppendingPathComponent:@"files"]) != 174) {
+                    [[NSFileManager defaultManager] removeItemAtPath:stagingDirectory error:nil];
+                    [progressAlert dismissViewControllerAnimated:YES completion:^{
+                        [completedSelf presentBootError:@"The extracted game file count is incomplete."];
+                    }];
+                    return;
+                }
+
+                if (completedSelf->_coreHost != nil) {
+                    [completedSelf->_coreHost stop];
+                    completedSelf->_coreHost = nil;
+                }
+                NSString *dataDirectory = [supportRoot stringByAppendingPathComponent:@"GameData"];
+                NSFileManager *fileManager = [NSFileManager defaultManager];
+                NSError *swapError = nil;
+                if ([fileManager fileExistsAtPath:dataDirectory]) {
+                    NSURL *resultURL = nil;
+                    [fileManager replaceItemAtURL:[NSURL fileURLWithPath:dataDirectory]
+                                    withItemAtURL:[NSURL fileURLWithPath:stagingDirectory]
+                                   backupItemName:nil options:0
+                                 resultingItemURL:&resultURL error:&swapError];
+                } else {
+                    [fileManager moveItemAtPath:stagingDirectory
+                                         toPath:dataDirectory error:&swapError];
+                }
+                if (swapError != nil) {
+                    [completedSelf startGameIfProvisioned];
+                    [progressAlert dismissViewControllerAnimated:YES completion:^{
+                        [completedSelf presentBootError:[NSString stringWithFormat:
+                            @"Could not activate the imported game data: %@",
+                            swapError.localizedDescription]];
+                    }];
+                    return;
+                }
+
+                NSString *destination = [dataDirectory stringByAppendingPathComponent:@"GMSE01.iso"];
+                NSString *extractRoot = [dataDirectory stringByAppendingPathComponent:@"GMSE01"];
+                SunPadSettings *settings = [SunPadSettings sharedSettings];
+                settings.retainedGameDataPath = destination;
+                settings.extractedGameRoot = extractRoot;
+                [settings synchronize];
+                SunPadLog(@"game data import activated filename=%@", destination.lastPathComponent);
+                [progressAlert dismissViewControllerAnimated:YES completion:^{
+                    [completedSelf startGameIfProvisioned];
+                }];
+            }];
+        });
+    });
 }
 
 - (nullable NSString *)validateGameDataAtURL:(NSURL *)url {
@@ -550,6 +699,11 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     if (header.length < 0x100)
         return @"The file is too small to be a GameCube image.";
 
+    NSNumber *fileSize = [[[NSFileManager defaultManager]
+        attributesOfItemAtPath:url.path error:nil] objectForKey:NSFileSize];
+    if (fileSize.unsignedLongLongValue != 1459978240ULL)
+        return @"The image size does not match the supported GMSE01 USA revision 0 disc.";
+
     const uint8_t *bytes = (const uint8_t *)header.bytes;
     uint32_t magic = CFSwapInt32BigToHost(*(uint32_t *)(bytes + 0x1C));
     if (magic != 0xC2339F3D)
@@ -559,7 +713,14 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     memcpy(gameId, bytes + 0x00, 6);
     if (strncmp(gameId, "GMSE01", 6) != 0)
         return [NSString stringWithFormat:@"Unsupported game ID '%s'; SunPad currently supports GMSE01 (Super Mario Sunshine USA).", gameId];
+    if (bytes[6] != 0 || bytes[7] != 0)
+        return @"SunPad currently supports disc 0, revision 0 only.";
     return nil;
+}
+
+- (NSString *)sunPadSupportRoot {
+    return [[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support"]
+        stringByAppendingPathComponent:@"SunPad"];
 }
 
 @end

@@ -14,3 +14,22 @@ live in [scripts/](../scripts):
   desktop Stage 1 checks and capture helpers.
 
 Run only one Simulator at a time on a given machine.
+
+Focused source regression gates:
+
+```sh
+./tests/test-input-pipe-encoder.sh
+./tests/test-diagnostics.sh
+```
+
+Before publishing or merging release-hardening work, run the combined
+repository gate from the repository root:
+
+```sh
+./scripts/check-repository.sh
+```
+
+It checks whitespace, shell/Python/plist/asset syntax, local Markdown links,
+the focused tests, prohibited tracked artifacts, likely credential material,
+personal absolute paths, and the required license/notice files. It does not
+replace a clean-clone build or physical gameplay acceptance.

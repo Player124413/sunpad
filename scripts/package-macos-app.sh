@@ -6,21 +6,15 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 MG="$ROOT/ref/ModernGekko"
 TPL="$ROOT/ref/ModernGekko-Template"
-BUILD="${SUNPAD_MACOS_BUILD_DIR:-$MG/build-desktop}"
+BUILD="${SUNPAD_MACOS_BUILD_DIR:-$MG/build-desktop-app-public}"
 OUTPUT="${SUNPAD_MACOS_OUTPUT:-$ROOT/build-macos/SunPad.app}"
-PATCH="$ROOT/patches/ModernGekko/0001-macos-metal-frontend.patch"
 
-if git -C "$MG" apply --reverse --check "$PATCH" >/dev/null 2>&1; then
-  : # Already applied.
-elif git -C "$MG" apply --check "$PATCH" >/dev/null 2>&1; then
-  git -C "$MG" apply "$PATCH"
-else
-  echo "ModernGekko macOS frontend patch does not apply cleanly." >&2
-  exit 1
-fi
+"$ROOT/scripts/bootstrap-dependencies.sh"
+export MACOSX_DEPLOYMENT_TARGET=14.0
 
 cmake -S "$MG" -B "$BUILD" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
   -DMODERNGEKKO_FRONTEND_NAME=SunPad \
   -DMODERNGEKKO_LAUNCHER_OUTPUT_NAME=SunPadFrontend \
   -DMODERNGEKKO_RUNNER_OUTPUT_NAME=SunPadRunner \
@@ -29,10 +23,12 @@ cmake -S "$MG" -B "$BUILD" -G Ninja \
   -DMODERNGEKKO_LOG_FILENAME=SunPad.log \
   -DMODERNGEKKO_GAMECUBE_CONTROLLERS=ON \
   -DMODERNGEKKO_REQUIRED_DISC_ID=GMSE01 \
+  -DUSE_SYSTEM_LIBS=OFF \
+  -DENABLE_VULKAN=OFF \
   -DENABLE_QT=OFF -DENABLE_TESTS=OFF
 cmake --build "$BUILD" --target moderngekko-run moderngekko-launcher -j8
 
-ACTIVE_MODULE="$(cat "$TPL/build/modules/GMSE01/active-module.txt")"
+ACTIVE_MODULE="$(cat "$TPL/build/modules-macos14/GMSE01/active-module.txt")"
 if [[ "$ACTIVE_MODULE" != /* ]]; then
   ACTIVE_MODULE="$TPL/$ACTIVE_MODULE"
 fi
@@ -40,6 +36,20 @@ if [[ ! -f "$ACTIVE_MODULE" ]]; then
   echo "Generated GMSE01 desktop module not found: $ACTIVE_MODULE" >&2
   exit 1
 fi
+MODULE_MINOS=$(vtool -show-build "$ACTIVE_MODULE" | awk '/minos/ {print $2; exit}')
+if [[ -z "$MODULE_MINOS" || "${MODULE_MINOS%%.*}" -gt 14 ]]; then
+  echo "GMSE01 module does not target macOS 14: ${MODULE_MINOS:-unknown}" >&2
+  echo "Move the ignored module cache aside and rerun scripts/prepare-game.sh." >&2
+  exit 1
+fi
+
+for binary in "$BUILD/SunPadFrontend" "$BUILD/SunPadRunner" "$ACTIVE_MODULE"; do
+  if otool -L "$binary" | grep -Eq '/opt/homebrew|/usr/local'; then
+    echo "non-portable package dependency in $binary" >&2
+    otool -L "$binary" >&2
+    exit 1
+  fi
+done
 
 APP_PARENT="$(dirname -- "$OUTPUT")"
 mkdir -p "$APP_PARENT"

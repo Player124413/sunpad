@@ -18,15 +18,15 @@ Last updated: 2026-08-09
 
 | Check | Result | Evidence |
 |---|---|---|
-| iOS Simulator core build (arm64, IOSSIMULATOR) | Pass | `ref/ModernGekko/build-ios3`, `vtool` shows platform IOSSIMULATOR minos 16.0 |
-| GMSE01 simulator module build | Pass | `/tmp/module-ios2/gGMSE01_recomp.dylib` (platform IOSSIMULATOR) |
+| iOS Simulator core build (arm64, IOSSIMULATOR) | Pass | `ref/ModernGekko/build-ios-iphonesimulator-public`, `vtool` shows platform IOSSIMULATOR minos 16.0 |
+| GMSE01 simulator module build | Pass | `/tmp/sunpad-module-ios-simulator/gGMSE01_recomp.dylib` (platform IOSSIMULATOR) |
 | App link (static core + Metal + GameController) | Pass | `xcodebuild ... BUILD SUCCEEDED` |
 | iPhone 17 Pro Simulator boot | Pass | title screen rendered; process stable (PID held) |
 | iPhone attract/demo + gameplay rendering | Pass | LIFE/WATER HUD + coins rendered after input |
 | iPhone input through pipe device | Pass | START presses advanced the game state |
 | iPad Pro 13-inch Simulator boot | Pass | "Welcome to Isle Delfino" splash → title screen |
 | No runtime JIT | Pass | JitArm64 fallback disabled; generic vertex loader; no w^x writes |
-| On-device import+extract | Pass | Picker validation (magic+GMSE01), private retain, 174-file extraction matches desktop tree |
+| On-device import+extract | Pass | Original picker validation/private-retain flow; 174-file extraction matches desktop tree. Hardened staged reimport/removal needs fresh acceptance. |
 | Boot from imported image | Pass | iPhone Simulator boots intro from on-device-extracted root and advances on input |
 | Landscape presentation | Pass | App is landscape-only; BellPad-style layout verified on iPhone and iPad Simulators |
 | Merged input + D-pad | Pass | Mixer (OR buttons/latching, strongest sticks, max triggers); D-pad renders; input advances the game |
@@ -100,7 +100,7 @@ domain while the user's current SunPad session remained running.
 | In-app raw-log sharing | Pass | top-level **Share Diagnostic Log…** menu action snapshots the current raw log under a timestamped `.log` filename and opens `UIActivityViewController`; focused snapshot test reads back a sentinel |
 | Slow black startup | Clarified in UI | startup status remains visible until the first measured game frame |
 | Unsigned arm64 iOS Release build | Pass | `xcodebuild ... -destination 'generic/platform=iOS' ... CODE_SIGNING_ALLOWED=NO build` |
-| Signed arm64 iPhone/iPad Release build | Pass | automatic development signing for `com.sunpad.SunPad`; Team `VKDH2T9UTF`; installed on iPhone 14 and iPad Pro 12.9-inch (6th generation), both running iOS/iPadOS 26.5.2 |
+| Signed arm64 iPhone/iPad Release build | Pass | automatic local development signing for `com.sunpad.SunPad`; installed on iPhone 14 and iPad Pro 12.9-inch (6th generation), both running iOS/iPadOS 26.5.2 |
 | In-place data-container relocation | Fixed | physical-device boot paths derive from the current sandbox home; stale absolute game-root/disc preferences are rebased without altering controller settings |
 | Final device boot | Pass | both persistent logs record preferences restored, extracted root readable, ISO readable, module present, `runtime created`, and input pipe connected on attempt 1 |
 | Post-launch stability | Pass | both final processes remained alive beyond 60 seconds, exceeding the repeated 8–30 second controller-crash window |
@@ -110,6 +110,18 @@ domain while the user's current SunPad session remained running.
 | Diagnostic-sharing build deployment | Pass | signed Release build installed and booted on the attached iPad and iPhone; both raw runtime logs reached `runtime created` and input-pipe connection on attempt 1 |
 | Disc-image preservation | Pass | full post-install readback from each device matches source SHA-256 `67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d` |
 | Exact HDMI + wired-controller hardware replay | Open | final build is installed and booted; the exact dongle/controller/display combination still needs a hands-on gameplay run |
+
+Repository hardening implemented after this device run remains a fresh
+acceptance gate; source inspection alone is not recorded as a runtime pass:
+
+| Check | Current state | Required acceptance |
+|---|---|---|
+| Game-image validation | Implemented in source | Reject wrong size, game ID, disc number, and revision; accept the supported raw image |
+| Staged atomic import | Implemented in source | Import, same-filename reimport, interrupted/failed extraction rollback, and successful boot |
+| Stored-data removal | Implemented in source | Retained image and extracted tree removed; save and unrelated preferences preserved |
+| Diagnostic privacy prompt | Implemented in source | Metadata disclosure appears before the share sheet; cancel shares nothing; confirmed snapshot excludes game data and saves |
+| Diagnostic path redaction | Implemented in source | New persistent messages replace current app-container and temporary prefixes |
+| iOS 16.0 / macOS 14.0 targets | Configured in build scripts | Fresh-build every final artifact, inspect recorded minimum OS, then run oldest-target acceptance |
 
 The separate `SunPad.cpu_resource-2026-08-09-102551.ips` report observed 90
 CPU seconds over 118 seconds (76% average) and memory growth from 327.67 MB to

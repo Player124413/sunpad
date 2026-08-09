@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible SunPad problem without uploading protected data
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not upload game images, extracted assets, generated modules, saves, signing material, device containers, or unreviewed logs.
+  - type: input
+    id: revision
+    attributes:
+      label: SunPad revision
+      placeholder: Git commit, branch, or release
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - iPhone
+        - iPad
+        - iOS Simulator
+        - macOS
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Include exact steps, expected behavior, and observed behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reviewed evidence
+      description: Paste only the smallest relevant, privacy-reviewed log excerpt.

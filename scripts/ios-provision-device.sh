@@ -11,9 +11,9 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 MG="$ROOT/ref/ModernGekko"
 TPL="$ROOT/ref/ModernGekko-Template"
-IOS_BUILD="$MG/build-ios-device"
+IOS_BUILD="$MG/build-ios-iphoneos-public"
 OUT="$ROOT/apple/ios/Provisioned"
-LIBS_DIR="$OUT/libs"
+LIBS_DIR="$OUT/iphoneos/libs"
 
 mkdir -p "$LIBS_DIR"
 
@@ -61,23 +61,15 @@ LIBS=(
   "$IOS_BUILD/vendor/dolphin/Externals/liblzma/liblzma.a"
 )
 
-# fmt device slice comes from the vendored Externals build; lz4/zstd are not
-# produced by the core build, so device slices are built separately from the
-# vendored sources into /tmp/sunpad-ios-libs-device.
 EXTRA=(
   "$IOS_BUILD/vendor/dolphin/Externals/fmt/fmt/libfmt.a"
-  "/tmp/sunpad-ios-libs-device/liblz4.a"
-  "/tmp/sunpad-ios-libs-device/libzstd.a"
+  "$IOS_BUILD/vendor/dolphin/Externals/lz4/lz4/build/cmake/liblz4.a"
+  "$IOS_BUILD/vendor/dolphin/Externals/zstd/zstd/build/cmake/lib/libzstd.a"
 )
 for lib in "${EXTRA[@]}"; do
   if [[ ! -f "$lib" ]]; then
-    FOUND="$(find "$IOS_BUILD/vendor/dolphin/Externals" -name "$(basename "$lib")" 2>/dev/null | head -1 || true)"
-    if [[ -n "$FOUND" ]]; then
-      LIBS+=("$FOUND")
-    else
-      echo "missing device static library: $lib" >&2
-      exit 1
-    fi
+    echo "missing device static library: $lib" >&2
+    exit 1
   else
     LIBS+=("$lib")
   fi
@@ -104,7 +96,7 @@ echo "merged: $LIBS_DIR/libSunPadCore.a"
 # DevGameRoot is unused on a real device (the import flow prefers the extracted
 # root it produces).
 GAME_ROOT="$TPL/extracted/Super-Mario-Sunshine"
-MODULE="/tmp/module-ios-device/gGMSE01_recomp.dylib"
+MODULE="/tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib"
 cat > "$OUT/dev-config.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

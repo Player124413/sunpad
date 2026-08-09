@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -34,7 +35,10 @@ namespace fs = std::filesystem;
     CAMetalLayer *_layer;
     std::thread *_gameThread;
     std::atomic<bool> *_stopRequested;
+    std::atomic<bool> *_starting;
     std::atomic<bool> *_running;
+    std::mutex *_runtimeMutex;
+    moderngekko::Runtime *_runtime;
     int _pipeFd;
     void (^_onError)(NSString *);
 }
@@ -45,7 +49,10 @@ namespace fs = std::filesystem;
         _pipeFd = -1;
         _gameThread = new std::thread();
         _stopRequested = new std::atomic<bool>(false);
+        _starting = new std::atomic<bool>(false);
         _running = new std::atomic<bool>(false);
+        _runtimeMutex = new std::mutex();
+        _runtime = nullptr;
     }
     return self;
 }
@@ -59,10 +66,11 @@ namespace fs = std::filesystem;
                modulePath:(NSString *)modulePath
              userDirectory:(NSString *)userDirectory
                    onError:(void (^)(NSString *))onError {
-    if (_running->load())
+    if (_running->load() || _starting->load() || _gameThread->joinable())
         return;
     _onError = [onError copy];
     *_stopRequested = false;
+    *_starting = true;
 
     NSError *audioSessionError = nil;
     AVAudioSession *audioSession = AVAudioSession.sharedInstance;
@@ -157,6 +165,7 @@ namespace fs = std::filesystem;
         auto created = moderngekko::Runtime::Create(std::move(config));
         if (!created) {
             errorMessage = created.error->message;
+            *_starting = false;
             SunPadLog(@"runtime create failed: %s", errorMessage.c_str());
             if (_onError) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -165,6 +174,17 @@ namespace fs = std::filesystem;
             }
             return;
         }
+        {
+            std::scoped_lock lock(*_runtimeMutex);
+            _runtime = created.runtime.get();
+        }
+        if (_stopRequested->load()) {
+            std::scoped_lock lock(*_runtimeMutex);
+            _runtime = nullptr;
+            *_starting = false;
+            return;
+        }
+        *_starting = false;
         *_running = true;
         SunPadLog(@"runtime created");
 
@@ -199,6 +219,10 @@ namespace fs = std::filesystem;
                       _stopRequested->load());
 
         auto result = created.runtime->Run();
+        {
+            std::scoped_lock lock(*_runtimeMutex);
+            _runtime = nullptr;
+        }
         SunPadLog(@"runtime exited error=%d stopRequested=%d",
                   (bool)result.error, _stopRequested->load());
         if (result.error && _onError) {
@@ -213,6 +237,7 @@ namespace fs = std::filesystem;
         }
     }
     *_running = false;
+    *_starting = false;
 }
 
 - (void)publishInput:(SunPadInputState)input {
@@ -296,17 +321,24 @@ namespace fs = std::filesystem;
 }
 
 - (void)stop {
-    SunPadLog(@"runtime stop requested running=%d", _running->load());
+    SunPadLog(@"runtime stop requested starting=%d running=%d",
+              _starting->load(), _running->load());
     *_stopRequested = true;
+    {
+        std::scoped_lock lock(*_runtimeMutex);
+        if (_runtime != nullptr)
+            _runtime->RequestStop();
+    }
     if (_gameThread->joinable())
         _gameThread->join();
+    *_starting = false;
+    *_running = false;
 }
 
 - (void)restartWithGameRoot:(NSString *)gameRoot
               discImagePath:(NSString *)discImagePath
                  modulePath:(NSString *)modulePath {
-    if (*_running) {
-        // Graceful stop; the runtime's Run returns and the thread joins.
+    if (_gameThread->joinable()) {
         [self stop];
     }
     NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
@@ -328,13 +360,15 @@ namespace fs = std::filesystem;
 }
 
 - (void)dealloc {
+    if (_gameThread->joinable())
+        [self stop];
     if (_pipeFd >= 0)
         ::close(_pipeFd);
-    if (_gameThread->joinable())
-        _gameThread->join();
     delete _gameThread;
     delete _stopRequested;
+    delete _starting;
     delete _running;
+    delete _runtimeMutex;
 }
 
 @end

@@ -36,6 +36,7 @@
 		AA0000000000000000000121 /* Sys in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000230 /* Sys */; };
 		AA0000000000000000000122 /* SunPadDiagnostics.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000231 /* SunPadDiagnostics.mm */; };
 		AA0000000000000000000123 /* SunPadInputPipeEncoder.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000233 /* SunPadInputPipeEncoder.mm */; };
+		AA0000000000000000000124 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000235 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,7 +58,7 @@
 		AA0000000000000000000216 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		AA0000000000000000000217 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		AA0000000000000000000218 /* SunPadCoreHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadCoreHost.mm; sourceTree = "<group>"; };
-		AA0000000000000000000219 /* libSunPadCore.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libSunPadCore.a; path = "apple/ios/Provisioned/libs/libSunPadCore.a"; sourceTree = "<group>"; };
+		AA0000000000000000000219 /* libSunPadCore.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libSunPadCore.a; sourceTree = "<group>"; };
 		AA0000000000000000000220 /* dev-config.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = dev-config.plist; path = Provisioned/dev-config.plist; sourceTree = "<group>"; };
 		AA0000000000000000000221 /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 		AA0000000000000000000222 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
@@ -79,6 +80,7 @@
 		AA0000000000000000000232 /* SunPadDiagnostics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadDiagnostics.h; sourceTree = "<group>"; };
 		AA0000000000000000000233 /* SunPadInputPipeEncoder.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadInputPipeEncoder.mm; sourceTree = "<group>"; };
 		AA0000000000000000000234 /* SunPadInputPipeEncoder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadInputPipeEncoder.h; sourceTree = "<group>"; };
+		AA0000000000000000000235 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -143,6 +145,7 @@
 				AA0000000000000000000205 /* Assets.xcassets */,
 				AA0000000000000000000214 /* Info.plist */,
 				AA0000000000000000000220 /* dev-config.plist */,
+				AA0000000000000000000235 /* PrivacyInfo.xcprivacy */,
 			);
 			path = ios;
 			sourceTree = "<group>";
@@ -255,6 +258,7 @@
 				AA0000000000000000000121 /* Sys in Resources */,
 				AA0000000000000000000114 /* dev-config.plist in Resources */,
 				AA0000000000000000000105 /* Assets.xcassets in Resources */,
+				AA0000000000000000000124 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -351,8 +355,8 @@
 					"$(SRCROOT)/ref/ModernGekko/include",
 					"$(SRCROOT)/ref/ModernGekko/vendor/dolphin/Source/Core",
 					"$(SRCROOT)/ref/ModernGekko/vendor/dolphin/GXRuntime/include",
-					"$(SRCROOT)/ref/ModernGekko/build-ios3",
-					"$(SRCROOT)/ref/ModernGekko/build-ios3/vendor/dolphin/Source/Core",
+					"$(SRCROOT)/ref/ModernGekko/build-ios-$(PLATFORM_NAME)-public",
+					"$(SRCROOT)/ref/ModernGekko/build-ios-$(PLATFORM_NAME)-public/vendor/dolphin/Source/Core",
 					"$(SRCROOT)/ref/ModernGekko/vendor/fmt/fmt/include",
 					"$(SRCROOT)/ref/ModernGekko/vendor/dolphin/Externals/picojson",
 				);
@@ -363,7 +367,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/apple/ios/Provisioned/libs",
+					"$(SRCROOT)/apple/ios/Provisioned/$(PLATFORM_NAME)/libs",
 				);
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = (
@@ -396,8 +400,8 @@
 					"$(SRCROOT)/ref/ModernGekko/include",
 					"$(SRCROOT)/ref/ModernGekko/vendor/dolphin/Source/Core",
 					"$(SRCROOT)/ref/ModernGekko/vendor/dolphin/GXRuntime/include",
-					"$(SRCROOT)/ref/ModernGekko/build-ios3",
-					"$(SRCROOT)/ref/ModernGekko/build-ios3/vendor/dolphin/Source/Core",
+					"$(SRCROOT)/ref/ModernGekko/build-ios-$(PLATFORM_NAME)-public",
+					"$(SRCROOT)/ref/ModernGekko/build-ios-$(PLATFORM_NAME)-public/vendor/dolphin/Source/Core",
 					"$(SRCROOT)/ref/ModernGekko/vendor/fmt/fmt/include",
 					"$(SRCROOT)/ref/ModernGekko/vendor/dolphin/Externals/picojson",
 				);
@@ -408,7 +412,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					"$(SRCROOT)/apple/ios/Provisioned/libs",
+					"$(SRCROOT)/apple/ios/Provisioned/$(PLATFORM_NAME)/libs",
 				);
 				MARKETING_VERSION = 0.1.0;
 				OTHER_LDFLAGS = (

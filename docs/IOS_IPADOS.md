@@ -1,6 +1,6 @@
 # iOS and iPadOS
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Current status
 
@@ -10,12 +10,15 @@ ahead-of-time statically recompiled game module runs through the
 ModernGekko/Dolphin-derived compatibility runtime, rendered by Dolphin's Metal
 backend into a CAMetalLayer. Input advances the game. The on-device game-data
 import flow is implemented and verified. A signed development build also boots
-and renders on a physical iPad; game-engine audio is the major open defect.
+and renders on a physical iPad. The guest-timebase audio defect is fixed on
+desktop and the Simulator; fresh physical-device audio re-acceptance is open.
 
 ## What is built
 
 - `SunPad.xcodeproj` — universal iPhone/iPad target (device family 1,2),
-  arm64, iOS 16.0+.
+  arm64, configured for an iOS 16.0 deployment target. Fresh final-artifact
+  inspection and oldest-OS runtime acceptance remain before claiming verified
+  iOS 16 compatibility.
 - `SunPadCoreHost` — boots the game on a background thread, owns the
   CAMetalLayer surface and the pipe-input bridge.
 - `SunPadGameOverlay` — BellPad-inspired overlay: three-dot menu with render
@@ -45,11 +48,13 @@ SunPad-specific iOS changes (all in `ref/ModernGekko`):
   replaced by the generic software loader (`GFX_VERTEX_LOADER_TYPE=Software`).
 - Translocated-path (macOS-only) bundle code is skipped on iOS.
 
-The Apple audio output path receives data from the Dolphin Mixer, but physical
-iPad testing found that the upstream JAudio/DSP stream truncates after its
-initial buffers. THP video audio follows a separate CPU-mixed path and can
-remain audible. See [AUDIO_ISSUE.md](AUDIO_ISSUE.md) before changing output
-buffering again. The persisted 1×-4× render-resolution choice is applied live
+The earlier physical-iPad run had truncated audible output. Investigation then
+found and fixed a static-recomp guest-timebase discontinuity that could trip
+JAudio's tick-delta voice limiter. Continuous producer-side audio is verified
+on desktop parity runs and through the full iOS Simulator audio stack. A fresh
+physical-device run must still confirm continuous audible output; see
+[AUDIO_ISSUE.md](AUDIO_ISSUE.md) before changing output buffering again. The
+persisted 1×-4× render-resolution choice is applied live
 through `Config::GFX_EFB_SCALE` (at boot and on change).
 Aspect changes are applied through Dolphin's graphics config without resizing
 the Metal surface or its separate UIKit touch overlay, so control placement is
@@ -57,14 +62,23 @@ unchanged. Original 4:3 is the default on iPhone and iPad.
 
 ## Game data on mobile
 
-The import flow is implemented and verified on the Simulator:
+The import flow is implemented; the original import/extract/boot path was
+verified on the Simulator, while the hardened reimport/removal path awaits a
+fresh acceptance run:
 
 1. **Document picker** opens from "Game Data & Saves > Change or Reimport".
-2. **Validate** the GameCube header (magic at 0x1C, GMSE01 game code at 0x00).
-3. **Retain** a private copy in Application Support.
-4. **Extract on-device** (`SunPadDiscExtractor`, Dolphin's DiscIO) into
-   `SunPad/GameData/GMSE01` (`sys/` + `files/`).
-5. **Boot** the extracted root with the provisioned module.
+2. **Access and validate** the security-scoped Files URL, exact
+   1,459,978,240-byte raw-image size, GameCube magic, `GMSE01` game code, disc
+   number 0, and revision 0.
+3. **Stage privately** by copying the image into a unique Application Support
+   import directory. Reimporting the same source filename is supported.
+4. **Extract on-device** (`SunPadDiscExtractor`, Dolphin's DiscIO) inside the
+   staging directory and require `sys/boot.bin`, `sys/main.dol`, and `files/`.
+5. **Activate atomically** only after extraction completes. A failed import
+   removes staging and leaves the prior working `GameData` directory in place.
+6. **Boot** the extracted root with the provisioned module. Confirmed **Remove
+   Stored Game Data** stops the runtime and deletes the retained image and
+   extracted tree; saves are stored separately and are not removed.
 
 Verified: the on-device extraction produces the same 174-file tree as the
 desktop extraction, and the game boots from the imported image and responds to
@@ -82,10 +96,15 @@ headlessly for verification.
 - SunPad writes low-frequency boot, display, controller, lifecycle,
   memory-warning, input-pipe, and runtime-exit breadcrumbs to both the unified
   device log and `Library/Application Support/SunPad/Logs/runtime.log`. The
-  persistent log rotates at 1 MB and survives relaunches. A normal user can
-  choose **Share Diagnostic Log…** directly from SunPad's three-dot menu; the
-  app snapshots the raw log and opens the standard iOS share sheet. Developers
-  can also retrieve it without stopping the game:
+  persistent log rotates at 1 MB and survives relaunches. Current app-container
+  and temporary-directory prefixes are redacted from newly written log
+  messages. A log can still contain OS/app versions, screen and controller
+  details, a game-image filename, and runtime errors. A normal user can choose
+  **Share Diagnostic Log…** from SunPad's three-dot menu; SunPad presents this
+  metadata disclosure and requires confirmation before snapshotting the raw log
+  and opening the standard iOS share sheet. The snapshot does not contain the
+  image, extracted files, or saves. Developers can also retrieve the persistent
+  log without stopping the game:
 
   ```sh
   xcrun devicectl device copy from --device <device-id> \

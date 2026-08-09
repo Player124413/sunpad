@@ -12,7 +12,7 @@ Last updated: 2026-08-09
    on desktop parity runs and the iOS Simulator app. A physical-iPad
    re-acceptance run is still required; if audible defects persist there
    with a clean DSP dump, debug the iOS output/consumer chain (Mixer iOS
-   modifications, AudioQueue/CoreAudio). See [AUDIO_ISSUE.md](AUDIO_ISSUE.md).
+   modifications and CoreAudio backend). See [AUDIO_ISSUE.md](AUDIO_ISSUE.md).
 2. **Module provisioning** — import/extract/boot works on-device, but the
    recompiled module is provisioned from the Mac (`dev-config.plist`); iOS has
    no C compiler, so the module for a given disc must be produced by the Mac
@@ -51,11 +51,13 @@ Last updated: 2026-08-09
     every inspected `cpu_resource` report says `Action taken: none`. This is a
     performance/energy concern, not evidence that iPadOS killed the app in the
     2026-08-08 controller crash sequence.
-11. **Dev module currently targets the build SDK** — the generated physical
-    device module reports iOS 26.5 as its minimum even though the app target is
-    iOS 16.0. This works on the currently accepted iOS 26.5.2 devices, but the
-    module toolchain must emit an explicit older deployment target before the
-    developer provisioning path can be claimed for older OS releases.
+11. **Older deployment targets are configured, not yet artifact-verified** —
+    the earlier generated physical-device module reported iOS 26.5 as its
+    minimum even though the app target was iOS 16.0. The current core/module
+    scripts now set iOS 16.0 explicitly, and the desktop/package path sets
+    macOS 14.0. Fresh complete builds still need minimum-OS inspection across
+    all final Mach-O files plus runtime acceptance on the oldest claimed OS;
+    the configuration alone is not a compatibility result.
 12. **CoreDevice removing uploads are unsafe for provisioning** — on the
     currently used iOS 26.5.2/Xcode toolchain, a nested `devicectl device copy
     to` with `--remove-existing-content true` cleared unrelated app-container

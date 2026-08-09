@@ -1,6 +1,6 @@
 # Dependencies
 
-Last updated: 2026-08-06
+Last updated: 2026-08-09
 
 ## Host toolchain (verified on this machine)
 
@@ -23,7 +23,7 @@ Last updated: 2026-08-06
 | ModernGekko | https://github.com/ExpansionPak/ModernGekko | `ref/ModernGekko` | `048c426ba3db0369e40826d22ad3adcce7fe7c58` | GPL-3.0 | GameCube/Wii recomp runtime (Dolphin-derived) |
 | ModernGekko vendor dolphin/RecompCore branch | https://github.com/ExpansionPak/RecompCore (`moderngekko-vendor`) | `ref/ModernGekko/vendor/dolphin` | `e13ab348f13cd67879f6db6e9d7185410f8f62c6` | Dolphin-derived / mixed | Vendored runtime core used by ModernGekko |
 | ModernGekko-Template | https://github.com/ExpansionPak/ModernGekko-Template | `ref/ModernGekko-Template` | `1ee85bb5e09c38f493a09f5fa6e9dc8228b23e42` | none declared in GitHub metadata | Reproducible extract/recompile/run Makefile pipeline |
-| DolRecomp | https://github.com/ExpansionPak/DolRecomp | `ref/DolRecomp` | `48c4ef11dd59c7367a3479a433e39a35bda80695` | GPL-3.0 | Static PowerPC recompiler (DOL → C/LLVM) |
+| DolRecomp | https://github.com/ExpansionPak/DolRecomp | `ref/ModernGekko/vendor/dolphin/DolRecomp` | `93b881c8f73df1d64a88491f2aa50c7c9ed2384d` | GPL-3.0 | Recursively pinned static PowerPC recompiler (DOL → C/LLVM) |
 | RecompCore (top-level clone) | https://github.com/ExpansionPak/RecompCore | `ref/RecompCore` | `af7a1a4854ee243b92926875e5a6b66663b0fda0` | NOASSERTION / Dolphin-derived | Upstream continuation referenced by ModernGekko |
 | Super Mario Sunshine decomp | https://github.com/doldecomp/sms | `ref/sms` | `5a8c71edd157a73e09cf62d7faaa3821feaf9913` | CC0-1.0 (project scaffolding; no assets) | Matching decompilation reference; **not** SunPad’s runtime path |
 | StrikersRecomp | https://github.com/aharonahdoot/StrikersRecomp | `ref/StrikersRecomp` | `cd88f71f5a836c103484c038454b4143000d883c` | GPL-3.0 | Worked example of DolRecomp + runtime packaging for another GameCube title |
@@ -65,10 +65,9 @@ Not selected as primary runtime:
 ## iOS Simulator build requirements (SunPad)
 
 - Xcode 26.x with the iOS 26.x Simulator SDK.
-- Homebrew `fmt`, `lz4`, `zstd` header trees (headers only for the core
-  compile; the Simulator-static libraries are built from the vendored sources
-  by `scripts/ios-provision.sh` and recorded in
-  `apple/ios/Provisioned/dev-config.plist`).
+- The vendored `fmt`, `lz4`, and `zstd` sources. The iOS core build compiles
+  the required static libraries in its own ignored build tree;
+  they do not consume unexplained prebuilt libraries from `/tmp`.
 - The iOS toolchain file lives at `scripts/ios-simulator-toolchain.cmake`.
 
 ## Update policy
@@ -79,6 +78,10 @@ When any external checkout moves, update this file with the new SHA and the reas
 
 The `ref/` checkouts and the local disc image are Git-ignored wholesale: each
 checkout is a nested Git repository, so committing them would create broken
-gitlinks or vendor bloat. A fresh machine reproduces the tree by cloning the
-pinned revisions above (or running `make check` in ModernGekko-Template) and
-supplying their own disc image.
+gitlinks or vendor bloat. A fresh machine reproduces the required runtime tree
+and its reviewed SunPad changes with `./scripts/bootstrap-dependencies.sh`,
+then validates and prepares its own supported image with
+`./scripts/prepare-game.sh /path/to/GMSE01.iso`. The bootstrap covers the
+required ModernGekko (including vendored Dolphin and DolRecomp) and ModernGekko-Template
+pins; the other entries above are research references and are not required by
+that build workflow.

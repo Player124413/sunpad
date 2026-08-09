@@ -1,0 +1,199 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5de06b9..ecbfc47 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -104,8 +104,10 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+     set(USE_UPNP OFF CACHE BOOL "" FORCE)
+     set(ENCODE_FRAMEDUMPS OFF CACHE BOOL "" FORCE)
+     set(ENABLE_LLVM OFF CACHE BOOL "" FORCE)
+-    # Cubeb is Dolphin's only audio backend on macOS
+-    if(APPLE OR WIN32)
++    # Cubeb is Dolphin's only audio backend on macOS; its audiounit backend
++    # uses macOS-only CoreAudio APIs, so iOS builds (SunPad provides its own
++    # AVAudioEngine backend) keep cubeb off.
++    if((APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS") OR WIN32)
+         set(ENABLE_CUBEB ON CACHE BOOL "" FORCE)
+     else()
+         set(ENABLE_CUBEB OFF CACHE BOOL "" FORCE)
+@@ -245,7 +247,15 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+             vendor/dolphin/Source/Core/DolphinNoGUI/PlatformWin32.cpp)
+         target_link_libraries(moderngekko PRIVATE dwmapi)
+     endif()
+-    if(APPLE)
++    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++        # SunPad's CAMetalLayer platform for iOS (no macOS windowing APIs)
++        target_sources(moderngekko PRIVATE
++            vendor/dolphin/Source/Core/DolphinNoGUI/PlatformIOS.mm)
++        set_source_files_properties(
++            vendor/dolphin/Source/Core/DolphinNoGUI/PlatformIOS.mm
++            PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
++        target_compile_definitions(moderngekko PRIVATE MODERNGEKKO_HAVE_IOS=1)
++    elseif(APPLE)
+         # Dolphin's windowed backend for macOS
+         target_sources(moderngekko PRIVATE
+             vendor/dolphin/Source/Core/DolphinNoGUI/PlatformMacos.mm)
+diff --git a/include/moderngekko/runtime.hpp b/include/moderngekko/runtime.hpp
+index af75a25..f406d32 100644
+--- a/include/moderngekko/runtime.hpp
++++ b/include/moderngekko/runtime.hpp
+@@ -54,6 +54,9 @@ enum class WindowSystem
+ struct RuntimeConfig
+ {
+   std::filesystem::path game_root;
++  // Optional original disc image used for boot and runtime DVD reads. The
++  // extracted root remains the source of module-validation metadata.
++  std::filesystem::path disc_image;
+   std::filesystem::path user_directory;
+   ModuleSource module;
+   std::vector<std::filesystem::path> mod_directories;
+@@ -66,6 +69,9 @@ struct RuntimeConfig
+   bool allow_interpreter = false;
+   bool show_fps_in_title = true;
+   std::optional<std::string> window_title;
++  // Host-provided render surface (a CAMetalLayer on iOS). The platform hands
++  // this to the video backend as WindowSystemInfo::render_surface.
++  void* render_surface = nullptr;
+ };
+ 
+ enum class RuntimeErrorCode
+diff --git a/src/runtime/dolphin_runtime.cpp b/src/runtime/dolphin_runtime.cpp
+index 981e098..41926e2 100644
+--- a/src/runtime/dolphin_runtime.cpp
++++ b/src/runtime/dolphin_runtime.cpp
+@@ -24,6 +24,10 @@
+ #include "moderngekko/mod_loader.hpp"
+ #include "moderngekko/module_loader.hpp"
+ 
++#ifdef MODERNGEKKO_HAVE_IOS
++extern "C" void ModernGekkoSetIOSRenderSurface(void* surface);
++#endif
++
+ #include <algorithm>
+ #include <array>
+ #include <atomic>
+@@ -186,6 +190,15 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+   if (!inspected)
+     return {{}, RuntimeError{RuntimeErrorCode::InvalidGame, inspected.error}};
+ 
++  if (!config.disc_image.empty()) {
++    std::error_code ec;
++    const auto disc_image = std::filesystem::weakly_canonical(config.disc_image, ec);
++    if (ec || !std::filesystem::is_regular_file(disc_image))
++      return {{}, RuntimeError{RuntimeErrorCode::InvalidGame,
++                               "disc image is not a readable file"}};
++    config.disc_image = disc_image;
++  }
++
+   const ModernGekkoModuleRequirements requirements = {
+       MODERNGEKKO_CPU_ABI_VERSION, static_cast<std::uint32_t>(sizeof(CPUState)),
+       inspected.metadata->disc_id.c_str()};
+@@ -244,6 +257,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+ 
+   if (impl->config.headless)
+     impl->platform = Platform::CreateHeadlessPlatform();
++#ifdef MODERNGEKKO_HAVE_IOS
++  else
++    impl->platform = Platform::CreateIOSPlatform();
++#endif
+ #ifdef _WIN32
+   else
+     impl->platform = Platform::CreateWin32Platform();
+@@ -267,6 +284,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+                          "the requested Dolphin host platform is unavailable"}};
+   }
+ 
++#ifdef MODERNGEKKO_HAVE_IOS
++  ModernGekkoSetIOSRenderSurface(impl->config.render_surface);
++#endif
++
+   const WindowSystemInfo wsi = impl->platform->GetWindowSystemInfo();
+   UICommon::InitControllers(wsi);
+   impl->controllers_initialized = true;
+@@ -284,6 +305,14 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+   Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
+                   ShaderCompilationMode::AsynchronousUberShaders);
+   Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
++#ifdef MODERNGEKKO_HAVE_IOS
++  // Dolphin's ARM64 vertex loader generates executable host code. iOS forbids
++  // that JIT path, so use the portable software vertex loader.
++  Config::SetBase(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
++  // Favor uninterrupted playback over the lower-latency desktop default.
++  Config::SetBase(Config::MAIN_AUDIO_BUFFER_SIZE, 120);
++  Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, true);
++#endif
+   const std::vector<std::string> audio_backends =
+       AudioCommon::GetSoundBackends();
+   if (impl->config.headless) {
+@@ -292,6 +321,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+              !std::ranges::contains(audio_backends,
+                                     impl->config.audio.backend)) {
+     constexpr std::array preferred_backends = {
++#ifdef MODERNGEKKO_HAVE_IOS
++        BACKEND_COREAUDIO,
++#endif
+         BACKEND_CUBEB, BACKEND_PULSEAUDIO, BACKEND_ALSA};
+     const auto preferred =
+         std::ranges::find_if(preferred_backends, [&](const char *backend) {
+@@ -356,12 +388,13 @@ RuntimeRunResult Runtime::Run() {
+   std::unique_ptr<BootParameters> boot;
+   {
+     std::lock_guard lock(s_runtime_mutex);
++    const std::filesystem::path& boot_path = m_impl->config.disc_image.empty() ?
++        m_impl->metadata.main_dol : m_impl->config.disc_image;
+     if (s_boot_session_data)
+       boot = BootParameters::GenerateFromFile(
+-          m_impl->metadata.main_dol.string(), std::move(*s_boot_session_data));
++          boot_path.string(), std::move(*s_boot_session_data));
+     else
+-      boot =
+-          BootParameters::GenerateFromFile(m_impl->metadata.main_dol.string());
++      boot = BootParameters::GenerateFromFile(boot_path.string());
+     s_boot_session_data.reset();
+   }
+   if (!boot) {
+diff --git a/tools/frontend_config.cpp b/tools/frontend_config.cpp
+index 03740d4..0aa2492 100644
+--- a/tools/frontend_config.cpp
++++ b/tools/frontend_config.cpp
+@@ -40,6 +40,10 @@ std::string NormalizeGraphicsBackend(std::string value) {
+     return "Vulkan";
+   if (lower == "opengl" || lower == "ogl")
+     return "OGL";
++#if defined(__APPLE__)
++  if (lower == "metal")
++    return "Metal";
++#endif
+   return {};
+ }
+ 
+@@ -84,10 +88,14 @@ const std::vector<ResolutionOption> &SupportedResolutions() {
+ }
+ 
+ const std::vector<GraphicsBackendOption> &SupportedGraphicsBackends() {
++#if defined(__APPLE__)
++  static const std::vector<GraphicsBackendOption> backends = {{"Metal", "Metal"}};
++#else
+   static const std::vector<GraphicsBackendOption> backends = {
+       {"Vulkan", "Vulkan"},
+       {"OpenGL", "OGL"},
+   };
++#endif
+   return backends;
+ }
+ 
+diff --git a/tools/frontend_config.hpp b/tools/frontend_config.hpp
+index 3b18d05..71ef24e 100644
+--- a/tools/frontend_config.hpp
++++ b/tools/frontend_config.hpp
+@@ -21,7 +21,11 @@ struct GraphicsBackendOption {
+ struct ConfigResult {
+   int dolphin_scale = 0;
+   std::string resolution;
++#if defined(__APPLE__)
++  std::string graphics_backend = "Metal";
++#else
+   std::string graphics_backend = "Vulkan";
++#endif
+   std::string controller;
+   std::vector<std::string> controllers;
+   bool show_fps_in_title = true;

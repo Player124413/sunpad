@@ -67,6 +67,15 @@ void SunPadLog(NSString *format, ...) {
     NSString *message = [[NSString alloc] initWithFormat:format arguments:arguments];
     va_end(arguments);
 
+    NSString *temporary = NSTemporaryDirectory();
+    if (temporary.length > 1)
+        message = [message stringByReplacingOccurrencesOfString:temporary
+                                                     withString:@"<temporary>/"];
+    NSString *home = NSHomeDirectory();
+    if (home.length > 0)
+        message = [message stringByReplacingOccurrencesOfString:home
+                                                     withString:@"<app-container>"];
+
     NSLog(@"[SunPad] %@", message);
 
     NSString *line = [NSString stringWithFormat:@"%@ %@\n", SunPadLogTimestamp(), message];

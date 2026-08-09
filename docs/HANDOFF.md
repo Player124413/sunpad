@@ -1,94 +1,76 @@
-# Handoff
+# Maintainer Notes
 
-Last updated: 2026-08-07
+Last updated: 2026-08-09
 
-## One-screen summary
+This is a public maintainer summary, not a machine-specific handoff. SunPad is
+an experimental source/developer workflow for `GMSE01` USA revision 0. It does
+not publish a ready-to-install IPA or any game data.
 
-Super Mario Sunshine (`GMSE01`) now runs natively on the **iPhone/iPad
-simulators and a physical iPad development build** through SunPad: the DolRecomp-generated module executes through
-the ModernGekko/Dolphin-derived compatibility runtime, rendered by Dolphin's
-Metal backend into a CAMetalLayer in the UIKit app. Desktop Stage 1 (title,
-intro, input) is also proven. The three-dot menu, 1x native/2x-4x render
-resolution, and Sunshine touch controls are implemented. Physical-iPad
-game-engine audio remains broken and is the highest-priority blocker.
+## Reproduce the local inputs
 
-## What works
-
-- Desktop: extract → recompile (0 unknown ops) → arm64 module → Metal launch
-  to title/intro; pipe input advances the game.
-- iOS/iPadOS Simulator: core + module build (no JIT), app boots the game to
-  the title screen and renders gameplay; input advances state; stable process.
-- On-device import: document picker → GMSE01 validation → retain → on-device
-  extraction → boot from the imported image (verified on the Simulator).
-- App UI: three-dot menu, render resolution choices, touch controls, settings
-  persistence.
-- Physical iPad: signed install, ISO boot, Metal rendering, and touch-control
-  acceptance are proven.
-
-## What does not
-
-- Physical-iPad audio re-acceptance with the 2026-08-08 timebase fix has not
-  run yet (fix verified on desktop parity + iOS Simulator; see
-  `docs/AUDIO_ISSUE.md`). Physical controllers, broader performance/memory,
-  module provisioning beyond the dev GMSE01 build, lifecycle save-flushing,
-  and audio-interruption restoration remain open.
-- Desktop Stage 1 gates: plaza gameplay, objective, save/reload.
-- Native macOS SunPad `.app` shell.
-
-## Exact resume commands
+From the repository root:
 
 ```sh
-cd /Users/chrissotraidis/GitHub/sunpad
-./scripts/ios-build-core.sh        # iOS core + module + provisioning
-xcodebuild -project SunPad.xcodeproj -scheme SunPad -configuration Debug \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  -derivedDataPath /tmp/sunpad-ddp build
-xcrun simctl boot "iPhone 17 Pro"   # one simulator at a time
-xcrun simctl install "iPhone 17 Pro" \
-  /tmp/sunpad-ddp/Build/Products/Debug-iphonesimulator/SunPad.app
-xcrun simctl launch "iPhone 17 Pro" com.sunpad.SunPad
-xcrun simctl io "iPhone 17 Pro" screenshot /tmp/evidence.png
+./scripts/bootstrap-dependencies.sh
+./scripts/prepare-game.sh /path/to/GMSE01.iso
 ```
 
-Input probe (proves the pipe path on iOS):
+The first command recreates the ignored public dependency tree at exact
+reviewed commits and applies the two complete SunPad patch snapshots. The
+second verifies the supported image SHA-256, builds the desktop tools, extracts
+the image locally, and produces the generated module inputs. Neither command
+downloads or commits game data.
+
+Build the desired development target after preparation:
 
 ```sh
-CONTAINER=$(xcrun simctl get_app_container "iPhone 17 Pro" com.sunpad.SunPad data)
-python3 scripts/gcpipe.py --pipe \
-  "$CONTAINER/Library/Application Support/SunPad/Pipes/sunpad" --tap START
+# iOS Simulator core/module and Xcode provisioning
+./scripts/ios-build-core.sh
+
+# Physical iPhone/iPad core/module and Xcode provisioning
+./scripts/ios-build-core-device.sh
+
+# Local Apple Silicon app bundle
+./scripts/package-macos-app.sh
 ```
 
-Desktop:
+The physical-device workflow also requires local signing and separate
+provisioning of the locally generated module. See [BUILDING.md](BUILDING.md).
+It is not IPA distribution packaging. Use an in-place install when preserving
+device data, and never use a removing CoreDevice container overlay for updates.
 
-```sh
-cd ref/ModernGekko-Template
-./lib/ModernGekko/build/moderngekko-run --game extracted/Super-Mario-Sunshine \
-  --module "$(cat build/modules/GMSE01/active-module.txt)" --graphics Metal
-```
+## Current accepted evidence
 
-## Next actions
+- Simulator and physical iPad boot, Metal rendering, import/extraction, touch
+  input, and gameplay have been demonstrated.
+- The controller snapshot and input-pipe overflow crash is fixed in source and
+  covered by a focused regression test; exact HDMI/controller replay remains.
+- The guest-timebase audio defect is fixed and continuous audio is verified on
+  desktop parity runs and the iOS Simulator. Physical-device audio
+  re-acceptance remains.
+- iPhone 14 boots but is slower than the iPad experience even at 1×. Recommend
+  iPhone 15 Pro or newer for iPhone development testing.
+- iOS 16.0 and macOS 14.0 are configured deployment targets. Fresh complete
+  artifacts still need minimum-OS inspection and oldest-target runtime tests.
 
-1. Physical-iPad audio re-acceptance with the fixed core
-   (`scripts/ios-build-core-device.sh`, then the capture + audible gate in
-   `docs/AUDIO_ISSUE.md`). Desktop parity runs need
-   `STATICRECOMP_NO_FALLBACK_JIT=1`.
-2. Module matching/provisioning for imported discs beyond the dev GMSE01
-   build.
-3. Lifecycle hardening: save flushing before suspension, audio-interruption
-   restoration, controller connect/disconnect during gameplay.
-4. Stage 2: native macOS SunPad `.app` shell on the shared runtime.
-5. Desktop: plaza gameplay, objective, save/reload evidence.
+## Public-release gates still open
 
-## Do not
+1. Build every target from a clean clone and run `./scripts/check-repository.sh`.
+2. Inspect the minimum OS recorded in every final app, executable, static-input
+   library where applicable, and generated module; then test the oldest claimed
+   OS/hardware.
+3. Re-run physical-device audio acceptance with the fixed core, including an
+   audible title/voice/gameplay check.
+4. Re-run the hardened mobile import, same-filename reimport, failed-import
+   rollback, removal-with-save-preservation, and diagnostic-sharing flows.
+5. Complete the exact HDMI + wired-controller replay and broader lifecycle,
+   save/reload, performance, and extended-session checks.
+6. Define and audit any eventual binary/IPA distribution separately. Generated
+   game-derived modules, retail images, extracted files, saves, and signing
+   material must remain local.
 
-- Commit the ISO, extracted FS, generated C/module binaries, saves, or
-  `apple/ios/Provisioned/`.
-- Claim full decompilation or complete playability yet.
-- Run more than one Simulator at a time.
+## Reporting
 
-## Input notes
-
-- The pipe device (`Pipes/sunpad`) carries normalized input; commands:
-  `PRESS/RELEASE <BUTTON>` and `SET MAIN|C <x> <y>` with x/y in [0,1]
-  (0.5 = neutral). `gcpipe.py` encodes this.
-- Desktop user config: `~/.local/share/moderngekko/Config/`.
+Record the git revision, target, OS/device, commands, game revision, observed
+runtime behavior, and remaining gap in [TESTING.md](TESTING.md). Do not convert
+configured or source-inspected behavior into a physical-acceptance claim.

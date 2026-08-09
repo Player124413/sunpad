@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <img alt="iOS 16+" src="https://img.shields.io/badge/iOS%20%2F%20iPadOS-16%2B-0A84FF?logo=apple">
-  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-0A84FF?logo=apple">
+  <img alt="Configured iOS 16+ target" src="https://img.shields.io/badge/configured%20iOS%20%2F%20iPadOS%20target-16%2B-0A84FF?logo=apple">
+  <img alt="Configured macOS 14+ target" src="https://img.shields.io/badge/configured%20macOS%20target-14%2B-0A84FF?logo=apple">
   <img alt="Metal renderer" src="https://img.shields.io/badge/renderer-Metal-5E5CE6">
   <img alt="Ahead-of-time static recompilation" src="https://img.shields.io/badge/PowerPC-static%20recompilation-FF9F0A">
   <img alt="Physical iPad tested" src="https://img.shields.io/badge/physical%20iPad-tested-30D158">
@@ -41,7 +41,7 @@ game module.
 |---|---|
 | Native app | Universal arm64 iPhone/iPad target plus a local Apple Silicon `SunPad.app` packager |
 | Rendering | Dolphin Metal backend reaches the title sequence and playable Delfino Plaza gameplay |
-| Game setup | Files picker, GMSE01 validation, private retention, and on-device extraction work |
+| Game setup | Exact GMSE01 USA Rev 0 validation, staged private import, atomic activation, and real removal |
 | Touch | Move stick, C-stick, D-pad, A/B/X/Y/Z, L/R, Start, and a persistent settings menu |
 | Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS |
 | Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
@@ -53,10 +53,17 @@ The mobile development build has been signed, installed, and played on a
 Files import, on-device extraction, touch input, gameplay, and in-place app
 updates have been exercised. A signed development build has also launched on
 an iPhone 14, where performance is currently below the iPad experience even at
-1×. The local arm64 macOS app bundle has been built, signed ad hoc, and
+1×. For iPhone development testing, an **iPhone 15 Pro or newer is strongly
+recommended**. The local arm64 macOS app bundle has been built, signed ad hoc, and
 launched with its Metal and keyboard defaults. See
 [the testing ledger](docs/TESTING.md) for the dated evidence and remaining
 hands-on acceptance checks.
+
+The project and module build configuration now set deployment targets of iOS
+16.0 and macOS 14.0. Those are configured targets, not yet compatibility
+claims: fresh complete artifacts still need minimum-OS inspection and runtime
+acceptance on the oldest supported hardware before the badges can be treated
+as verified support.
 
 ## Get started
 
@@ -68,9 +75,20 @@ You need:
 - your own legally obtained Super Mario Sunshine USA revision 0 image
   (`GMSE01`).
 
-Clone the repository, place your local inputs under the ignored `ref/` tree,
-and follow the exact extraction and recompilation steps in
-[`docs/BUILDING.md`](docs/BUILDING.md).
+From a clean clone, reproduce the reviewed dependency tree and prepare the one
+supported game revision:
+
+```sh
+./scripts/bootstrap-dependencies.sh
+./scripts/prepare-game.sh /path/to/GMSE01.iso
+```
+
+`bootstrap-dependencies.sh` clones the pinned public toolchain revisions and
+applies the two complete SunPad patch snapshots. It never downloads game data.
+`prepare-game.sh` verifies the exact supported SHA-256, builds the desktop
+tools, extracts the image locally, and generates the host module inputs used
+by the Apple builds. All outputs stay under ignored local paths. See
+[`docs/BUILDING.md`](docs/BUILDING.md) for the full workflow.
 
 Build the iOS Simulator core and app:
 
@@ -118,9 +136,12 @@ SunPad never downloads or bundles game data.
 4. Leave SunPad open while it validates and extracts the image locally.
 5. Start playing when the game finishes booting.
 
-SunPad validates the GameCube header and `GMSE01` game code before replacing
-the retained image. The private copy and extracted tree stay in the app
-container and are reused on later launches.
+SunPad validates the exact raw image size, GameCube magic, `GMSE01` game code,
+disc number 0, and revision 0. It copies and extracts into a unique staging
+directory, checks the required extracted structure, then atomically activates
+the completed import. A failed reimport leaves the prior working data in
+place. **Remove Stored Game Data** deletes both the retained image and
+extracted game tree after confirmation; saves are kept separately.
 
 ## First launch on Mac
 
@@ -153,10 +174,14 @@ analog triggers preserve FLUDD pressure control.
 
 ## Share a diagnostic log
 
-If SunPad crashes or fails to start, reopen it, choose **••• → Share Diagnostic
-Log…**, and send the resulting `.log` file with a short description of what
-happened. The shared file is a snapshot of SunPad's raw runtime log; it does
-not include the game image, extracted game data, or save files.
+If SunPad crashes or fails to start, reopen it and choose **••• → Share
+Diagnostic Log…**. SunPad first asks for confirmation and describes the
+metadata that can appear: OS and app versions, display and controller details,
+the game-image filename, runtime errors, and diagnostic paths. App-container
+and temporary-directory prefixes are redacted in newly written messages. The
+snapshot does not include the game image, extracted game data, or save files.
+Review the destination in the standard share sheet and send the `.log` with a
+short description of what happened.
 
 If SunPad cannot reopen, use **Settings → Privacy & Security → Analytics &
 Improvements → Analytics Data**, select the newest entry beginning with
@@ -233,9 +258,11 @@ unrecompiled regions.
 
 ### Can I download an IPA?
 
-Not currently. The repository supports local development builds signed with
-your Apple development team. No public IPA, TestFlight, AltStore, or App Store
-release has been announced.
+Not currently. This repository reproduces a **source/developer workflow**: the
+developer generates a game-specific module locally, signs the app and module,
+and provisions the module into the development app container. That is not a
+self-contained or publicly distributed IPA. No public IPA, TestFlight,
+AltStore, or App Store release has been announced.
 
 ### Do saves survive an app update?
 
@@ -255,12 +282,15 @@ packaging, and broader macOS gameplay acceptance remain explicit work.
 
 | Path | Purpose |
 |---|---|
+| [`scripts/bootstrap-dependencies.sh`](scripts/bootstrap-dependencies.sh) | Clone reviewed upstream revisions and apply the complete patch snapshots |
+| [`scripts/prepare-game.sh`](scripts/prepare-game.sh) | Validate the supported local image and generate ignored game/module inputs |
 | [`scripts/ios-build-core.sh`](scripts/ios-build-core.sh) | Build and provision the Simulator core/module |
 | [`scripts/ios-build-core-device.sh`](scripts/ios-build-core-device.sh) | Build and provision the physical-device core/module |
 | [`scripts/package-macos-app.sh`](scripts/package-macos-app.sh) | Build the local Apple Silicon `SunPad.app` bundle |
 | [`apple/ios/`](apple/ios/) | UIKit app shell, Files import, touch UI, and Apple adapter |
 | [`apple/macos/`](apple/macos/) | macOS bundle metadata, launcher wrapper, and keyboard defaults |
-| [`patches/ModernGekko-dolphin/`](patches/ModernGekko-dolphin/) | Maintained upstream runtime fixes |
+| [`patches/ModernGekko/`](patches/ModernGekko/) | Complete ModernGekko Apple-runtime snapshot |
+| [`patches/ModernGekko-dolphin/`](patches/ModernGekko-dolphin/) | Complete vendored Dolphin iOS/runtime snapshot |
 | [`docs/BUILDING.md`](docs/BUILDING.md) | Exact desktop, Simulator, and device build commands |
 | [`docs/TESTING.md`](docs/TESTING.md) | Dated evidence and remaining acceptance gates |
 | [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) | Current limitations and workarounds |
@@ -283,7 +313,9 @@ endorsed by Nintendo. Super Mario Sunshine, Nintendo, and GameCube names and
 screenshots are used only to identify compatibility and demonstrate the
 project. No disc image, extracted Nintendo asset, generated game-derived
 module, or user save is included in the repository or a release. Each upstream
-component retains its own license and copyright. See
+component retains its own license and copyright. SunPad is licensed under
+GPL-3.0-or-later; see [`LICENSE`](LICENSE),
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and
 [`docs/LEGAL_AND_PROVENANCE.md`](docs/LEGAL_AND_PROVENANCE.md).
 
 ## Contributing

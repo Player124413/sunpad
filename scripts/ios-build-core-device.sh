@@ -3,8 +3,8 @@
 # physical iOS/iPadOS device (arm64) and provisions the SunPad iOS/iPadOS app.
 #
 # Product path: ahead-of-time statically recompiled game code through the
-# compatibility runtime. No runtime PowerPC JIT is built for iOS (the static
-# recomp fallback uses the interpreter). The game module is recompiled for
+# compatibility runtime. The product path never enables the compiled PowerPC
+# JIT (the static-recomp fallback uses the interpreter). The game module is recompiled for
 # the device from the user's locally generated DolRecomp output.
 set -euo pipefail
 
@@ -12,7 +12,10 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 MG="$ROOT/ref/ModernGekko"
 TPL="$ROOT/ref/ModernGekko-Template"
 TOOLCHAIN="$ROOT/scripts/ios-device-toolchain.cmake"
-BUILD="$MG/build-ios-device"
+BUILD="$MG/build-ios-iphoneos-public"
+MODULE_BUILD="/tmp/sunpad-module-ios-device"
+
+"$ROOT/scripts/bootstrap-dependencies.sh"
 
 CMAKE_COMMON=(
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
@@ -25,6 +28,8 @@ CMAKE_COMMON=(
   -DENABLE_ANALYTICS=OFF -DUSE_UPNP=OFF
   -DMODERNGEKKO_ENABLE_DOLPHIN_TESTS=OFF
   -DENABLE_CUBEB=OFF -DENABLE_VULKAN=OFF
+  -DUSE_SYSTEM_LZ4=OFF -DUSE_SYSTEM_ZSTD=OFF
+  -DHAVE_PIPE2=0
   # cubeb's wrapper defaults USE_SANITIZERS=ON, which needs the
   # sanitizers-cmake submodule; sanitizers are pointless with cubeb off.
   -DUSE_SANITIZERS=OFF
@@ -37,19 +42,29 @@ echo "==> Building core libraries"
 ninja -C "$BUILD" libmoderngekko.a -j8
 
 echo "==> Building GMSE01 recompiled module for iOS device"
-GEN="$TPL/extracted/Super-Mario-Sunshine/recomp/generated"
+ACTIVE_FILE="$TPL/build/modules-macos14/GMSE01/active-module.txt"
+if [[ ! -f "$ACTIVE_FILE" ]]; then
+  echo "prepared module manifest missing; run scripts/prepare-game.sh first" >&2
+  exit 1
+fi
+ACTIVE_MODULE="$(<"$ACTIVE_FILE")"
+if [[ "$ACTIVE_MODULE" != /* ]]; then
+  ACTIVE_MODULE="$TPL/$ACTIVE_MODULE"
+fi
+GEN="$(dirname "$ACTIVE_MODULE")/dolrecomp-output/generated"
 if [[ ! -f "$GEN/main.dol" ]]; then
   cp "$TPL/extracted/Super-Mario-Sunshine/sys/main.dol" "$GEN/main.dol"
 fi
-cmake -S "$MG/vendor/dolphin/module-template" -B /tmp/module-ios-device -G Ninja \
+cmake -S "$MG/vendor/dolphin/module-template" -B "$MODULE_BUILD" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
   -DCMAKE_SYSTEM_PROCESSOR=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
   -DGAME_ID=GMSE01 \
   -DGENERATED_DIR="$GEN" \
   -DGXRUNTIME_DIR="$MG/vendor/dolphin/GXRuntime" \
   -DCHASSIS_ABI_DIR="$MG/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp"
-ninja -C /tmp/module-ios-device -j8
+ninja -C "$MODULE_BUILD" -j8
 
 echo "==> Provisioning app"
 "$ROOT/scripts/ios-provision-device.sh"

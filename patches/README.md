@@ -1,43 +1,35 @@
-# Patches
+# Patch Snapshots
 
-SunPad-owned patches, kept separate from generic upstream tooling:
+SunPad carries two complete, reviewable snapshots of all required changes to
+its ignored upstream trees:
 
-- **Generic runtime patches** — fixes to the Dolphin/ModernGekko-derived
-  compatibility runtime that are not game-specific.
-- **Sunshine-specific patches** — address maps, runtime code-patching ranges,
-  HLE decisions, MMIO routing, or version-specific fixes required for
-  `GMSE01`. These must be documented separately from generic changes and never
-  hidden inside unrelated platform code.
+| Patch | Applies to | Contents |
+|---|---|---|
+| `ModernGekko/0001-sunpad-apple-runtime.patch` | Pinned ModernGekko root | Apple frontend/runtime integration, macOS Metal defaults, iOS platform and build wiring, and the SunPad-owned files required by the Apple workflows |
+| `ModernGekko-dolphin/0001-sunpad-ios-runtime.patch` | Pinned `ModernGekko/vendor/dolphin` | Complete Dolphin-derived iOS/runtime delta, including Metal/platform guards and stubs, no-JIT/software-loader behavior, iOS audio integration, StaticRecomp timebase/TL/TU fixes, and iOS backend/link fixes |
 
-## Applied patches
+These replace the earlier partial patch series. Required CoreAudio,
+mixer, platform-stub, frontend, and build changes are no longer
+described as unrepresented local edits.
 
-`ModernGekko/` holds small SunPad-owned frontend deltas against the
-ModernGekko root:
+Do not apply these snapshots by hand to an arbitrary checkout. From the
+repository root, run:
 
-- `0001-macos-metal-frontend.patch` — exposes Metal as the only graphics
-  backend in the macOS launcher and makes it the desktop default.
+```sh
+./scripts/bootstrap-dependencies.sh
+```
 
-`ModernGekko-dolphin/` holds the SunPad-owned deltas against the vendored
-Dolphin (`ref/ModernGekko/vendor/dolphin`). They are generic runtime patches,
-not Sunshine-specific:
+The bootstrap script checks out the exact revisions recorded in
+[DEPENDENCIES.md](../docs/DEPENDENCIES.md), verifies the vendored Dolphin
+revision, and applies each patch once. It accepts a patch that is already
+fully applied and stops if a checkout is on an unexpected commit or either
+snapshot does not apply cleanly.
 
-- `0001-staticrecomp-timebase-rate-and-tl-tu-read.patch` — the full
-  StaticRecomp-core delta. The substantive 2026-08-08 fixes: advance the guest
-  timebase at TB rate (CPU cycles / `SystemTimers::TIMER_RATIO`) from a
-  SyncIn snapshot instead of 1 tick per CPU cycle (the old behavior ran guest
-  `mftb` 12× fast inside native bursts and snapped it backwards at every
-  burst boundary); materialize live `SPR_TL`/`SPR_TU` in `HookSPRRead`; add
-  the `STATICRECOMP_NO_FALLBACK_JIT` env toggle so desktop can reproduce the
-  iOS execution contract (module + interpreter, no fallback JIT). Also
-  includes the pre-existing iOS no-JIT guard.
-- `0002-ios-no-opengl-backend.patch` — do not define `HAS_OPENGL` for iOS
-  builds (Metal-only there); without this the merged core archive fails to
-  link (`vtable for OGL::VideoBackend`).
+The snapshots contain generic Apple/runtime integration for SunPad's current
+`GMSE01` development path. A future game-specific address map, runtime
+code-patching range, HLE decision, MMIO route, or revision-specific workaround
+must remain clearly identified and reviewed rather than hidden in an unrelated
+platform edit.
 
-Apply from `ref/ModernGekko/vendor/dolphin` with
-`git apply --unidiff-zero <patch>`. Other local vendor changes
-(CoreAudio/AudioQueue backends, Mixer iOS behavior, platform stubs) predate
-these patches and remain local; they are not yet represented by patch files.
-
-See [docs/RESEARCH.md](../docs/RESEARCH.md) and
-[docs/DEPENDENCIES.md](../docs/DEPENDENCIES.md).
+See [RESEARCH.md](../docs/RESEARCH.md) and
+[DEPENDENCIES.md](../docs/DEPENDENCIES.md) for architecture and provenance.

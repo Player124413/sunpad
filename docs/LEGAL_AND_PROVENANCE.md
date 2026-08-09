@@ -1,6 +1,15 @@
 # Legal and Provenance
 
-Last updated: 2026-08-05
+Last updated: 2026-08-09
+
+## Project license
+
+SunPad's original source and integration work is licensed under
+[GNU GPL version 3 or later](../LICENSE). Distributed source and binaries must
+also comply with the licenses and notice requirements of incorporated upstream
+components. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and
+[DEPENDENCIES.md](DEPENDENCIES.md). A dependency's own license and copyright
+remain in force; the SunPad license does not replace them.
 
 ## Non-goals
 
@@ -22,7 +31,11 @@ Users must provide their own legally obtained Super Mario Sunshine disc image. T
 
 ## Third-party open-source components
 
-See [DEPENDENCIES.md](DEPENDENCIES.md). Major runtime/recompiler components are GPL/Dolphin-derived and impose corresponding license obligations on distributed binaries that incorporate them.
+See [DEPENDENCIES.md](DEPENDENCIES.md). Major runtime/recompiler components are
+GPL/Dolphin-derived and impose corresponding source, license, notice, and other
+obligations on distributed binaries that incorporate them. An eventual IPA or
+other binary release needs a separate artifact-level compliance audit; the
+current repository documents a local source/developer workflow only.
 
 ## Provenance of research claims
 
