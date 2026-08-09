@@ -16,4 +16,8 @@ FOUNDATION_EXPORT void SunPadLog(NSString *format, ...) NS_FORMAT_FUNCTION(1, 2)
 
 FOUNDATION_EXPORT NSString *SunPadDiagnosticsLogPath(void);
 
+/* Copies the current raw runtime log to a timestamped temporary file that is
+ * safe to hand to UIActivityViewController while logging continues. */
+FOUNDATION_EXPORT NSURL *_Nullable SunPadDiagnosticsSnapshotURL(NSError **error);
+
 NS_ASSUME_NONNULL_END

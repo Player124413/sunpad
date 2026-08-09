@@ -27,6 +27,14 @@ static NSString *SunPadLogTimestamp(void) {
     return [formatter stringFromDate:NSDate.date];
 }
 
+static NSString *SunPadSnapshotTimestamp(void) {
+    NSDateFormatter *formatter = [NSDateFormatter new];
+    formatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+    formatter.timeZone = [NSTimeZone timeZoneForSecondsFromGMT:0];
+    formatter.dateFormat = @"yyyyMMdd-HHmmss";
+    return [formatter stringFromDate:NSDate.date];
+}
+
 void SunPadDiagnosticsStart(void) {
     @synchronized (SunPadDiagnosticsLock()) {
         NSFileManager *fileManager = NSFileManager.defaultManager;
@@ -75,5 +83,28 @@ void SunPadLog(NSString *format, ...) {
         [handle seekToEndOfFile];
         [handle writeData:data];
         [handle closeFile];
+    }
+}
+
+NSURL *SunPadDiagnosticsSnapshotURL(NSError **error) {
+    @synchronized (SunPadDiagnosticsLock()) {
+        NSFileManager *fileManager = NSFileManager.defaultManager;
+        NSString *sourcePath = SunPadDiagnosticsLogPath();
+        if (![fileManager fileExistsAtPath:sourcePath]) {
+            if (error != nil) {
+                *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                             code:NSFileNoSuchFileError
+                                         userInfo:@{NSFilePathErrorKey: sourcePath}];
+            }
+            return nil;
+        }
+
+        NSString *fileName = [NSString stringWithFormat:@"SunPad-Diagnostic-%@.log",
+                              SunPadSnapshotTimestamp()];
+        NSString *snapshotPath = [NSTemporaryDirectory() stringByAppendingPathComponent:fileName];
+        [fileManager removeItemAtPath:snapshotPath error:nil];
+        if (![fileManager copyItemAtPath:sourcePath toPath:snapshotPath error:error])
+            return nil;
+        return [NSURL fileURLWithPath:snapshotPath];
     }
 }

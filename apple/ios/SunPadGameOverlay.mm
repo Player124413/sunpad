@@ -1,5 +1,6 @@
 #import "SunPadGameOverlay.h"
 
+#import "SunPadDiagnostics.h"
 #import "SunPadInputMixer.h"
 #import "SunPadSettings.h"
 
@@ -248,6 +249,14 @@
     }];
     fpsAction.state = settings.showFPSCounter ? UIMenuElementStateOn : UIMenuElementStateOff;
 
+    UIAction *shareLogAction =
+        [UIAction actionWithTitle:@"Share Diagnostic Log…"
+                            image:[UIImage systemImageNamed:@"square.and.arrow.up"]
+                       identifier:nil handler:^(__kindof UIAction *action) {
+        (void)action;
+        [weakSelf shareDiagnosticLog];
+    }];
+
     return [UIMenu menuWithTitle:@"SunPad" children:@[
         renderMenu,
         aspectMenu,
@@ -259,7 +268,34 @@
             [weakSelf toggleSettingsPanel];
         }],
         dataMenu,
+        shareLogAction,
     ]];
+}
+
+- (void)shareDiagnosticLog {
+    SunPadLog(@"diagnostic log share requested");
+    NSError *error = nil;
+    NSURL *snapshotURL = SunPadDiagnosticsSnapshotURL(&error);
+    UIViewController *presenter = self.window.rootViewController;
+    if (snapshotURL == nil) {
+        UIAlertController *alert =
+            [UIAlertController alertControllerWithTitle:@"Diagnostic Log Unavailable"
+                                                message:error.localizedDescription
+                                         preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+                                                  style:UIAlertActionStyleDefault
+                                                handler:nil]];
+        [presenter presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+
+    UIActivityViewController *share =
+        [[UIActivityViewController alloc] initWithActivityItems:@[snapshotURL]
+                                         applicationActivities:nil];
+    UIPopoverPresentationController *popover = share.popoverPresentationController;
+    popover.sourceView = _menuButton;
+    popover.sourceRect = _menuButton.bounds;
+    [presenter presentViewController:share animated:YES completion:nil];
 }
 
 - (UIAction *)aspectRatioAction:(NSString *)title mode:(SunPadAspectRatioMode)mode {

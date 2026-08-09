@@ -140,8 +140,8 @@ larger iPads:
 - **Left:** movement stick, D-pad, and L within thumb reach.
 - **Right:** camera stick, A/B/X/Y diamond, Z, R, and Start.
 - **Menu:** the persistent **•••** button opens render resolution, aspect
-  ratio, control, game-data, and save settings. Original 4:3 is the default;
-  16:9 and Fill Screen are marked experimental.
+  ratio, control, game-data, save, and diagnostic-log actions. Original 4:3
+  is the default; 16:9 and Fill Screen are marked experimental.
 - **Customize:** Move mode lets controls be dragged and saves normalized
   positions per device class; Reset restores the default layout.
 - **Controller handoff:** a connected physical controller can hide the touch
@@ -150,6 +150,17 @@ larger iPads:
 Touch and GameController input merge through the same thread-safe GameCube
 state. Button presses are edge-latched, the strongest stick input wins, and
 analog triggers preserve FLUDD pressure control.
+
+## Share a diagnostic log
+
+If SunPad crashes or fails to start, reopen it, choose **••• → Share Diagnostic
+Log…**, and send the resulting `.log` file with a short description of what
+happened. The shared file is a snapshot of SunPad's raw runtime log; it does
+not include the game image, extracted game data, or save files.
+
+If SunPad cannot reopen, use **Settings → Privacy & Security → Analytics &
+Improvements → Analytics Data**, select the newest entry beginning with
+`SunPad`, and share that system crash report instead.
 
 ## Screenshots
 

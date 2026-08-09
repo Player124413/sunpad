@@ -82,8 +82,10 @@ headlessly for verification.
 - SunPad writes low-frequency boot, display, controller, lifecycle,
   memory-warning, input-pipe, and runtime-exit breadcrumbs to both the unified
   device log and `Library/Application Support/SunPad/Logs/runtime.log`. The
-  persistent log rotates at 1 MB and survives relaunches. Retrieve it later
-  without stopping the game:
+  persistent log rotates at 1 MB and survives relaunches. A normal user can
+  choose **Share Diagnostic Log…** directly from SunPad's three-dot menu; the
+  app snapshots the raw log and opens the standard iOS share sheet. Developers
+  can also retrieve it without stopping the game:
 
   ```sh
   xcrun devicectl device copy from --device <device-id> \

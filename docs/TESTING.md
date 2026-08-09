@@ -97,6 +97,7 @@ domain while the user's current SunPad session remained running.
 | Controller snapshot initialization | Fixed in source | `SunPadInputState state = {}` prevents indeterminate button bits |
 | Pipe command encoding | Fixed and regression-tested | production `std::string` encoder handles all 12 simultaneous press/release edges; both messages exceed the old 128-byte stack-buffer limit |
 | Persistent diagnostics | Added | rotating app log covers boot, display, controller, lifecycle, memory warning, input pipe, and runtime exit |
+| In-app raw-log sharing | Pass | top-level **Share Diagnostic Log…** menu action snapshots the current raw log under a timestamped `.log` filename and opens `UIActivityViewController`; focused snapshot test reads back a sentinel |
 | Slow black startup | Clarified in UI | startup status remains visible until the first measured game frame |
 | Unsigned arm64 iOS Release build | Pass | `xcodebuild ... -destination 'generic/platform=iOS' ... CODE_SIGNING_ALLOWED=NO build` |
 | Signed arm64 iPhone/iPad Release build | Pass | automatic development signing for `com.sunpad.SunPad`; Team `VKDH2T9UTF`; installed on iPhone 14 and iPad Pro 12.9-inch (6th generation), both running iOS/iPadOS 26.5.2 |
@@ -106,6 +107,7 @@ domain while the user's current SunPad session remained running.
 | New ordinary crash reports | Pass | none on either device; new CPU-resource reports sampled 102.71 s (iPhone) and 125.11 s (iPad) and both state `Action taken: none` |
 | Save preservation | Pass | separate iPad and iPhone GCI files were backed up and read back byte-identical both before and after final runtime startup |
 | Controller-settings preservation | Pass | device GCPad configuration read back byte-identical; iPad touch-control origins also compare exactly after preference recovery |
+| Diagnostic-sharing build deployment | Pass | signed Release build installed and booted on the attached iPad and iPhone; both raw runtime logs reached `runtime created` and input-pipe connection on attempt 1 |
 | Disc-image preservation | Pass | full post-install readback from each device matches source SHA-256 `67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d` |
 | Exact HDMI + wired-controller hardware replay | Open | final build is installed and booted; the exact dongle/controller/display combination still needs a hands-on gameplay run |
 
@@ -118,6 +120,7 @@ Focused input regression gate:
 
 ```sh
 ./tests/test-input-pipe-encoder.sh
+./tests/test-diagnostics.sh
 ```
 
 Device provisioning caution: with this iOS/Xcode combination, CoreDevice
