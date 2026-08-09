@@ -209,8 +209,20 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
         return hostPath;
 
     NSString *deviceRelativePath = configuration[@"DeviceModuleRelativePath"];
-    if (deviceRelativePath.length > 0)
-        return [NSTemporaryDirectory() stringByAppendingPathComponent:deviceRelativePath];
+    if (deviceRelativePath.length > 0) {
+        NSString *temporaryPath =
+            [NSTemporaryDirectory() stringByAppendingPathComponent:deviceRelativePath];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:temporaryPath])
+            return temporaryPath;
+
+        // Local device builds can carry the signed, user-generated module in
+        // the app bundle when CoreDevice temporary-file uploads are unavailable.
+        NSString *bundledPath =
+            [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:deviceRelativePath];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:bundledPath])
+            return bundledPath;
+        return temporaryPath;
+    }
     return hostPath;
 }
 
