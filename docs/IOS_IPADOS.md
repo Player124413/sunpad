@@ -79,3 +79,56 @@ headlessly for verification.
   flushing before suspension is the next milestone.
 - GameController polling merges into the same normalized input snapshot as
   touch; touch controls auto-hide when a controller is connected.
+- SunPad writes low-frequency boot, display, controller, lifecycle,
+  memory-warning, input-pipe, and runtime-exit breadcrumbs to both the unified
+  device log and `Library/Application Support/SunPad/Logs/runtime.log`. The
+  persistent log rotates at 1 MB and survives relaunches. Retrieve it later
+  without stopping the game:
+
+  ```sh
+  xcrun devicectl device copy from --device <device-id> \
+    --domain-type appDataContainer \
+    --domain-identifier com.sunpad.SunPad \
+    --source "Library/Application Support/SunPad/Logs" \
+    --destination /tmp/sunpad-app-logs
+  ```
+
+- While the runtime is booting, a visible startup message replaces the former
+  unexplained black surface. It disappears after the first measured game
+  frame.
+- Development provisioning must use non-removing CoreDevice directory
+  overlays. On the current iOS/Xcode combination,
+  `--remove-existing-content true` cleared unrelated app-container data even
+  when the requested destination was nested. Upload the temporary runtime
+  module first, then overlay game data, saves, and configuration with
+  `--remove-existing-content false`, and read every protected file back.
+- `-sunpadRestorePreferences` is an explicit maintenance launch flag. When
+  requested, the app imports `tmp/SunPadPreferencesRestore.plist` through
+  `NSUserDefaults` and deletes the temporary payload. This avoids direct plist
+  replacement being discarded by iOS's preferences daemon during a
+  device-settings recovery.
+
+## HDMI + wired-controller crash investigation (2026-08-09)
+
+The iPad retained seven ordinary SunPad crash reports from the prior evening.
+All seven are `SIGABRT` / `stack buffer overflow`, and every faulting stack is:
+
+```text
+SunPadCoreHost publishInput
+SunPadGameViewController publishMergedInput
+60 Hz input dispatch timer
+```
+
+The first affected session ran for hours and then crashed after the wired
+controller was introduced. With the controller still attached, the following
+relaunches crashed after roughly 8–30 seconds. The controller callback built a
+complete input snapshot without initializing its button bitmask. Random button
+edges could then make the pipe encoder append beyond its 128-byte stack buffer;
+`snprintf` returned the full would-have-written length, so subsequent appends
+used an out-of-bounds pointer and the stack protector aborted the app.
+
+The mirrored HDMI display does not appear anywhere in the exception path and
+is not needed to reproduce the defect. It may have made the relaunch look worse
+because a connected controller hides the touch overlay, leaving only the black
+Metal boot surface. External-display mode changes are now logged so a separate
+display failure can be distinguished if one occurs later.

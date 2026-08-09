@@ -1,10 +1,13 @@
 #import "SunPadCoreHost.h"
+#import "SunPadDiagnostics.h"
+#import "SunPadInputPipeEncoder.h"
 
 #import <AVFAudio/AVFAudio.h>
 #import <fcntl.h>
 #import <sys/stat.h>
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -67,7 +70,9 @@ namespace fs = std::filesystem;
     if (!audioSessionError)
         [audioSession setActive:YES error:&audioSessionError];
     if (audioSessionError)
-        NSLog(@"[SunPad] audio session setup failed: %@", audioSessionError);
+        SunPadLog(@"audio session setup failed: %@", audioSessionError);
+    else
+        SunPadLog(@"audio session active route=%@", audioSession.currentRoute.outputs.firstObject.portType ?: @"none");
 
     NSString *pipeDir = [userDirectory stringByAppendingPathComponent:@"Pipes"];
     NSString *pipePath = [pipeDir stringByAppendingPathComponent:@"sunpad"];
@@ -77,7 +82,8 @@ namespace fs = std::filesystem;
                                                     error:nil];
     // The runtime opens the FIFO read-only; recreate if a stale file exists.
     ::unlink(pipePath.fileSystemRepresentation);
-    ::mkfifo(pipePath.fileSystemRepresentation, 0666);
+    int fifoResult = ::mkfifo(pipePath.fileSystemRepresentation, 0666);
+    SunPadLog(@"input pipe create result=%d errno=%d", fifoResult, fifoResult == 0 ? 0 : errno);
 
     // This is a dedicated virtual GameCube controller. Dolphin's pipe backend
     // is present in the iOS core, but it has no default bindings, so provide
@@ -119,6 +125,9 @@ namespace fs = std::filesystem;
                    encoding:NSUTF8StringEncoding
                       error:nil];
 
+    SunPadLog(@"runtime thread starting discImage=%d moduleExists=%d",
+              discImagePath.length > 0,
+              [[NSFileManager defaultManager] fileExistsAtPath:modulePath]);
     *_gameThread = std::thread([self, gameRoot, discImagePath, modulePath, userDirectory] {
         [self runGameWithGameRoot:gameRoot
                     discImagePath:discImagePath
@@ -148,6 +157,7 @@ namespace fs = std::filesystem;
         auto created = moderngekko::Runtime::Create(std::move(config));
         if (!created) {
             errorMessage = created.error->message;
+            SunPadLog(@"runtime create failed: %s", errorMessage.c_str());
             if (_onError) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     _onError(@(errorMessage.c_str()));
@@ -156,6 +166,7 @@ namespace fs = std::filesystem;
             return;
         }
         *_running = true;
+        SunPadLog(@"runtime created");
 
         // Apply the persisted render-resolution choice now that the runtime's
         // config layers exist.
@@ -177,12 +188,19 @@ namespace fs = std::filesystem;
             stringByAppendingPathComponent:@"sunpad"];
         for (int attempt = 0; attempt < 600 && !_stopRequested->load(); ++attempt) {
             _pipeFd = ::open(pipePath.fileSystemRepresentation, O_WRONLY | O_NONBLOCK);
-            if (_pipeFd >= 0)
+            if (_pipeFd >= 0) {
+                SunPadLog(@"input pipe connected attempt=%d", attempt + 1);
                 break;
+            }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
+        if (_pipeFd < 0)
+            SunPadLog(@"input pipe unavailable after wait errno=%d stopRequested=%d", errno,
+                      _stopRequested->load());
 
         auto result = created.runtime->Run();
+        SunPadLog(@"runtime exited error=%d stopRequested=%d",
+                  (bool)result.error, _stopRequested->load());
         if (result.error && _onError) {
             errorMessage = result.error->message;
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -200,49 +218,22 @@ namespace fs = std::filesystem;
 - (void)publishInput:(SunPadInputState)input {
     if (_pipeFd < 0)
         return;
-    char buffer[128];
-    int len = 0;
-    // Sticks are int8 [-127,127]; the pipe expects raw [0,1] with 0.5 neutral
-    // and the positive Y axis mapped to stick-down (GCPadNew.ini).
-    float mx = 0.5f + (input.stickX / 127.0f) * 0.5f;
-    float my = 0.5f - (input.stickY / 127.0f) * 0.5f;
-    float cx = 0.5f + (input.cStickX / 127.0f) * 0.5f;
-    float cy = 0.5f - (input.cStickY / 127.0f) * 0.5f;
-    len += snprintf(buffer + len, sizeof(buffer) - len,
-                    "SET MAIN %.3f %.3f\n", mx, my);
-    len += snprintf(buffer + len, sizeof(buffer) - len,
-                    "SET C %.3f %.3f\n", cx, cy);
-    // Triggers are uint8 [0,255] -> pipe value [0,1] (0 = off, 1 = full).
-    len += snprintf(buffer + len, sizeof(buffer) - len,
-                    "SET L %.3f\n", input.triggerL / 255.0f);
-    len += snprintf(buffer + len, sizeof(buffer) - len,
-                    "SET R %.3f\n", input.triggerR / 255.0f);
-
-    struct { uint16_t bit; const char *name; } buttons[] = {
-        {SunPadButtonA, "A"},    {SunPadButtonB, "B"},
-        {SunPadButtonX, "X"},    {SunPadButtonY, "Y"},
-        {SunPadButtonZ, "Z"},    {SunPadButtonStart, "START"},
-        {SunPadButtonL, "L"},    {SunPadButtonR, "R"},
-        {SunPadButtonDpadUp, "D_UP"},
-        {SunPadButtonDpadDown, "D_DOWN"},
-        {SunPadButtonDpadLeft, "D_LEFT"},
-        {SunPadButtonDpadRight, "D_RIGHT"},
-    };
     static uint16_t lastButtons = 0;
-    for (const auto &button : buttons) {
-        bool pressed = (input.buttons & button.bit) != 0;
-        bool wasPressed = (lastButtons & button.bit) != 0;
-        if (pressed && !wasPressed)
-            len += snprintf(buffer + len, sizeof(buffer) - len,
-                            "PRESS %s\n", button.name);
-        else if (!pressed && wasPressed)
-            len += snprintf(buffer + len, sizeof(buffer) - len,
-                            "RELEASE %s\n", button.name);
+    std::string commands = SunPadEncodePipeCommands(input, lastButtons);
+    if (!commands.empty()) {
+        ssize_t written = ::write(_pipeFd, commands.data(), commands.size());
+        if (written == static_cast<ssize_t>(commands.size())) {
+            // Advance edge tracking only after the whole atomic FIFO message
+            // is delivered; an EAGAIN will retry the same button transition.
+            lastButtons = input.buttons;
+        } else if (written < 0 && errno != EAGAIN) {
+            SunPadLog(@"input pipe write failed errno=%d bytes=%lu", errno,
+                      (unsigned long)commands.size());
+        } else if (written >= 0) {
+            SunPadLog(@"input pipe partial write bytes=%ld expected=%lu", (long)written,
+                      (unsigned long)commands.size());
+        }
     }
-    lastButtons = input.buttons;
-
-    if (len > 0)
-        ::write(_pipeFd, buffer, len);
 }
 
 - (void)setRenderScale:(NSInteger)scale {
@@ -305,6 +296,7 @@ namespace fs = std::filesystem;
 }
 
 - (void)stop {
+    SunPadLog(@"runtime stop requested running=%d", _running->load());
     *_stopRequested = true;
     if (_gameThread->joinable())
         _gameThread->join();

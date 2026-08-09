@@ -34,6 +34,8 @@
 		AA000000000000000000011F /* SunPadDiscExtractor.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022C /* SunPadDiscExtractor.mm */; };
 		AA0000000000000000000120 /* SunPadInputMixer.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000022E /* SunPadInputMixer.mm */; };
 		AA0000000000000000000121 /* Sys in Resources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000230 /* Sys */; };
+		AA0000000000000000000122 /* SunPadDiagnostics.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000231 /* SunPadDiagnostics.mm */; };
+		AA0000000000000000000123 /* SunPadInputPipeEncoder.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000233 /* SunPadInputPipeEncoder.mm */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -73,6 +75,10 @@
 		AA000000000000000000022E /* SunPadInputMixer.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadInputMixer.mm; sourceTree = "<group>"; };
 		AA000000000000000000022F /* SunPadInputMixer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadInputMixer.h; sourceTree = "<group>"; };
 		AA0000000000000000000230 /* Sys */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Sys; path = ref/ModernGekko/vendor/dolphin/Data/Sys; sourceTree = SOURCE_ROOT; };
+		AA0000000000000000000231 /* SunPadDiagnostics.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadDiagnostics.mm; sourceTree = "<group>"; };
+		AA0000000000000000000232 /* SunPadDiagnostics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadDiagnostics.h; sourceTree = "<group>"; };
+		AA0000000000000000000233 /* SunPadInputPipeEncoder.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = SunPadInputPipeEncoder.mm; sourceTree = "<group>"; };
+		AA0000000000000000000234 /* SunPadInputPipeEncoder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SunPadInputPipeEncoder.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +150,10 @@
 		AA0000000000000000000406 /* shared */ = {
 			isa = PBXGroup;
 			children = (
+				AA0000000000000000000231 /* SunPadDiagnostics.mm */,
+				AA0000000000000000000232 /* SunPadDiagnostics.h */,
+				AA0000000000000000000233 /* SunPadInputPipeEncoder.mm */,
+				AA0000000000000000000234 /* SunPadInputPipeEncoder.h */,
 				AA0000000000000000000204 /* SunPadSettings.mm */,
 				AA0000000000000000000212 /* SunPadSettings.h */,
 				AA000000000000000000022E /* SunPadInputMixer.mm */,
@@ -255,6 +265,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000000122 /* SunPadDiagnostics.mm in Sources */,
+				AA0000000000000000000123 /* SunPadInputPipeEncoder.mm in Sources */,
 				AA0000000000000000000120 /* SunPadInputMixer.mm in Sources */,
 				AA000000000000000000011F /* SunPadDiscExtractor.mm in Sources */,
 				AA0000000000000000000112 /* SunPadCoreHost.mm in Sources */,

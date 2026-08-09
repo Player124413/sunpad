@@ -1,6 +1,7 @@
 #import "SunPadGameViewController.h"
 
 #import "SunPadCoreHost.h"
+#import "SunPadDiagnostics.h"
 #import "SunPadDiscExtractor.h"
 #import "SunPadGameOverlay.h"
 #import "SunPadInputMixer.h"
@@ -9,6 +10,7 @@
 #import <GameController/GameController.h>
 #import <Metal/Metal.h>
 #import <QuartzCore/QuartzCore.h>
+#import <TargetConditionals.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #include <cmath>
@@ -38,6 +40,8 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     SunPadGameOverlay *_overlay;
     dispatch_source_t _controllerTimer;
     UILabel *_fpsLabel;
+    UILabel *_bootStatusLabel;
+    CGSize _lastLoggedDrawableSize;
 }
 
 - (BOOL)shouldAutorotate {
@@ -52,8 +56,8 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    NSLog(@"[SunPad] viewDidLoad bounds=%@ orientation=%ld",
-          NSStringFromCGRect(self.view.bounds), (long)UIDevice.currentDevice.orientation);
+    SunPadLog(@"viewDidLoad bounds=%@ orientation=%ld",
+              NSStringFromCGRect(self.view.bounds), (long)UIDevice.currentDevice.orientation);
     self.view.backgroundColor = UIColor.blackColor;
 
     _gameView = [[SunPadMetalSurfaceView alloc] initWithFrame:self.view.bounds];
@@ -72,6 +76,14 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     _overlay.delegate = self;
     [self.view addSubview:_overlay];
 
+    _bootStatusLabel = [UILabel new];
+    _bootStatusLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.9];
+    _bootStatusLabel.font = [UIFont systemFontOfSize:18.0 weight:UIFontWeightSemibold];
+    _bootStatusLabel.textAlignment = NSTextAlignmentCenter;
+    _bootStatusLabel.numberOfLines = 0;
+    _bootStatusLabel.text = @"Starting SunPad…\nThis can take a little while.";
+    [self.view addSubview:_bootStatusLabel];
+
     _fpsLabel = [UILabel new];
     _fpsLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.85];
     _fpsLabel.font = [UIFont monospacedDigitSystemFontOfSize:12.0
@@ -84,6 +96,24 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(settingsChanged:)
                                                  name:NSUserDefaultsDidChangeNotification
+                                               object:nil];
+    // SunPad is an app-delegate UIKit app rather than a scene-based app. These
+    // legacy notifications remain the only direct external-screen signal for
+    // this deployment model on iPadOS 16+.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(displayConfigurationChanged:)
+                                                 name:UIScreenDidConnectNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(displayConfigurationChanged:)
+                                                 name:UIScreenDidDisconnectNotification
+                                               object:nil];
+#pragma clang diagnostic pop
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(displayConfigurationChanged:)
+                                                 name:UIScreenModeDidChangeNotification
                                                object:nil];
     // DEBUG hook: -sunpadImportTest <iso path> runs the full import flow.
     NSArray<NSString *> *arguments = NSProcessInfo.processInfo.arguments;
@@ -145,11 +175,14 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 }
 
 - (void)updateFPSLabel {
+    double fps = [_coreHost currentFPS];
+    if (fps > 0.0)
+        _bootStatusLabel.hidden = YES;
+
     if (![SunPadSettings sharedSettings].showFPSCounter) {
         _fpsLabel.hidden = YES;
         return;
     }
-    double fps = [_coreHost currentFPS];
     if (fps > 0.0) {
         // Super Mario Sunshine runs at a 30 Hz NTSC frame rate, so FPS ~ 30 is
         // full speed. Dolphin's raw "speed" metric is not wired on the static
@@ -176,11 +209,17 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 }
 
 - (void)controllerDidConnect:(NSNotification *)notification {
+    GCController *controller = notification.object;
+    SunPadLog(@"controller connected vendor=%@ category=%@ extended=%d count=%lu",
+              controller.vendorName ?: @"unknown", controller.productCategory ?: @"unknown",
+              controller.extendedGamepad != nil, (unsigned long)GCController.controllers.count);
     [self configureController:notification.object];
 }
 
 - (void)controllerDidDisconnect:(NSNotification *)notification {
-    (void)notification;
+    GCController *controller = notification.object;
+    SunPadLog(@"controller disconnected vendor=%@ count=%lu",
+              controller.vendorName ?: @"unknown", (unsigned long)GCController.controllers.count);
     [[SunPadInputMixer sharedMixer] clearInputFromTouch:NO];
 }
 
@@ -188,13 +227,20 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
  * the right shoulder is Z, menu is Start, and the D-pad maps to D-pad bits. */
 - (void)configureController:(GCController *)controller {
     GCExtendedGamepad *gamepad = controller.extendedGamepad;
-    if (gamepad == nil)
+    if (gamepad == nil) {
+        SunPadLog(@"controller ignored vendor=%@ reason=no extended gamepad profile",
+                  controller.vendorName ?: @"unknown");
         return;
+    }
+    SunPadLog(@"controller configured vendor=%@ category=%@",
+              controller.vendorName ?: @"unknown", controller.productCategory ?: @"unknown");
     __weak SunPadGameViewController *weakSelf = self;
     gamepad.valueChangedHandler = ^(GCExtendedGamepad *pad, GCControllerElement *element) {
         (void)element;
         (void)weakSelf;
-        SunPadInputState state;
+        // Every callback is a complete snapshot. Leaving buttons uninitialized
+        // made random button edges overflow the old fixed-size pipe buffer.
+        SunPadInputState state = {};
         state.connected = 1;
         if (pad.buttonA.isPressed) state.buttons |= SunPadButtonA;
         if (pad.buttonB.isPressed) state.buttons |= SunPadButtonB;
@@ -233,14 +279,30 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
     layer.drawableSize = CGSizeMake(CGRectGetWidth(_gameView.bounds) * SunPadDrawableScale,
                                     CGRectGetHeight(_gameView.bounds) * SunPadDrawableScale);
-    NSLog(@"[SunPad] layout bounds=%@ game=%@ drawable=%@",
-          NSStringFromCGRect(self.view.bounds),
-          NSStringFromCGRect(_gameView.bounds),
-          NSStringFromCGSize(layer.drawableSize));
+    if (!CGSizeEqualToSize(_lastLoggedDrawableSize, layer.drawableSize)) {
+        _lastLoggedDrawableSize = layer.drawableSize;
+        SunPadLog(@"layout bounds=%@ game=%@ drawable=%@",
+                  NSStringFromCGRect(self.view.bounds),
+                  NSStringFromCGRect(_gameView.bounds),
+                  NSStringFromCGSize(layer.drawableSize));
+    }
     CGRect safe = UIEdgeInsetsInsetRect(self.view.bounds, self.view.safeAreaInsets);
+    CGFloat statusWidth = MIN(420.0, CGRectGetWidth(safe) - 32.0);
+    _bootStatusLabel.frame = CGRectMake(CGRectGetMidX(safe) - statusWidth / 2.0,
+                                        CGRectGetMidY(safe) - 40.0,
+                                        statusWidth, 80.0);
     _fpsLabel.frame = CGRectMake(CGRectGetMinX(safe) + 8.0,
                                  CGRectGetMinY(safe) + 8.0,
                                  140.0, 22.0);
+}
+
+- (void)displayConfigurationChanged:(NSNotification *)notification {
+    UIScreen *screen = [notification.object isKindOfClass:UIScreen.class]
+        ? notification.object : UIScreen.mainScreen;
+    SunPadLog(@"display event=%@ bounds=%@ nativeBounds=%@ scale=%.2f nativeScale=%.2f maxFPS=%ld",
+              notification.name,
+              NSStringFromCGRect(screen.bounds), NSStringFromCGRect(screen.nativeBounds),
+              screen.scale, screen.nativeScale, (long)screen.maximumFramesPerSecond);
 }
 
 - (void)startGameIfProvisioned {
@@ -248,39 +310,45 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
         return;
     NSBundle *bundle = NSBundle.mainBundle;
     NSString *configPath = [bundle pathForResource:@"dev-config" ofType:@"plist"];
-    if (configPath == nil)
+    if (configPath == nil) {
+        SunPadLog(@"boot skipped reason=dev config missing");
+        _bootStatusLabel.text = @"SunPad needs its local game data before it can start.";
         return; // Not a dev-provisioned build; import flow is a later stage.
+    }
     NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
-    // Prefer an extracted root produced from an imported image; fall back to
-    // the dev-provisioned tree for acceptance testing on the Simulator.
     SunPadSettings *settings = [SunPadSettings sharedSettings];
     NSFileManager *fileManager = [NSFileManager defaultManager];
-    NSString *gameRoot = settings.extractedGameRoot;
-    BOOL rootValid = gameRoot.length > 0 &&
-        [fileManager fileExistsAtPath:gameRoot];
-    if (!rootValid) {
-        // An in-place dev install can change the app container UUID. Rebase
-        // imported game data onto the current sandbox instead of relying on
-        // the absolute path stored by a previous installation.
-        NSArray<NSString *> *supportPaths = NSSearchPathForDirectoriesInDomains(
-            NSApplicationSupportDirectory, NSUserDomainMask, YES);
-        NSString *currentContainerRoot = [supportPaths.firstObject
-            stringByAppendingPathComponent:@"SunPad/GameData/GMSE01"];
-        if ([fileManager fileExistsAtPath:currentContainerRoot]) {
-            gameRoot = currentContainerRoot;
-            settings.extractedGameRoot = gameRoot;
-            [settings synchronize];
-        } else {
-            gameRoot = config[@"DevGameRoot"];
-        }
+    // App updates can relocate the data-container UUID. On physical devices,
+    // derive imported data from the current sandbox instead of trusting an
+    // absolute path persisted by a previous installation.
+    NSString *supportRoot = [[NSHomeDirectory()
+        stringByAppendingPathComponent:@"Library/Application Support"]
+        stringByAppendingPathComponent:@"SunPad"];
+    NSString *gameDataDirectory = [supportRoot stringByAppendingPathComponent:@"GameData"];
+    NSString *currentContainerRoot = [gameDataDirectory stringByAppendingPathComponent:@"GMSE01"];
+    BOOL currentRootExists = [fileManager fileExistsAtPath:currentContainerRoot];
+    NSString *gameRoot = currentContainerRoot;
+#if TARGET_OS_SIMULATOR
+    if (!currentRootExists)
+        gameRoot = config[@"DevGameRoot"];
+#endif
+    if (![settings.extractedGameRoot isEqualToString:gameRoot]) {
+        settings.extractedGameRoot = gameRoot;
+        [settings synchronize];
     }
-    NSString *modulePath = [self modulePathFromConfiguration:config];
-    if (gameRoot.length == 0 || modulePath.length == 0)
-        return;
+    SunPadLog(@"boot data support=%@ root=%@ rootExists=%d persistedRoot=%@",
+              supportRoot, gameRoot, currentRootExists,
+              settings.extractedGameRoot ?: @"none");
 
-    NSArray<NSString *> *paths = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    NSString *userDirectory = [paths.firstObject stringByAppendingPathComponent:@"SunPad"];
+    NSString *modulePath = [self modulePathFromConfiguration:config];
+    if (gameRoot.length == 0 || modulePath.length == 0) {
+        SunPadLog(@"boot skipped gameRoot=%d modulePath=%d",
+                  gameRoot.length > 0, modulePath.length > 0);
+        _bootStatusLabel.text = @"SunPad could not find its local game data.";
+        return;
+    }
+
+    NSString *userDirectory = supportRoot;
     [[NSFileManager defaultManager] createDirectoryAtPath:userDirectory
                               withIntermediateDirectories:YES
                                                attributes:nil
@@ -290,20 +358,40 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
     // file offsets, and streaming layout from the user's disc. In-place app
     // installs preserve the file but change the container UUID, so rebase the
     // persisted absolute path when necessary.
-    NSString *discImagePath = settings.retainedGameDataPath;
-    if (discImagePath.length > 0 && ![fileManager fileExistsAtPath:discImagePath]) {
-        NSString *rebasedImage = [[userDirectory stringByAppendingPathComponent:@"GameData"]
-            stringByAppendingPathComponent:discImagePath.lastPathComponent];
-        if ([fileManager fileExistsAtPath:rebasedImage]) {
-            discImagePath = rebasedImage;
-            settings.retainedGameDataPath = rebasedImage;
-            [settings synchronize];
-        } else {
-            discImagePath = @"";
+    NSString *discFileName = settings.retainedGameDataPath.lastPathComponent;
+    if (discFileName.length == 0) {
+        NSArray<NSString *> *entries = [fileManager contentsOfDirectoryAtPath:gameDataDirectory
+                                                                        error:nil];
+        for (NSString *entry in entries) {
+            NSString *extension = entry.pathExtension.lowercaseString;
+            if ([extension isEqualToString:@"iso"] ||
+                [extension isEqualToString:@"gcm"] ||
+                [extension isEqualToString:@"rvz"]) {
+                discFileName = entry;
+                break;
+            }
         }
     }
+    NSString *rebasedImage = discFileName.length > 0
+        ? [gameDataDirectory stringByAppendingPathComponent:discFileName] : @"";
+    NSString *discImagePath = rebasedImage;
+#if TARGET_OS_SIMULATOR
+    if (rebasedImage.length == 0 || ![fileManager fileExistsAtPath:rebasedImage])
+        discImagePath = settings.retainedGameDataPath ?: @"";
+#endif
+    if (discImagePath.length > 0 &&
+        ![settings.retainedGameDataPath isEqualToString:discImagePath]) {
+        settings.retainedGameDataPath = discImagePath;
+        [settings synchronize];
+    }
+    SunPadLog(@"boot disc path=%@ exists=%d", discImagePath.length > 0
+              ? discImagePath.lastPathComponent : @"none",
+              discImagePath.length > 0 && [fileManager fileExistsAtPath:discImagePath]);
 
     CAMetalLayer *layer = (CAMetalLayer *)_gameView.layer;
+    SunPadLog(@"boot requested gameRootExists=%d discImage=%d moduleExists=%d drawable=%@",
+              [fileManager fileExistsAtPath:gameRoot], discImagePath.length > 0,
+              [fileManager fileExistsAtPath:modulePath], NSStringFromCGSize(layer.drawableSize));
     _coreHost = [[SunPadCoreHost alloc] initWithLayer:layer];
     __weak SunPadGameViewController *weakSelf = self;
     [_coreHost startWithGameRoot:gameRoot
@@ -316,6 +404,7 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 }
 
 - (void)presentBootError:(NSString *)message {
+    _bootStatusLabel.text = @"SunPad could not start.";
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"SunPad could not start"
                                                                    message:message
                                                             preferredStyle:UIAlertControllerStyleAlert];

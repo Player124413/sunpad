@@ -1,6 +1,6 @@
 # Known Issues
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## iOS / iPadOS
 
@@ -28,9 +28,13 @@ Last updated: 2026-08-08
    packaging.
 6. **Interpreter fallback speed** — un-recompiled/SMC regions fall back to the
    interpreter (no JIT by design); verify in demanding scenes.
-7. **Physical-controller acceptance pending** — touch controls have been used
-   on a physical iPad, but connect/disconnect and auto-hide behavior still need
-   hands-on controller coverage.
+7. **Physical-controller crash fixed; re-acceptance pending** — seven retained
+   iPad crash reports from 2026-08-08 show the same stack-buffer abort in
+   `SunPadCoreHost::publishInput`. The GameController callback left the button
+   bitmask uninitialized, and the resulting random multi-button edges could
+   overrun a fixed 128-byte pipe-command buffer. Controller snapshots are now
+   zero-initialized and commands use dynamically sized storage. The corrected
+   build still needs an exact wired-controller + HDMI hands-on acceptance run.
 8. **Physical iPhone performance is less than ideal** — an iPhone 14 can run
    substantially below full speed even at 1×. The runtime and module are
    release-optimized; the portable software vertex loader and interpreter
@@ -42,6 +46,22 @@ Last updated: 2026-08-08
    widescreen/custom-aspect paths and can expose projection, culling, or
    stretching defects. They change game rendering only; touch controls keep
    their normal device layout.
+10. **Sustained CPU diagnostics** — physical iPad runs commonly exceed iPadOS's
+    diagnostic threshold (roughly 58–99% average CPU in retained reports), but
+    every inspected `cpu_resource` report says `Action taken: none`. This is a
+    performance/energy concern, not evidence that iPadOS killed the app in the
+    2026-08-08 controller crash sequence.
+11. **Dev module currently targets the build SDK** — the generated physical
+    device module reports iOS 26.5 as its minimum even though the app target is
+    iOS 16.0. This works on the currently accepted iOS 26.5.2 devices, but the
+    module toolchain must emit an explicit older deployment target before the
+    developer provisioning path can be claimed for older OS releases.
+12. **CoreDevice removing uploads are unsafe for provisioning** — on the
+    currently used iOS 26.5.2/Xcode toolchain, a nested `devicectl device copy
+    to` with `--remove-existing-content true` cleared unrelated app-container
+    data. Provision the module before user data and use a non-removing
+    directory overlay. Back up and read back each device's saves and settings;
+    never treat an app-install success message as preservation proof.
 
 ## Desktop Stage 1 gaps
 

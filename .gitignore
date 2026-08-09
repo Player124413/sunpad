@@ -71,6 +71,7 @@ xcuserdata/
 logs/
 artifacts/runtime/
 artifacts/screenshots/
+artifacts/device-save-backups/
 !artifacts/.gitkeep
 
 # Signing material and secrets
