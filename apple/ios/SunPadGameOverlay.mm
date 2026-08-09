@@ -154,6 +154,7 @@
     UISlider *_sizeSlider;
     UISlider *_selectedSizeSlider;
     UISwitch *_hideControlsSwitch;
+    UISwitch *_modernCStickSwitch;
     UISwitch *_editLayoutSwitch;
     UIView *_editorBar;
     UILabel *_editorHintLabel;
@@ -745,6 +746,12 @@
     [_hideControlsSwitch addTarget:self action:@selector(hideChanged:)
                   forControlEvents:UIControlEventValueChanged];
 
+    _modernCStickSwitch = [UISwitch new];
+    _modernCStickSwitch.on = [SunPadSettings sharedSettings].modernCStickHorizontal;
+    _modernCStickSwitch.accessibilityLabel = @"Modern C-stick left and right";
+    [_modernCStickSwitch addTarget:self action:@selector(modernCStickChanged:)
+                   forControlEvents:UIControlEventValueChanged];
+
     _editLayoutSwitch = [UISwitch new];
     _editLayoutSwitch.on = NO;
     _editLayoutSwitch.accessibilityLabel = @"Move touch controls";
@@ -765,6 +772,7 @@
         [self settingsRowWithTitle:@"Opacity" control:_opacitySlider],
         [self settingsRowWithTitle:@"All sizes" control:_sizeSlider],
         [self settingsRowWithTitle:@"Hide on controller" control:_hideControlsSwitch],
+        [self settingsRowWithTitle:@"Modern C-stick L/R" control:_modernCStickSwitch],
         [self settingsRowWithTitle:@"Move controls" control:_editLayoutSwitch],
         reset,
     ]];
@@ -865,6 +873,7 @@
     if (_settingsPanel.hidden) {
         _settingsPanel.hidden = NO;
         _renderScaleControl.selectedSegmentIndex = [SunPadSettings sharedSettings].renderScale - 1;
+        _modernCStickSwitch.on = [SunPadSettings sharedSettings].modernCStickHorizontal;
         [self bringSubviewToFront:_settingsPanel];
         [self bringSubviewToFront:_menuButton];
     } else {
@@ -900,6 +909,11 @@
     [SunPadSettings sharedSettings].hideTouchControlsWhenControllerConnected = switcher.on;
     [[SunPadSettings sharedSettings] synchronize];
     [self applyControllerVisibility];
+}
+
+- (void)modernCStickChanged:(UISwitch *)switcher {
+    [SunPadSettings sharedSettings].modernCStickHorizontal = switcher.on;
+    [[SunPadSettings sharedSettings] synchronize];
 }
 
 - (void)editLayoutChanged:(UISwitch *)switcher {
@@ -1110,6 +1124,7 @@
     _opacitySlider.value = settings.controlOpacity;
     _sizeSlider.value = settings.controlSizeScale;
     _hideControlsSwitch.on = settings.hideTouchControlsWhenControllerConnected;
+    _modernCStickSwitch.on = settings.modernCStickHorizontal;
     _editLayoutSwitch.on = NO;
     [self endLayoutEditing];
     [self setNeedsLayout];

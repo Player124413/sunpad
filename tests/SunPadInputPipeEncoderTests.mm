@@ -20,7 +20,7 @@ static size_t CountLines(const std::string &commands) {
 int main(void) {
     @autoreleasepool {
         SunPadInputState neutral = {};
-        std::string neutralCommands = SunPadEncodePipeCommands(neutral, 0);
+        std::string neutralCommands = SunPadEncodePipeCommands(neutral, 0, false);
         assert(CountLines(neutralCommands) == 4);
         assert(neutralCommands.find("SET MAIN 0.500 0.500\n") != std::string::npos);
 
@@ -32,18 +32,26 @@ int main(void) {
         pressed.cStickY = 127;
         pressed.triggerL = 255;
         pressed.triggerR = 255;
-        std::string pressCommands = SunPadEncodePipeCommands(pressed, 0);
+        std::string pressCommands = SunPadEncodePipeCommands(pressed, 0, false);
         assert(CountLines(pressCommands) == 16);
         assert(pressCommands.size() > 128);
         assert(pressCommands.find("PRESS START\n") != std::string::npos);
         assert(pressCommands.find("PRESS D_RIGHT\n") != std::string::npos);
 
         SunPadInputState released = {};
-        std::string releaseCommands = SunPadEncodePipeCommands(released, AllButtons);
+        std::string releaseCommands = SunPadEncodePipeCommands(released, AllButtons, false);
         assert(CountLines(releaseCommands) == 16);
         assert(releaseCommands.size() > 128);
         assert(releaseCommands.find("RELEASE START\n") != std::string::npos);
         assert(releaseCommands.find("RELEASE D_RIGHT\n") != std::string::npos);
+
+        SunPadInputState cStickRight = {};
+        cStickRight.cStickX = 127;
+        cStickRight.cStickY = 64;
+        std::string originalCStick = SunPadEncodePipeCommands(cStickRight, 0, false);
+        std::string modernCStick = SunPadEncodePipeCommands(cStickRight, 0, true);
+        assert(originalCStick.find("SET C 1.000 0.248\n") != std::string::npos);
+        assert(modernCStick.find("SET C 0.000 0.248\n") != std::string::npos);
 
         std::cout << "SunPad input pipe encoder regression test passed\n";
     }

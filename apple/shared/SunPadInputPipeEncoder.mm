@@ -3,7 +3,8 @@
 #include <cstdio>
 
 std::string SunPadEncodePipeCommands(const SunPadInputState &input,
-                                     uint16_t previousButtons) {
+                                     uint16_t previousButtons,
+                                     bool modernCStickHorizontal) {
     std::string commands;
     commands.reserve(320);
     auto appendCommand = [&commands](const char *format, auto... values) {
@@ -17,7 +18,8 @@ std::string SunPadEncodePipeCommands(const SunPadInputState &input,
     // and the positive Y axis mapped to stick-down (GCPadNew.ini).
     float mx = 0.5f + (input.stickX / 127.0f) * 0.5f;
     float my = 0.5f - (input.stickY / 127.0f) * 0.5f;
-    float cx = 0.5f + (input.cStickX / 127.0f) * 0.5f;
+    float cStickX = modernCStickHorizontal ? -input.cStickX : input.cStickX;
+    float cx = 0.5f + (cStickX / 127.0f) * 0.5f;
     float cy = 0.5f - (input.cStickY / 127.0f) * 0.5f;
     appendCommand("SET MAIN %.3f %.3f\n", mx, my);
     appendCommand("SET C %.3f %.3f\n", cx, cy);

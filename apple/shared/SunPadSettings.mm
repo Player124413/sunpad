@@ -79,6 +79,14 @@
     [[NSUserDefaults standardUserDefaults] setBool:value forKey:@"SunPadHideControlsOnController"];
 }
 
+- (BOOL)modernCStickHorizontal {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"SunPadModernCStickHorizontal"];
+}
+
+- (void)setModernCStickHorizontal:(BOOL)value {
+    [[NSUserDefaults standardUserDefaults] setBool:value forKey:@"SunPadModernCStickHorizontal"];
+}
+
 - (CGFloat)controlOpacity {
     NSNumber *value = [[NSUserDefaults standardUserDefaults] objectForKey:@"SunPadControlOpacity"];
     if (value == nil)

@@ -92,7 +92,9 @@ headlessly for verification.
 - App delegate pause/resume/background hooks exist but are stubs; save
   flushing before suspension is the next milestone.
 - GameController polling merges into the same normalized input snapshot as
-  touch; touch controls auto-hide when a controller is connected.
+  touch; touch controls auto-hide when a controller is connected. The persisted
+  **Modern C-stick L/R** setting reverses only the horizontal C-stick axis for
+  both touch and physical controllers, leaving vertical zoom unchanged.
 - SunPad writes low-frequency boot, display, controller, lifecycle,
   memory-warning, input-pipe, and runtime-exit breadcrumbs to both the unified
   device log and `Library/Application Support/SunPad/Logs/runtime.log`. The

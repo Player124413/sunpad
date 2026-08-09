@@ -30,6 +30,8 @@ typedef NS_ENUM(NSInteger, SunPadAspectRatioMode) {
 
 /* Touch-control presentation. */
 @property(nonatomic, assign) BOOL hideTouchControlsWhenControllerConnected;
+/* Reverses only the C-stick horizontal axis for modern camera movement. */
+@property(nonatomic, assign) BOOL modernCStickHorizontal;
 @property(nonatomic, assign) CGFloat controlOpacity;   // 0.25..1
 @property(nonatomic, assign) CGFloat controlSizeScale; // 0.70..1.35
 @property(nonatomic, assign) BOOL editingControlLayout;
