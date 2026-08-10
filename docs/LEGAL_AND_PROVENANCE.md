@@ -1,6 +1,6 @@
 # Legal and Provenance
 
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 ## Project license
 
@@ -16,7 +16,7 @@ remain in force; the SunPad license does not replace them.
 SunPad will not:
 
 - Redistribute Super Mario Sunshine or any Nintendo copyrighted assets.
-- Commit disc images, extracted filesystems, textures, audio, or generated game-derived modules.
+- Commit disc images, extracted filesystems, textures, audio, or user saves.
 - Claim affiliation with or endorsement by Nintendo.
 - Misrepresent static recompilation as a complete clean-room rewrite if Dolphin-derived runtime services remain.
 
@@ -33,9 +33,11 @@ Users must provide their own legally obtained Super Mario Sunshine disc image. T
 
 See [DEPENDENCIES.md](DEPENDENCIES.md). Major runtime/recompiler components are
 GPL/Dolphin-derived and impose corresponding source, license, notice, and other
-obligations on distributed binaries that incorporate them. An eventual IPA or
-other binary release needs a separate artifact-level compliance audit; the
-current repository documents a local source/developer workflow only.
+obligations on distributed binaries that incorporate them. The
+developer-preview IPA includes the GMSE01 ahead-of-time recompiled executable
+module required to run the supported game, but no disc image, extracted assets,
+saves, settings, or signing material. The packaging audit enforces that
+boundary; users still provide their own supported image.
 
 ## Provenance of research claims
 

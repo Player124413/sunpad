@@ -18,6 +18,9 @@ plutil -lint apple/ios/Info.plist apple/macos/Info.plist
 ./tests/test-input-pipe-encoder.sh
 ./tests/test-diagnostics.sh
 
+test -x scripts/package-ios.sh
+test -x scripts/audit-ios-package.sh
+
 prohibited=$(git ls-files | grep -E '(^|/)(ref|DerivedData|Provisioned|build[^/]*)/|\.(iso|gcm|rvz|wia|wbfs|gcz|dylib|ipa|xcarchive|mobileprovision|p12|pem|key|gci|sav|raw)$' || true)
 if [[ -n "$prohibited" ]]; then
   echo "prohibited tracked material:" >&2
