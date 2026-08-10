@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 Current phase: **SunPad now boots Super Mario Sunshine on a physical iPad as
 well as the iPhone and iPad simulators** as an ahead-of-time statically
@@ -86,6 +86,10 @@ code-generating loader).
     17 Pro Simulator at 640x528 EFB) and the current EFB resolution. Persistent
     logs redact current app-container and temporary-directory prefixes, and
     sharing requires a metadata disclosure confirmation before the share sheet.
+14. **Developer-preview packaging**: the Release app and required GMSE01
+    recompiled module package as a deterministic unsigned IPA. The audit checks
+    iPhoneOS/arm64 identity and rejects disc images, extracted game data, saves,
+    personal build paths, credentials, and signing material.
 
 ### Desktop (previously proven)
 

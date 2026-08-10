@@ -1,10 +1,10 @@
 # Maintainer Notes
 
-Last updated: 2026-08-09
+Last updated: 2026-08-10
 
 This is a public maintainer summary, not a machine-specific handoff. SunPad is
-an experimental source/developer workflow for `GMSE01` USA revision 0. It does
-not publish a ready-to-install IPA or any game data.
+an experimental developer preview for `GMSE01` USA revision 0. Its unsigned
+IPA requires user-side signing and a user-provided supported game image.
 
 ## Reproduce the local inputs
 
@@ -65,9 +65,8 @@ device data, and never use a removing CoreDevice container overlay for updates.
    rollback, removal-with-save-preservation, and diagnostic-sharing flows.
 5. Complete the exact HDMI + wired-controller replay and broader lifecycle,
    save/reload, performance, and extended-session checks.
-6. Define and audit any eventual binary/IPA distribution separately. Generated
-   game-derived modules, retail images, extracted files, saves, and signing
-   material must remain local.
+6. Continue auditing each binary release. Retail images, extracted assets,
+   saves, settings, and signing material must remain local.
 
 ## Reporting
 

@@ -46,7 +46,7 @@ game module.
 | Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS |
 | Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
 | Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
-| Distribution | Source/development build only; no public IPA, TestFlight, or App Store release |
+| Distribution | Unsigned developer-preview IPA for user-side signing; no game image, saves, signing material, TestFlight, or App Store release |
 
 The mobile development build has been signed, installed, and played on a
 12.9-inch iPad Pro (6th generation). Physical-device boot, Metal rendering,
@@ -258,11 +258,12 @@ unrecompiled regions.
 
 ### Can I download an IPA?
 
-Not currently. This repository reproduces a **source/developer workflow**: the
-developer generates a game-specific module locally, signs the app and module,
-and provisions the module into the development app container. That is not a
-self-contained or publicly distributed IPA. No public IPA, TestFlight,
-AltStore, or App Store release has been announced.
+Yes. Download the unsigned **SunPad 0.1.0 Preview 1** IPA from
+[GitHub Releases](https://github.com/chrissotraidis/sunpad/releases), then
+re-sign it with your own Apple identity. It includes the required GMSE01
+ahead-of-time recompiled executable module, but no disc image, extracted game
+assets, save, settings, certificate, or provisioning profile. See
+[`docs/INSTALL_IPA.md`](docs/INSTALL_IPA.md).
 
 ### Do saves survive an app update?
 
@@ -286,6 +287,8 @@ packaging, and broader macOS gameplay acceptance remain explicit work.
 | [`scripts/prepare-game.sh`](scripts/prepare-game.sh) | Validate the supported local image and generate ignored game/module inputs |
 | [`scripts/ios-build-core.sh`](scripts/ios-build-core.sh) | Build and provision the Simulator core/module |
 | [`scripts/ios-build-core-device.sh`](scripts/ios-build-core-device.sh) | Build and provision the physical-device core/module |
+| [`scripts/package-ios.sh`](scripts/package-ios.sh) | Create the audited unsigned developer-preview IPA |
+| [`scripts/audit-ios-package.sh`](scripts/audit-ios-package.sh) | Reject game data, saves, signing material, and malformed IPA contents |
 | [`scripts/package-macos-app.sh`](scripts/package-macos-app.sh) | Build the local Apple Silicon `SunPad.app` bundle |
 | [`apple/ios/`](apple/ios/) | UIKit app shell, Files import, touch UI, and Apple adapter |
 | [`apple/macos/`](apple/macos/) | macOS bundle metadata, launcher wrapper, and keyboard defaults |
@@ -311,8 +314,9 @@ reference. See [`docs/RESEARCH.md`](docs/RESEARCH.md) and
 SunPad is an unofficial community project and is not affiliated with or
 endorsed by Nintendo. Super Mario Sunshine, Nintendo, and GameCube names and
 screenshots are used only to identify compatibility and demonstrate the
-project. No disc image, extracted Nintendo asset, generated game-derived
-module, or user save is included in the repository or a release. Each upstream
+project. No disc image, extracted Nintendo asset, or user save is included in
+the repository or a release. The developer-preview IPA includes the required
+ahead-of-time recompiled executable module. Each upstream
 component retains its own license and copyright. SunPad is licensed under
 GPL-3.0-or-later; see [`LICENSE`](LICENSE),
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), and

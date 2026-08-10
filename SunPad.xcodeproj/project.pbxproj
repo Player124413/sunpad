@@ -379,6 +379,14 @@
 					"-lcompression",
 					"-framework AVFAudio",
 				);
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-ffile-prefix-map=$(SRCROOT)=.",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-ffile-prefix-map=$(SRCROOT)=.",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunpad.SunPad;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -423,6 +431,14 @@
 					"-lresolv",
 					"-lcompression",
 					"-framework AVFAudio",
+				);
+				OTHER_CFLAGS = (
+					"$(inherited)",
+					"-ffile-prefix-map=$(SRCROOT)=.",
+				);
+				OTHER_CPLUSPLUSFLAGS = (
+					"$(inherited)",
+					"-ffile-prefix-map=$(SRCROOT)=.",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.sunpad.SunPad;
 				PRODUCT_NAME = "$(TARGET_NAME)";
