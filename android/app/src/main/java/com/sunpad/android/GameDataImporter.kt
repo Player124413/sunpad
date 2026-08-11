@@ -33,6 +33,25 @@ class GameDataImporter(private val context: Context) {
 
     fun hasModule(): Boolean = moduleFile.isFile
 
+    /**
+     * Ensures the game module is available in private storage. If the module
+     * was bundled into the APK assets (CI builds with SUNPAD_BUNDLE_MODULE=1),
+     * it is extracted to the module directory on first launch; otherwise a
+     * user-provided module copied earlier is used.
+     */
+    fun ensureModule(): Boolean {
+        if (moduleFile.isFile) return true
+        return try {
+            context.assets.open("modules/gGMSE01_recomp.so").use { input ->
+                moduleDir.mkdirs()
+                FileOutputStream(moduleFile).use { out -> input.copyTo(out) }
+            }
+            moduleFile.isFile
+        } catch (_: java.io.IOException) {
+            false
+        }
+    }
+
     /** Returns a validation error string, or null when the image is valid. */
     fun validateImageFile(file: File): String? {
         if (file.length() != EXPECTED_SIZE)

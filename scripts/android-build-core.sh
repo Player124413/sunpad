@@ -184,8 +184,16 @@ echo "provisioned: $GEN_DIR/core_libs.cmake (${#LIBS[@]} archives)"
 if [[ -n "$MODULE_SO" ]]; then
   echo "Android core, module, and provisioning complete."
   echo "Module for on-device provisioning: $MODULE_SO"
-  echo "Push it to the device (e.g. adb push to Download/) and install it from"
-  echo "the SunPad setup menu: 'Set game module'."
+  if [[ "${SUNPAD_BUNDLE_MODULE:-0}" == "1" ]]; then
+    ASSETS_DIR="$ROOT/android/app/src/main/assets/modules"
+    mkdir -p "$ASSETS_DIR"
+    cp "$MODULE_SO" "$ASSETS_DIR/gGMSE01_recomp.so"
+    echo "Module bundled into the app: $ASSETS_DIR/gGMSE01_recomp.so"
+    echo "(the app extracts it to private storage on first launch)"
+  else
+    echo "Push it to the device (e.g. adb push to Download/) and install it from"
+    echo "the SunPad setup menu: 'Set game module'."
+  fi
 else
   echo "Android core and provisioning complete (module build skipped)."
 fi

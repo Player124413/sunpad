@@ -141,7 +141,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     private fun startGameIfReady() {
         if (started || !surfaceReady) return
-        if (!importer.hasActiveGame() || !importer.hasModule()) {
+        if (!importer.hasActiveGame() || !importer.ensureModule()) {
             showSetupDialog()
             return
         }
@@ -171,7 +171,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             items.add("Import game data (GMSE01 ISO/GCM)…")
             actions.add { pickImage() }
         }
-        if (!importer.hasModule()) {
+        if (!importer.ensureModule()) {
             items.add("Set game module (gGMSE01_recomp.so)…")
             actions.add { pickModule() }
         }

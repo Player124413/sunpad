@@ -103,13 +103,38 @@ The repository ships `ci/android-build.yml`, a workflow that builds the
 whole Android app on GitHub's `ubuntu-latest` runners — no local Mac, NDK,
 or game data needed:
 
-1. installs JDK 17, the Android SDK/NDK r26, and Ninja;
+1. installs JDK 17, the Android SDK/NDK r26, Ninja, and clang;
 2. runs `bootstrap-dependencies.sh` (pinned clones + the 0001/0002 patches);
 3. runs `android-build-core.sh` (Android arm64 core, Vulkan + OpenSL ES);
 4. builds `app-debug.apk` with `./gradlew :app:assembleDebug` and runs the
    JUnit mapping tests;
 5. uploads the APK as the `sunpad-debug-apk` artifact (Actions → run →
    Artifacts).
+
+### Building the APK with the game module bundled (ISO URL)
+
+The workflow accepts a **direct download URL to your GMSE01 ISO** in the
+`workflow_dispatch` form:
+
+1. **Actions → Android build → Run workflow**;
+2. paste the direct link into the **iso_url** field (the ISO must be the
+   supported GMSE01 USA Rev 0 image — the run verifies its SHA-256 and
+   fails with a clear message otherwise);
+3. the run downloads the image, validates it, generates the DolRecomp C
+   sources (`scripts/ci-prepare-game.sh`), recompiles `gGMSE01_recomp.so`
+   for Android arm64, and **bundles it into the APK** under
+   `assets/modules/`;
+4. the app extracts the bundled module to private storage on first launch —
+   no on-device module step needed.
+
+Notes on the URL: it must be a direct link (the file starts downloading
+immediately). GitHub release assets, S3/GCS signed links, and similar work;
+share-link pages (Google Drive web UI, Mega) do not. The downloaded ISO is
+only used inside the runner and is not committed anywhere.
+
+With the bundled module, the only remaining step on the device is
+importing your ISO through the app's setup dialog — everything else is in
+the APK.
 
 To activate it, move the file back into GitHub's workflow directory (the
 GitHub App used by the Arena agent lacks the `workflows` permission, so the
@@ -127,18 +152,17 @@ trigger a build manually from the Actions tab even without pushing.
 
 What the CI APK contains and does not contain:
 
-- **Contains**: the app, the JNI shim, and the statically linked
-  ModernGekko/Dolphin core (Vulkan + OpenSL ES + Pipes input).
-- **Does not contain**: the GMSE01 recompiled module and game data. The
-  module must be generated from your own disc (`scripts/prepare-game.sh`)
-  and provisioned on the device, exactly as with a locally built APK
-  (step "On-device provisioning" below). The CI build therefore proves the
-  whole pipeline compiles; gameplay acceptance still happens on your
-  device.
+- **Contains**: the app, the JNI shim, the statically linked
+  ModernGekko/Dolphin core (Vulkan + OpenSL ES + Pipes input), and — when
+  you supplied an ISO URL — the bundled `gGMSE01_recomp.so` module.
+- **Does not contain**: game data (the 1.4 GB image itself). With a
+  bundled module you only import your ISO on the device; without it, the
+  module must be generated locally (`scripts/prepare-game.sh`) and
+  provisioned on-device (step "On-device provisioning" below).
 
 The first CI run may need small fixes (archive names in
-`android-build-core.sh`, NDK version bumps) — the build log will say
-precisely what is missing.
+`android-build-core.sh`, NDK version bumps, clang availability for the
+module generation) — the build log will say precisely what is missing.
 
 ### On-device provisioning
 
