@@ -121,7 +121,7 @@ acceptance gate; source inspection alone is not recorded as a runtime pass:
 | Stored-data removal | Implemented in source | Retained image and extracted tree removed; save and unrelated preferences preserved |
 | Diagnostic privacy prompt | Implemented in source | Metadata disclosure appears before the share sheet; cancel shares nothing; confirmed snapshot excludes game data and saves |
 | Diagnostic path redaction | Implemented in source | New persistent messages replace current app-container and temporary prefixes |
-| Loading presentation polish | Visual iPad-Simulator acceptance passed; runtime VoiceOver pass open | Preparing runtime → Starting game → Waiting for first frame is readable with no fake percentage; first game output hides the loading presentation; an intentionally invalid module produces a readable alert and stops the indicator; the untouched build was reinstalled and rendered again |
+| Loading presentation polish | Visual iPad-Simulator acceptance passed; physical-device VoiceOver pass open because the installed iOS 26.5 Simulator image does not expose VoiceOver | Preparing runtime → Starting game → Waiting for first frame is readable with no fake percentage; first game output hides the loading presentation; an intentionally invalid module produces a readable alert and stops the indicator; the untouched build was reinstalled and rendered again |
 | iOS 16.0 / macOS 14.0 targets | Signed iOS app plist and app/module Mach-O metadata verify iOS 16.0; macOS 14.0 is configured | Run iOS 16 hardware acceptance; inspect the final macOS artifact and run oldest-target acceptance |
 
 The separate `SunPad.cpu_resource-2026-08-09-102551.ips` report observed 90
@@ -174,7 +174,10 @@ position. The final physical-iPad pass accepted the longer R slider, continuous
 pressure adjustment, run-and-spray behavior, grouped D-pad editing, and the
 adjusted iPad mapping. The iPad Simulator visually passed the honest loading
 phases, first-frame dismissal, and stopped-indicator error alert; runtime
-VoiceOver navigation, controller, and compact-iPhone acceptance remain open.
+VoiceOver navigation on physical hardware, controller, and compact-iPhone
+acceptance remain open. The host accessibility tree exposes the standard touch
+buttons and analog R value, but the installed iOS 26.5 Simulator image has no
+VoiceOver setting and therefore cannot replace a spoken-navigation run.
 
 A fresh local Release build also passed `scripts/package-ios.sh` and the IPA
 audit as `/private/tmp/SunPad-next-preview-unsigned.ipa`, SHA-256
@@ -185,7 +188,7 @@ tagged.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
-| Loading polish | Visual iPad-Simulator pass: honest phases appeared before game output; first output hid the presentation; an invalid-module copy stopped the indicator and showed a readable rejection alert; reinstalling the untouched build rendered again. Signed iPhoneOS build and in-place device launch also passed; runtime VoiceOver observation remains open | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
+| Loading polish | Visual iPad-Simulator pass: honest phases appeared before game output; first output hid the presentation; an invalid-module copy stopped the indicator and showed a readable rejection alert; reinstalling the untouched build rendered again. Host accessibility inspection exposes the standard controls and analog R value. Signed iPhoneOS build and in-place device launch also passed; physical-device VoiceOver observation remains open because this Simulator image does not expose VoiceOver | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
 | Grouped D-pad layout | Physical-iPad move/resize and gameplay accepted; it is the single standard D-pad layout path | Four directions move/resize/reset as one group; directional hit regions and rolling-direction behavior stay unchanged; compact-iPhone layout pass remains open |
 | Analog R touch | Physical-iPad animation, run-and-spray, pressure adjustment, continuous tracking, and full-pressure behavior accepted; it is the single standard R path | Accepted normalized position is the large-iPad default; minimum and maximum edge clamping and final-quarter haptic remain stable; compact-iPhone layout and gameplay pass remains open |
 | Physical controller mapping | Implemented in source; pure mapping/persistence test passed | A/B/X/Y/Z only; one-to-one conflict swap; reset/default/corrupt persistence; no stuck input while using the mapping menu; DualSense Bluetooth and USB preserve analog L/R pressure; sticks, D-pad, Start, left shoulder, connect/disconnect handoff, touch hiding, and Modern C-stick behavior remain unchanged |

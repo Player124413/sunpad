@@ -95,7 +95,8 @@ code-generating loader).
     phases. It uses no synthetic progress percentage and disappears only after
     the first measured game frame. Visual iPad-Simulator acceptance passed for
     the phase transition, first-frame dismissal, and stopped-indicator module
-    failure alert; a runtime VoiceOver navigation pass remains open.
+    failure alert. The installed iOS 26.5 Simulator image does not expose
+    VoiceOver, so a spoken-navigation pass remains open on physical hardware.
 
 ### Desktop (previously proven)
 
