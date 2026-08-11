@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img alt="Configured iOS 16+ target" src="https://img.shields.io/badge/configured%20iOS%20%2F%20iPadOS%20target-16%2B-0A84FF?logo=apple">
+  <img alt="iOS and iPadOS artifact target 16+" src="https://img.shields.io/badge/iOS%20%2F%20iPadOS%20artifact%20target-16%2B-0A84FF?logo=apple">
   <img alt="Configured macOS 14+ target" src="https://img.shields.io/badge/configured%20macOS%20target-14%2B-0A84FF?logo=apple">
   <img alt="Metal renderer" src="https://img.shields.io/badge/renderer-Metal-5E5CE6">
   <img alt="Ahead-of-time static recompilation" src="https://img.shields.io/badge/PowerPC-static%20recompilation-FF9F0A">
@@ -46,7 +46,7 @@ game module.
 | Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS; narrow A/B/X/Y/Z physical-button remapping is implemented in source and awaiting device acceptance |
 | Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
 | Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
-| Distribution | Unsigned developer-preview IPA for user-side signing; no game image, saves, signing material, TestFlight, or App Store release |
+| Distribution | Public download remains the earlier unsigned Preview 1 IPA; current branch improvements are unreleased; no game image, saves, signing material, TestFlight, or App Store release |
 
 The mobile development build has been signed, installed, and played on a
 12.9-inch iPad Pro (6th generation). Physical-device boot, Metal rendering,
