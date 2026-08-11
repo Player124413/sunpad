@@ -1,0 +1,95 @@
+# Android APK build on GitHub Actions.
+#
+# NOTE: this workflow is parked outside .github/workflows/ so that changes
+# to it can be pushed without the GitHub App "workflows" permission. Move
+# it to .github/workflows/android-build.yml to activate it.
+#
+# What this builds:
+#   - the ModernGekko / Dolphin-derived core for Android arm64-v8a
+#     (Vulkan + OpenSL ES, the SunPad 0001+0002 patches applied),
+#   - when you provide an ISO URL in the workflow_dispatch form: the GMSE01
+#     recompiled module, generated from your disc image and BUNDLED into
+#     the APK (the app extracts it to private storage on first launch),
+#   - the Kotlin app + JNI shim into an installable debug APK.
+#
+# Game data is never committed: the ISO is downloaded only for the run and
+# discarded afterwards. If no ISO URL is given (plain push), the APK is
+# built without the module and it must be provisioned on-device.
+name: Android build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      iso_url:
+        description: >-
+          Direct URL to your GMSE01 USA Rev 0 ISO (1.4 GB, SHA-256
+          67cec163...73e51d). Leave empty to build the APK without the game
+          module.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config clang
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK and platform
+        run: |
+          sdkmanager "ndk;26.3.11579264" "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+      - name: Bootstrap pinned patched dependencies
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/26.3.11579264
+        run: ./scripts/bootstrap-dependencies.sh
+
+      - name: Download and validate user-provided ISO
+        if: ${{ inputs.iso_url != '' }}
+        env:
+          ISO_URL: ${{ inputs.iso_url }}
+        run: |
+          curl -L --fail --retry 3 -o /tmp/gmse01.iso "$ISO_URL"
+          ls -l /tmp/gmse01.iso
+          echo "67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d  /tmp/gmse01.iso" | sha256sum -c -
+
+      - name: Generate GMSE01 module sources from the ISO
+        if: ${{ inputs.iso_url != '' }}
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/26.3.11579264
+        run: ./scripts/ci-prepare-game.sh /tmp/gmse01.iso
+
+      - name: Build Android core and provision the app
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/26.3.11579264
+          SUNPAD_BUNDLE_MODULE: "1"
+        run: ./scripts/android-build-core.sh
+
+      - name: Build APK and run unit tests
+        working-directory: android
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunpad-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
