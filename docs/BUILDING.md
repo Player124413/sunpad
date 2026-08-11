@@ -140,9 +140,10 @@ and provisioned separately into the development app container.
 
 ## Deployment targets and verification boundary
 
-The Xcode app, iOS core and iOS module configurations set iOS 16.0. The desktop
-core, generated module and macOS package configuration set macOS 14.0. These
-are configured targets only. The deployment-target fixes have not yet been
-validated across a fresh complete build by inspecting every final Mach-O and
-running on the oldest OS/hardware combination, so do not describe iOS 16 or
-macOS 14 compatibility as physically accepted yet.
+The Xcode app, iOS core and iOS module configurations set iOS 16.0. The signed
+iOS app plist and app/module Mach-O metadata have been inspected and record
+iOS 16.0; runtime acceptance on iOS 16 hardware remains open. The desktop core,
+generated module and macOS package configuration set macOS 14.0, but the final
+macOS artifact still needs equivalent inspection and oldest-target runtime
+acceptance. Do not describe either oldest-OS compatibility boundary as
+physically accepted yet.
