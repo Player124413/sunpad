@@ -22,6 +22,7 @@ namespace fs = std::filesystem;
 /* The ModernGekko runtime header is a C++ header; include it here only. */
 #include "moderngekko/runtime.hpp"
 
+#include "Core/Core.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/System.h"
 #include "VideoCommon/PerformanceMetrics.h"
@@ -29,6 +30,9 @@ namespace fs = std::filesystem;
 
 @interface SunPadCoreHost ()
 - (void)applyAspectRatioMode:(SunPadAspectRatioMode)mode;
+- (void)applySystemPauseState;
+- (void)scheduleSystemStateRetry;
+- (void)handleAudioSessionInterruption:(NSNotification *)notification;
 @end
 
 @implementation SunPadCoreHost {
@@ -41,6 +45,13 @@ namespace fs = std::filesystem;
     moderngekko::Runtime *_runtime;
     int _pipeFd;
     void (^_onError)(NSString *);
+    BOOL _applicationActive;
+    BOOL _audioInterrupted;
+    BOOL _runtimePausedForSystemEvent;
+    BOOL _audioSessionDeactivatedForSystemEvent;
+    BOOL _audioSessionNeedsReactivation;
+    BOOL _systemStateRetryScheduled;
+    NSUInteger _systemStateRetryAttempts;
 }
 
 - (instancetype)initWithLayer:(CAMetalLayer *)layer {
@@ -53,6 +64,18 @@ namespace fs = std::filesystem;
         _running = new std::atomic<bool>(false);
         _runtimeMutex = new std::mutex();
         _runtime = nullptr;
+        _applicationActive = UIApplication.sharedApplication.applicationState == UIApplicationStateActive;
+        _audioInterrupted = NO;
+        _runtimePausedForSystemEvent = NO;
+        _audioSessionDeactivatedForSystemEvent = NO;
+        _audioSessionNeedsReactivation = NO;
+        _systemStateRetryScheduled = NO;
+        _systemStateRetryAttempts = 0;
+        [[NSNotificationCenter defaultCenter]
+            addObserver:self
+               selector:@selector(handleAudioSessionInterruption:)
+                   name:AVAudioSessionInterruptionNotification
+                 object:AVAudioSession.sharedInstance];
     }
     return self;
 }
@@ -158,9 +181,19 @@ namespace fs = std::filesystem;
         config.graphics.backend = "Metal";
         config.headless = false;
         config.show_fps_in_title = false;
+        BOOL launchArgument60FPS =
+            [NSProcessInfo.processInfo.arguments containsObject:@"-sunpadExperimental60FPS"];
+        BOOL menuPreference60FPS = [SunPadSettings sharedSettings].experimental60FPS;
+        config.enable_gmse01_60fps = launchArgument60FPS || menuPreference60FPS;
         config.render_surface = (__bridge void *)_layer;
         config.module = moderngekko::ModuleSource::DynamicPath(
             modulePath.fileSystemRepresentation);
+
+        NSString *frameModeSource = launchArgument60FPS ? @"launch argument" :
+            (menuPreference60FPS ? @"menu preference" : @"default");
+        SunPadLog(@"runtime frame mode=%@ source=%@",
+                  config.enable_gmse01_60fps ? @"60 FPS experimental" : @"original 30 FPS",
+                  frameModeSource);
 
         auto created = moderngekko::Runtime::Create(std::move(config));
         if (!created) {
@@ -218,6 +251,13 @@ namespace fs = std::filesystem;
             SunPadLog(@"input pipe unavailable after wait errno=%d stopRequested=%d", errno,
                       _stopRequested->load());
 
+        // Run() marks the ModernGekko runtime active before booting. Re-apply
+        // any lifecycle state on the main queue so a resign-active event that
+        // arrived during startup cannot be lost.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self->_systemStateRetryAttempts = 0;
+            [self applySystemPauseState];
+        });
         auto result = created.runtime->Run();
         {
             std::scoped_lock lock(*_runtimeMutex);
@@ -334,6 +374,151 @@ namespace fs = std::filesystem;
         _gameThread->join();
     *_starting = false;
     *_running = false;
+    _runtimePausedForSystemEvent = NO;
+}
+
+- (void)pauseRuntimeForSystemEvent {
+    _applicationActive = NO;
+    _systemStateRetryAttempts = 0;
+    [self applySystemPauseState];
+}
+
+- (void)resumeRuntimeAfterSystemEvent {
+    _applicationActive = YES;
+    _systemStateRetryAttempts = 0;
+    [self applySystemPauseState];
+}
+
+- (void)applySystemPauseState {
+    BOOL shouldPause = !_applicationActive || _audioInterrupted;
+    if (shouldPause) {
+        _audioSessionNeedsReactivation = YES;
+        if (!_audioSessionDeactivatedForSystemEvent) {
+            NSError *audioError = nil;
+            [AVAudioSession.sharedInstance
+                setActive:NO
+               withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                     error:&audioError];
+            if (audioError) {
+                SunPadLog(@"audio session deactivation failed: %@", audioError);
+            } else {
+                _audioSessionDeactivatedForSystemEvent = YES;
+            }
+        }
+
+        if (_runtimePausedForSystemEvent)
+            return;
+
+        std::optional<moderngekko::RuntimeError> pauseError;
+        BOOL hadRuntime = NO;
+        BOOL corePaused = NO;
+        {
+            std::scoped_lock lock(*_runtimeMutex);
+            hadRuntime = _runtime != nullptr;
+            if (hadRuntime) {
+                pauseError = _runtime->Pause();
+                corePaused = !pauseError &&
+                    Core::GetState(Core::System::GetInstance()) == Core::State::Paused;
+            }
+        }
+        if (hadRuntime && corePaused) {
+            _runtimePausedForSystemEvent = YES;
+            _systemStateRetryAttempts = 0;
+            SunPadLog(@"runtime paused for system event");
+        } else {
+            if (_systemStateRetryAttempts == 0 && pauseError)
+                SunPadLog(@"runtime pause pending: %s", pauseError->message.c_str());
+            else if (_systemStateRetryAttempts == 0 && hadRuntime)
+                SunPadLog(@"runtime pause pending: core not yet pausable");
+            else if (_systemStateRetryAttempts == 0)
+                SunPadLog(@"runtime pause pending: runtime not created");
+            if (hadRuntime || _starting->load())
+                [self scheduleSystemStateRetry];
+        }
+        return;
+    }
+
+    if (_audioSessionNeedsReactivation) {
+        NSError *audioError = nil;
+        [AVAudioSession.sharedInstance setActive:YES error:&audioError];
+        if (audioError) {
+            if (_systemStateRetryAttempts == 0)
+                SunPadLog(@"audio session reactivation pending: %@", audioError);
+            [self scheduleSystemStateRetry];
+            return;
+        }
+        _audioSessionNeedsReactivation = NO;
+        _audioSessionDeactivatedForSystemEvent = NO;
+        _systemStateRetryAttempts = 0;
+        SunPadLog(@"audio session reactivated route=%@",
+                  AVAudioSession.sharedInstance.currentRoute.outputs.firstObject.portType ?: @"none");
+    }
+
+    if (!_runtimePausedForSystemEvent)
+        return;
+
+    std::optional<moderngekko::RuntimeError> resumeError;
+    BOOL hadRuntime = NO;
+    {
+        std::scoped_lock lock(*_runtimeMutex);
+        hadRuntime = _runtime != nullptr;
+        if (hadRuntime)
+            resumeError = _runtime->Resume();
+    }
+    if (hadRuntime && !resumeError) {
+        _runtimePausedForSystemEvent = NO;
+        _systemStateRetryAttempts = 0;
+        SunPadLog(@"runtime resumed after system event");
+    } else {
+        if (_systemStateRetryAttempts == 0 && resumeError)
+            SunPadLog(@"runtime resume pending: %s", resumeError->message.c_str());
+        if (hadRuntime || _starting->load())
+            [self scheduleSystemStateRetry];
+    }
+}
+
+- (void)scheduleSystemStateRetry {
+    static const NSUInteger kMaxSystemStateRetryAttempts = 20;
+    if (_systemStateRetryScheduled ||
+        _systemStateRetryAttempts >= kMaxSystemStateRetryAttempts)
+        return;
+    _systemStateRetryScheduled = YES;
+    ++_systemStateRetryAttempts;
+    __weak SunPadCoreHost *weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC),
+                   dispatch_get_main_queue(), ^{
+        SunPadCoreHost *strongSelf = weakSelf;
+        if (strongSelf == nil)
+            return;
+        strongSelf->_systemStateRetryScheduled = NO;
+        [strongSelf applySystemPauseState];
+    });
+}
+
+- (void)handleAudioSessionInterruption:(NSNotification *)notification {
+    NSDictionary *info = notification.userInfo;
+    AVAudioSessionInterruptionType type =
+        (AVAudioSessionInterruptionType)[info[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
+    if (type == AVAudioSessionInterruptionTypeBegan) {
+        SunPadLog(@"audio interruption began");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self->_audioInterrupted = YES;
+            self->_systemStateRetryAttempts = 0;
+            [self applySystemPauseState];
+        });
+        return;
+    }
+
+    AVAudioSessionInterruptionOptions options =
+        (AVAudioSessionInterruptionOptions)[info[AVAudioSessionInterruptionOptionKey]
+            unsignedIntegerValue];
+    BOOL shouldResume = (options & AVAudioSessionInterruptionOptionShouldResume) != 0;
+    SunPadLog(@"audio interruption ended shouldResume=%d", shouldResume);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self->_audioInterrupted = NO;
+        self->_systemStateRetryAttempts = 0;
+        [self applySystemPauseState];
+    });
 }
 
 - (void)restartWithGameRoot:(NSString *)gameRoot
@@ -361,6 +546,7 @@ namespace fs = std::filesystem;
 }
 
 - (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
     if (_gameThread->joinable())
         [self stop];
     if (_pipeFd >= 0)

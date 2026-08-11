@@ -125,8 +125,14 @@ codesign --force --sign <development-identity> --timestamp=none \
   --identifier gGMSE01_recomp /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib
 xcrun devicectl device copy to --device <device-udid> \
   --domain-type appDataContainer --domain-identifier com.sunpad.SunPad \
-  --source /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib --destination tmp
+  --source /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib \
+  --destination tmp/gGMSE01_recomp.dylib
 ```
+
+For repeat deployments, use `scripts/deploy-ios-device.sh`. It performs the
+in-place app update, provisions the signed module at that exact path, and then
+launches SunPad. Installing the app alone clears its temporary module and will
+leave the build unable to start.
 
 This produces a locally signed source/developer build, not a distributable
 IPA. The runtime module is generated from the user's local disc-derived inputs
@@ -134,9 +140,10 @@ and provisioned separately into the development app container.
 
 ## Deployment targets and verification boundary
 
-The Xcode app, iOS core and iOS module configurations set iOS 16.0. The desktop
-core, generated module and macOS package configuration set macOS 14.0. These
-are configured targets only. The deployment-target fixes have not yet been
-validated across a fresh complete build by inspecting every final Mach-O and
-running on the oldest OS/hardware combination, so do not describe iOS 16 or
-macOS 14 compatibility as physically accepted yet.
+The Xcode app, iOS core and iOS module configurations set iOS 16.0. The signed
+iOS app plist and app/module Mach-O metadata have been inspected and record
+iOS 16.0; runtime acceptance on iOS 16 hardware remains open. The desktop core,
+generated module and macOS package configuration set macOS 14.0, but the final
+macOS artifact still needs equivalent inspection and oldest-target runtime
+acceptance. Do not describe either oldest-OS compatibility boundary as
+physically accepted yet.

@@ -28,6 +28,10 @@ typedef NS_ENUM(NSInteger, SunPadAspectRatioMode) {
 /* Optional developer performance overlay. Off by default for normal play. */
 @property(nonatomic, assign) BOOL showFPSCounter;
 
+/* Experimental GMSE01 60 FPS boot mode. Off by default and applied only on
+ * the next app launch. */
+@property(nonatomic, assign) BOOL experimental60FPS;
+
 /* Touch-control presentation. */
 @property(nonatomic, assign) BOOL hideTouchControlsWhenControllerConnected;
 /* Reverses only the C-stick horizontal axis for modern camera movement. */

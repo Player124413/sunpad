@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 ## Principles
 
@@ -121,7 +121,8 @@ acceptance gate; source inspection alone is not recorded as a runtime pass:
 | Stored-data removal | Implemented in source | Retained image and extracted tree removed; save and unrelated preferences preserved |
 | Diagnostic privacy prompt | Implemented in source | Metadata disclosure appears before the share sheet; cancel shares nothing; confirmed snapshot excludes game data and saves |
 | Diagnostic path redaction | Implemented in source | New persistent messages replace current app-container and temporary prefixes |
-| iOS 16.0 / macOS 14.0 targets | Configured in build scripts | Fresh-build every final artifact, inspect recorded minimum OS, then run oldest-target acceptance |
+| Loading presentation polish | Visual iPad-Simulator acceptance passed; physical-device VoiceOver pass open because the installed iOS 26.5 Simulator image does not expose VoiceOver | Preparing runtime → Starting game → Waiting for first frame is readable with no fake percentage; first game output hides the loading presentation; an intentionally invalid module produces a readable alert and stops the indicator; the untouched build was reinstalled and rendered again |
+| iOS 16.0 / macOS 14.0 targets | Signed iOS app plist and app/module Mach-O metadata verify iOS 16.0; macOS 14.0 is configured | Run iOS 16 hardware acceptance; inspect the final macOS artifact and run oldest-target acceptance |
 
 The separate `SunPad.cpu_resource-2026-08-09-102551.ips` report observed 90
 CPU seconds over 118 seconds (76% average) and memory growth from 327.67 MB to
@@ -141,6 +142,94 @@ app-data domain than the requested nested destination. Final recovery uploaded
 the runtime module first, then overlaid `Library` with
 `--remove-existing-content false`. Do not use the removing form for save,
 settings, module, or game-data updates.
+
+## Stability-improvement acceptance queue (2026-08-11)
+
+No row below is a pass until the required source, automated, and physical
+evidence has been recorded.
+
+Current branch evidence: `./scripts/check-repository.sh` passes; the
+ModernGekko iPhoneOS core and provisioned archive rebuild successfully; and a
+generic iPhoneOS Debug app containing the signed local GMSE01 module passes
+`codesign --verify --deep --strict`. The signed app plist and the app/module
+`LC_BUILD_VERSION` commands all report an iOS 16.0 minimum. A clean
+iPad-simulator core/module/app
+build also reaches a live game frame, exposes the analog-R accessibility value,
+and shows one outlined D-pad group with one persisted size control in editor
+mode. On the physical iPad, a normal device reboot recovered a wedged
+CoreDevice file service; the current save and preferences were backed up, the
+signed app was installed in place, and the app relaunched successfully. The
+post-install save hash is identical. The preferences retain the same values;
+only the two absolute game-data paths changed to the new iOS app-container
+UUID. A later repeat deployment exposed two concrete module-provisioning bugs:
+the generated plist could still point at the Simulator module, and copying to
+`tmp` reported success while leaving that directory empty. The corrected
+`scripts/deploy-ios-device.sh` installed in place, copied the signed module to
+`tmp/gGMSE01_recomp.dylib`, and launched in one operation. The device log then
+recorded `moduleExists=1`, `runtime created`, input connection, and a sample of
+29.9 FPS / 0.995 speed ratio / nominal thermal state at 2× render scale. The GCI
+save remained byte-identical; all non-D-pad control origins remained exact,
+while the D-pad's stored directional centers reflect its accepted grouped
+position. The final physical-iPad pass accepted the longer R slider, continuous
+pressure adjustment, run-and-spray behavior, grouped D-pad editing, and the
+adjusted iPad mapping. The iPad Simulator visually passed the honest loading
+phases, first-frame dismissal, and stopped-indicator error alert; runtime
+VoiceOver navigation on physical hardware, controller, and compact-iPhone
+acceptance remain open. The host accessibility tree exposes the standard touch
+buttons and analog R value, but the installed iOS 26.5 Simulator image has no
+VoiceOver setting and therefore cannot replace a spoken-navigation run.
+
+A fresh local Release build was repackaged with the current install guidance
+and passed `scripts/package-ios.sh` and the IPA audit as
+`/private/tmp/SunPad-next-preview-unsigned-20260811-1539.ipa`, SHA-256
+`cb67e5b856b652b6fa4957ec1eeb908fc1697105fb75af438db33c2fded4f919`.
+The app executable hash is
+`422fe3646e730ec3f05b47d58e10d0ed3e55d0065fa8dac9ce7c86d1ea63ac1f`
+and the native-module hash is
+`4598ad489a01f0831563c777dbb1bf65fc8a833dae405b585993eb5be36d0f24`.
+The audit enforces iOS 16.0 in the app plist and both app/module Mach-O files.
+This is pre-menu-toggle private candidate evidence only; it has not been
+published or tagged and must be rebuilt before any release.
+An exact-HEAD rebuild after the controller-test, package-audit, and
+documentation commits produced
+`/private/tmp/SunPad-next-preview-unsigned-20260811-1601.ipa` with the same
+SHA-256, confirming those non-product changes did not alter the candidate
+bytes.
+
+Signed physical-iPad build `72fb44a` was then installed in place with the
+post-install module-provisioning helper. The device log recorded
+`moduleExists=1`, `runtime created`, and the original 30 FPS mode at near-1.0
+speed ratio; the recognized GCI remained byte-identical at SHA-256
+`a8f5ea47227478c9acc010f9ba99fe5a0c493ff2e044c1f56b6a8952badce932`,
+and the accepted touch layout persisted. The user enabled the new menu option,
+fully relaunched, and judged experimental 60 FPS unusable for normal play. The
+exact symptom breakdown was not captured, so the mode remains exposed only as
+a warned, default-off experiment and is excluded from support claims.
+
+Final reviewed source commit `41362de` built successfully in Release mode and
+passed `scripts/package-ios.sh` plus the strengthened IPA audit as the private
+artifact `/private/tmp/SunPad-merge-review-41362de.ipa`, SHA-256
+`6c59e7b05badda11a716b3883edf809e96892d73df92d69344e2ab1bac5f50a6`.
+It is an unpublished merge-review artifact only; no tag, GitHub release, or
+public asset was created. Rebuild from merged `main` before the later IPA
+republication so the public artifact and release notes point at the merge
+commit rather than this branch commit.
+
+| Area | Current state | Required acceptance |
+|---|---|---|
+| Loading polish | Visual iPad-Simulator pass: honest phases appeared before game output; first output hid the presentation; an invalid-module copy stopped the indicator and showed a readable rejection alert; reinstalling the untouched build rendered again. Host accessibility inspection exposes the standard controls and analog R value. Signed iPhoneOS build and in-place device launch also passed; physical-device VoiceOver observation remains open because this Simulator image does not expose VoiceOver | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
+| Lifecycle and audio session | iPhoneOS and iPad-Simulator builds pass. Both an already-running cycle and a targeted startup-window cycle confirmed an actual core pause before suspension, bounded pending-state retries, the two-second save grace, Speaker-route reactivation, same-PID resume, renewed rendering, and 30 FPS / near-1.0 speed | Physical-device background/foreground with byte-identical recognized GCI; real audio interruption begin/end and audible recovery; no stuck input or audio; repeat after an in-game save |
+| Grouped D-pad layout | Physical-iPad move/resize and gameplay accepted; it is the single standard D-pad layout path | Four directions move/resize/reset as one group; directional hit regions and rolling-direction behavior stay unchanged; compact-iPhone layout pass remains open |
+| Analog R touch | Physical-iPad animation, run-and-spray, pressure adjustment, continuous tracking, and full-pressure behavior accepted; it is the single standard R path | Accepted normalized position is the large-iPad default; minimum and maximum edge clamping and final-quarter haptic remain stable; compact-iPhone layout and gameplay pass remains open |
+| Physical controller mapping | Implemented in source; pure mapping/persistence test passed | A/B/X/Y/Z only; one-to-one conflict swap; reset/default/corrupt persistence; no stuck input while using the mapping menu; DualSense Bluetooth and USB preserve analog L/R pressure; sticks, D-pad, Start, left shoulder, connect/disconnect handoff, touch hiding, and Modern C-stick behavior remain unchanged |
+| 60 FPS | A default-off **Experimental 60 FPS (Restart Required)** three-dot-menu option persists the next-launch boot mode; original 30 FPS remains the default. A 14-minute-49-second physical-iPad telemetry pass held 59.7–60.0 FPS near real-time speed at 2× and nominal thermals except one recovered 42.1 FPS / 0.897 sample; the only two SMC demotions map exactly to the intentional Gecko code patches; returning to 30 FPS preserved save/preferences. A subsequent hands-on physical-iPad test judged the mode unusable for normal play | Keep the mode default-off, restart-required, visibly experimental, and excluded from support claims. If revisited, capture the specific gameplay timing, physics, animation, cutscene, audio, controller, save/reload, memory, and graceful-shutdown failures before changing the patch |
+| iPad/iPhone slowdown | One August 11 iPad reproduction: visible 30 FPS counter remained at 30 while gameplay/dialogue slowed; captured log proves default 30 FPS mode but lacks performance samples | New builds log FPS, speed ratio, EFB, render scale, thermal state, and Low Power Mode every 10 seconds; reproduce and share the bounded log before timing/render changes. For external reports also capture release/commit, device/OS, scene, controller, elapsed time, and any `cpu_resource` report |
+| LiveContainer | Unverified; one failure report with no environment or error evidence. Current upstream-source review shows recursive 64-bit Mach-O signing and guest `NSBundle.mainBundle` redirection; the audited candidate contains the module and its relative name, so no package-layout defect is proven | Exact IPA/hash, LiveContainer version/source, device/OS, signing/JIT settings, JIT-less diagnostic and Force Re-sign result, app and nested-module signature evidence, visible launch/error, LiveContainer output, SunPad log, and comparison with a normal re-signed install |
+| Wii U adapter / HD textures / Vision Pro / Apple TV / Eclipse or mods | Backlog research | Separate feasibility result and legal/data boundary before implementation; no generic Dolphin/GameController capability counts as SunPad runtime acceptance |
+
+Preserve and read back device saves, controller settings, touch preferences,
+and imported game data around every physical update. Compilation, installation,
+a PID, or a clean log alone does not satisfy hands-on input or gameplay rows.
 
 ## Audio root-cause verification (2026-08-08, Apple Silicon Mac)
 

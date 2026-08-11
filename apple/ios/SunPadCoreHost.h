@@ -26,6 +26,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)stop;
 
+/* Pauses/resumes emulation around iOS lifecycle and audio interruptions.
+ * Resume also reactivates the app's AVAudioSession. */
+- (void)pauseRuntimeForSystemEvent;
+- (void)resumeRuntimeAfterSystemEvent;
+
 /* Stops the current runtime (if any) and boots the game at gameRoot with the
  * given module. Used after an imported image is extracted. */
 - (void)restartWithGameRoot:(NSString *)gameRoot
@@ -47,7 +52,7 @@ NS_ASSUME_NONNULL_BEGIN
 /* Current emulated FPS from the runtime (0 if not booted). */
 - (double)currentFPS;
 
-/* Emulation speed relative to real time (100 = full speed). */
+/* Emulation speed ratio relative to real time (1.0 = full speed). */
 - (double)currentSpeed;
 
 /* Internal (EFB) render resolution, e.g. "640x528". */

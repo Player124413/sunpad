@@ -1,6 +1,6 @@
 # iOS and iPadOS
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 ## Current status
 
@@ -16,9 +16,8 @@ desktop and the Simulator; fresh physical-device audio re-acceptance is open.
 ## What is built
 
 - `SunPad.xcodeproj` — universal iPhone/iPad target (device family 1,2),
-  arm64, configured for an iOS 16.0 deployment target. Fresh final-artifact
-  inspection and oldest-OS runtime acceptance remain before claiming verified
-  iOS 16 compatibility.
+  arm64. The signed app plist and app/module Mach-O metadata verify an iOS 16.0
+  minimum; oldest-OS runtime acceptance remains before claiming compatibility.
 - `SunPadCoreHost` — boots the game on a background thread, owns the
   CAMetalLayer surface and the pipe-input bridge.
 - `SunPadGameOverlay` — BellPad-inspired overlay: three-dot menu with render
@@ -89,8 +88,12 @@ headlessly for verification.
 
 ## Lifecycle and controls
 
-- App delegate pause/resume/background hooks exist but are stubs; save
-  flushing before suspension is the next milestone.
+- App lifecycle hooks now pause the runtime and deactivate audio before
+  backgrounding, allow Dolphin's existing one-second GCI-folder flush thread a
+  two-second background grace window, then reactivate audio and resume the same
+  runtime on return. The iPad Simulator passed a background/foreground cycle on
+  one process with continued 30 FPS/full-speed telemetry. Physical save
+  readback and a real audio-interruption replay remain acceptance gates.
 - GameController polling merges into the same normalized input snapshot as
   touch; touch controls auto-hide when a controller is connected. The persisted
   **Modern C-stick L/R** setting reverses only the horizontal C-stick axis for
@@ -116,9 +119,11 @@ headlessly for verification.
     --destination /tmp/sunpad-app-logs
   ```
 
-- While the runtime is booting, a visible startup message replaces the former
-  unexplained black surface. It disappears after the first measured game
-  frame.
+- While the runtime is booting, an activity indicator and honest **Preparing
+  runtime**, **Starting game**, and **Waiting for first frame** phases replace
+  the former unexplained black surface. There is no synthetic percentage. The
+  loading presentation disappears after the first measured game frame and
+  stops on a visible boot error.
 - Development provisioning must use non-removing CoreDevice directory
   overlays. On the current iOS/Xcode combination,
   `--remove-existing-content true` cleared unrelated app-container data even
@@ -130,6 +135,60 @@ headlessly for verification.
   `NSUserDefaults` and deletes the temporary payload. This avoids direct plist
   replacement being discarded by iOS's preferences daemon during a
   device-settings recovery.
+
+## Approved mobile improvement boundaries
+
+These are ordered implementation and acceptance boundaries, not claims about
+the public Preview 1 release. Loading, touch, and narrow controller-mapping
+source work is present on the development branch. Large-iPad touch is accepted;
+the loading presentation has visual Simulator acceptance, while a runtime
+VoiceOver pass on physical hardware, compact-iPhone touch, and physical
+controller mapping remain open. The installed iOS 26.5 Simulator image does not
+expose a VoiceOver setting:
+
+1. **Evidence intake first.** The reported iPhone 15 Pro slowdown is blocked on
+   the offered SunPad log plus scene, render scale, controller, thermal state,
+   and elapsed-time details. The LiveContainer failure is blocked on the
+   checklist in [INSTALL_IPA.md](INSTALL_IPA.md). Do not guess at either cause.
+2. **Loading polish only.** Improve the existing presentation while keeping the
+   current startup architecture and first-frame completion signal.
+3. **Touch controls.** Grouped D-pad editing and the wider analog R slider are
+   the accepted standard path. The August 11 physical-iPad mapping is the
+   large-iPad default; compact-iPhone defaults remain unchanged pending their
+   own play pass.
+4. **Physical-controller mapping.** Limit v1 to GameCube A/B/X/Y/Z mapped
+   one-to-one across the four face buttons and right shoulder. Preserve sticks,
+   D-pad, Start, left shoulder, analog L/R pressure, touch/controller merging,
+   and controller handoff. Reset and corrupt persistence must return to the
+   current default mapping.
+5. **60 FPS testing.** Any mode is default-off, requires a restart, and is not
+   supported until gameplay timing, physics, animation, cutscenes, audio,
+   controller polling, save/reload, and a sustained hands-on physical gameplay
+   session pass. The three-dot menu exposes **Experimental 60 FPS (Restart
+   Required)** and applies changes only on the next launch; original 30 FPS
+   remains the default. Although the telemetry/thermal subgate passed, a later
+   hands-on physical-iPad test judged the mode unusable for normal play. Keep
+   it explicitly experimental; live switching is out of scope.
+6. **Backlog only.** Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV,
+   and Eclipse/general mods require separate feasibility work. The current iOS
+   GameCube-adapter backend is a no-op, and generic runtime capabilities do not
+   prove any of these product paths.
+
+### LiveContainer evidence checklist
+
+Record the exact IPA filename/hash, LiveContainer version and source, device
+and OS, signing and JIT settings, signatures reported for both `SunPad` and
+`gGMSE01_recomp.dylib`, whether the app window appears, the first visible error,
+LiveContainer output, and a privacy-reviewed SunPad diagnostic log. Compare the
+same IPA with a normal re-signed install. Never attach the game image, extracted
+assets, saves, signing material, or a device container.
+
+Current upstream source recursively sends every regular 64-bit Mach-O in a
+guest bundle through its signer and redirects `NSBundle.mainBundle` to that
+guest. The audited SunPad candidate includes the root-level module and its
+relative configuration name. No package-layout defect is therefore proven;
+collect the JIT-less diagnostic and Force Re-sign result in addition to the
+evidence above before changing SunPad's loader or package.
 
 ## HDMI + wired-controller crash investigation (2026-08-09)
 
@@ -152,6 +211,7 @@ used an out-of-bounds pointer and the stack protector aborted the app.
 
 The mirrored HDMI display does not appear anywhere in the exception path and
 is not needed to reproduce the defect. It may have made the relaunch look worse
-because a connected controller hides the touch overlay, leaving only the black
-Metal boot surface. External-display mode changes are now logged so a separate
-display failure can be distinguished if one occurs later.
+because a connected controller hides the touch overlay while the Metal runtime
+starts. The app now keeps explicit loading phases visible until the first game
+frame. External-display mode changes are logged so a separate display failure
+can be distinguished if one occurs later.

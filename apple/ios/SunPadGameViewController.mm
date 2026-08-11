@@ -1,6 +1,7 @@
 #import "SunPadGameViewController.h"
 
 #import "SunPadCoreHost.h"
+#import "SunPadControllerMapping.h"
 #import "SunPadDiagnostics.h"
 #import "SunPadDiscExtractor.h"
 #import "SunPadGameOverlay.h"
@@ -19,6 +20,49 @@
 static constexpr CGFloat SunPadDrawableScale = 1.0;
 static NSString *const SunPadSupportedImageSHA256 =
     @"67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d";
+
+static NSString *SunPadThermalStateName(NSProcessInfoThermalState state) {
+    switch (state) {
+    case NSProcessInfoThermalStateFair: return @"fair";
+    case NSProcessInfoThermalStateSerious: return @"serious";
+    case NSProcessInfoThermalStateCritical: return @"critical";
+    case NSProcessInfoThermalStateNominal:
+    default: return @"nominal";
+    }
+}
+
+static SunPadPhysicalControllerButton SunPadPressedFaceButtons(GCExtendedGamepad *pad) {
+    uint8_t buttons = 0;
+    if (pad.buttonA.isPressed) buttons |= SunPadPhysicalControllerButtonA;
+    if (pad.buttonB.isPressed) buttons |= SunPadPhysicalControllerButtonB;
+    if (pad.buttonX.isPressed) buttons |= SunPadPhysicalControllerButtonX;
+    if (pad.buttonY.isPressed) buttons |= SunPadPhysicalControllerButtonY;
+    if (pad.rightShoulder.isPressed) buttons |= SunPadPhysicalControllerButtonRightShoulder;
+    return (SunPadPhysicalControllerButton)buttons;
+}
+
+static NSString *SunPadGameButtonName(uint16_t gameButton) {
+    switch (gameButton) {
+    case SunPadButtonA: return @"GameCube A";
+    case SunPadButtonB: return @"GameCube B";
+    case SunPadButtonX: return @"GameCube X";
+    case SunPadButtonY: return @"GameCube Y";
+    case SunPadButtonZ: return @"GameCube Z";
+    default: return @"Unknown";
+    }
+}
+
+static SunPadPhysicalControllerButton SunPadMappedPhysicalButton(
+    SunPadControllerButtonMapping mapping, uint16_t gameButton) {
+    switch (gameButton) {
+    case SunPadButtonA: return mapping.gameA;
+    case SunPadButtonB: return mapping.gameB;
+    case SunPadButtonX: return mapping.gameX;
+    case SunPadButtonY: return mapping.gameY;
+    case SunPadButtonZ: return mapping.gameZ;
+    default: return (SunPadPhysicalControllerButton)0;
+    }
+}
 
 static NSString *_Nullable SunPadSHA256ForFile(NSString *path, NSError **error) {
     NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath:path];
@@ -96,7 +140,9 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     dispatch_source_t _controllerTimer;
     UILabel *_fpsLabel;
     UILabel *_bootStatusLabel;
+    UIActivityIndicatorView *_bootActivityIndicator;
     CGSize _lastLoggedDrawableSize;
+    NSUInteger _performanceLogSeconds;
 }
 
 - (BOOL)shouldAutorotate {
@@ -131,12 +177,20 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     _overlay.delegate = self;
     [self.view addSubview:_overlay];
 
+    _bootActivityIndicator = [[UIActivityIndicatorView alloc]
+        initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+    _bootActivityIndicator.color = UIColor.whiteColor;
+    _bootActivityIndicator.hidesWhenStopped = YES;
+    [_bootActivityIndicator startAnimating];
+    [self.view addSubview:_bootActivityIndicator];
+
     _bootStatusLabel = [UILabel new];
     _bootStatusLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.9];
     _bootStatusLabel.font = [UIFont systemFontOfSize:18.0 weight:UIFontWeightSemibold];
     _bootStatusLabel.textAlignment = NSTextAlignmentCenter;
     _bootStatusLabel.numberOfLines = 0;
-    _bootStatusLabel.text = @"Starting SunPad…\nThis can take a little while.";
+    _bootStatusLabel.text = @"Preparing runtime…";
+    _bootStatusLabel.accessibilityLabel = @"Preparing runtime";
     [self.view addSubview:_bootStatusLabel];
 
     _fpsLabel = [UILabel new];
@@ -209,6 +263,13 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
         return hostPath;
 
     NSString *deviceRelativePath = configuration[@"DeviceModuleRelativePath"];
+#if !TARGET_OS_SIMULATOR
+    // Simulator and device provisioning share a generated development plist.
+    // A Simulator build may therefore leave DevModulePath pointing at the Mac.
+    // Device installs always use this stable, sandbox-relative module name.
+    if (deviceRelativePath.length == 0)
+        deviceRelativePath = @"gGMSE01_recomp.dylib";
+#endif
     if (deviceRelativePath.length > 0) {
         NSString *temporaryPath =
             [NSTemporaryDirectory() stringByAppendingPathComponent:deviceRelativePath];
@@ -243,8 +304,24 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
 
 - (void)updateFPSLabel {
     double fps = [_coreHost currentFPS];
-    if (fps > 0.0)
+    if (fps > 0.0) {
         _bootStatusLabel.hidden = YES;
+        [_bootActivityIndicator stopAnimating];
+        if (++_performanceLogSeconds >= 10) {
+            _performanceLogSeconds = 0;
+            NSProcessInfo *processInfo = NSProcessInfo.processInfo;
+            SunPadLog(@"performance fps=%.1f speedRatio=%.3f efb=%@ renderScale=%ld thermal=%@ lowPower=%d",
+                      fps, [_coreHost currentSpeed], [_coreHost efbResolution],
+                      (long)[SunPadSettings sharedSettings].renderScale,
+                      SunPadThermalStateName(processInfo.thermalState),
+                      processInfo.isLowPowerModeEnabled);
+        }
+    } else if (_coreHost != nil && !_bootStatusLabel.hidden &&
+               _bootActivityIndicator.isAnimating) {
+        _performanceLogSeconds = 0;
+        _bootStatusLabel.text = @"Waiting for first frame…";
+        _bootStatusLabel.accessibilityLabel = @"Waiting for first frame";
+    }
 
     if (![SunPadSettings sharedSettings].showFPSCounter) {
         _fpsLabel.hidden = YES;
@@ -309,12 +386,9 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
         // made random button edges overflow the old fixed-size pipe buffer.
         SunPadInputState state = {};
         state.connected = 1;
-        if (pad.buttonA.isPressed) state.buttons |= SunPadButtonA;
-        if (pad.buttonB.isPressed) state.buttons |= SunPadButtonB;
-        if (pad.buttonX.isPressed) state.buttons |= SunPadButtonX;
-        if (pad.buttonY.isPressed) state.buttons |= SunPadButtonY;
+        state.buttons |= SunPadApplyControllerButtonMapping(
+            [SunPadControllerMappingStore mapping], SunPadPressedFaceButtons(pad));
         if (pad.leftShoulder.isPressed) state.buttons |= SunPadButtonL;
-        if (pad.rightShoulder.isPressed) state.buttons |= SunPadButtonZ;
         if (pad.buttonMenu.isPressed) state.buttons |= SunPadButtonStart;
         if (pad.dpad.up.isPressed) state.buttons |= SunPadButtonDpadUp;
         if (pad.dpad.down.isPressed) state.buttons |= SunPadButtonDpadDown;
@@ -355,8 +429,10 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     }
     CGRect safe = UIEdgeInsetsInsetRect(self.view.bounds, self.view.safeAreaInsets);
     CGFloat statusWidth = MIN(420.0, CGRectGetWidth(safe) - 32.0);
+    _bootActivityIndicator.center = CGPointMake(CGRectGetMidX(safe),
+                                                CGRectGetMidY(safe) - 34.0);
     _bootStatusLabel.frame = CGRectMake(CGRectGetMidX(safe) - statusWidth / 2.0,
-                                        CGRectGetMidY(safe) - 40.0,
+                                        CGRectGetMidY(safe) - 4.0,
                                         statusWidth, 80.0);
     _fpsLabel.frame = CGRectMake(CGRectGetMinX(safe) + 8.0,
                                  CGRectGetMinY(safe) + 8.0,
@@ -375,11 +451,17 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
 - (void)startGameIfProvisioned {
     if (_coreHost != nil)
         return;
+    _bootStatusLabel.hidden = NO;
+    _bootStatusLabel.text = @"Preparing runtime…";
+    _bootStatusLabel.accessibilityLabel = @"Preparing runtime";
+    [_bootActivityIndicator startAnimating];
     NSBundle *bundle = NSBundle.mainBundle;
     NSString *configPath = [bundle pathForResource:@"dev-config" ofType:@"plist"];
     if (configPath == nil) {
         SunPadLog(@"boot skipped reason=dev config missing");
         _bootStatusLabel.text = @"SunPad needs its local game data before it can start.";
+        _bootStatusLabel.accessibilityLabel = _bootStatusLabel.text;
+        [_bootActivityIndicator stopAnimating];
         return; // Not a dev-provisioned build; import flow is a later stage.
     }
     NSDictionary *config = [NSDictionary dictionaryWithContentsOfFile:configPath];
@@ -410,6 +492,8 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
         SunPadLog(@"boot skipped gameRoot=%d modulePath=%d",
                   gameRoot.length > 0, modulePath.length > 0);
         _bootStatusLabel.text = @"SunPad could not find its local game data.";
+        _bootStatusLabel.accessibilityLabel = _bootStatusLabel.text;
+        [_bootActivityIndicator stopAnimating];
         return;
     }
 
@@ -459,6 +543,8 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
               [fileManager fileExistsAtPath:modulePath], NSStringFromCGSize(layer.drawableSize));
     _coreHost = [[SunPadCoreHost alloc] initWithLayer:layer];
     __weak SunPadGameViewController *weakSelf = self;
+    _bootStatusLabel.text = @"Starting game…";
+    _bootStatusLabel.accessibilityLabel = @"Starting game";
     [_coreHost startWithGameRoot:gameRoot
                    discImagePath:discImagePath ?: @""
                       modulePath:modulePath
@@ -470,6 +556,8 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
 
 - (void)presentBootError:(NSString *)message {
     _bootStatusLabel.text = @"SunPad could not start.";
+    _bootStatusLabel.accessibilityLabel = _bootStatusLabel.text;
+    [_bootActivityIndicator stopAnimating];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"SunPad could not start"
                                                                    message:message
                                                             preferredStyle:UIAlertControllerStyleAlert];
@@ -495,6 +583,14 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
 - (void)publishMergedInput {
     SunPadInputState merged = [[SunPadInputMixer sharedMixer] consumeMergedState];
     [_coreHost publishInput:merged];
+}
+
+- (void)pauseRuntimeForApplicationLifecycle {
+    [_coreHost pauseRuntimeForSystemEvent];
+}
+
+- (void)resumeRuntimeForApplicationLifecycle {
+    [_coreHost resumeRuntimeAfterSystemEvent];
 }
 
 #pragma mark - SunPadGameOverlayDelegate
@@ -531,6 +627,106 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     _bootStatusLabel.hidden = NO;
     _bootStatusLabel.text = @"Stored game data removed.\nUse the ••• menu to import it again.";
     SunPadLog(@"stored game data removed");
+}
+
+- (void)gameOverlayRequestsControllerMapping:(SunPadGameOverlay *)overlay {
+    (void)overlay;
+    [self presentControllerMapping];
+}
+
+- (GCController *)firstExtendedController {
+    for (GCController *controller in GCController.controllers) {
+        if (controller.extendedGamepad != nil)
+            return controller;
+    }
+    return nil;
+}
+
+- (void)presentControllerMapping {
+    GCController *controller = [self firstExtendedController];
+    SunPadControllerButtonMapping mapping = [SunPadControllerMappingStore mapping];
+    NSString *controllerName = controller.vendorName ?: controller.productCategory;
+    NSString *message = controllerName.length > 0
+        ? [NSString stringWithFormat:@"Connected: %@\nOnly A, B, X, Y, and Z are remapped. Analog triggers, sticks, D-pad, Start, and L stay unchanged.",
+                                     controllerName]
+        : @"No extended controller is connected. You can review or reset the saved mapping; connect a controller to test it.";
+    if (controller.physicalInputProfile.hasRemappedElements) {
+        message = [message stringByAppendingString:
+            @"\n\niOS controller customization is also active, so Apple applies that remap before SunPad."];
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"Controller Button Mapping"
+                                            message:message
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    const uint16_t gameButtons[] = {
+        SunPadButtonA, SunPadButtonB, SunPadButtonX, SunPadButtonY, SunPadButtonZ,
+    };
+    __weak SunPadGameViewController *weakSelf = self;
+    for (uint16_t gameButton : gameButtons) {
+        NSString *title = [NSString stringWithFormat:@"%@ — %@",
+            SunPadGameButtonName(gameButton),
+            SunPadPhysicalControllerButtonName(
+                SunPadMappedPhysicalButton(mapping, gameButton))];
+        [alert addAction:[UIAlertAction actionWithTitle:title
+                                                style:UIAlertActionStyleDefault
+                                              handler:^(__kindof UIAlertAction *action) {
+            (void)action;
+            [weakSelf presentPhysicalButtonChoicesForGameButton:gameButton];
+        }]];
+    }
+    [alert addAction:[UIAlertAction actionWithTitle:@"Reset to Default"
+                                            style:UIAlertActionStyleDestructive
+                                          handler:^(__kindof UIAlertAction *action) {
+        (void)action;
+        [SunPadControllerMappingStore reset];
+        [[SunPadInputMixer sharedMixer] clearInputFromTouch:NO];
+        SunPadLog(@"controller mapping reset to default");
+        [weakSelf presentControllerMapping];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"Done"
+                                            style:UIAlertActionStyleCancel
+                                          handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)presentPhysicalButtonChoicesForGameButton:(uint16_t)gameButton {
+    UIAlertController *alert = [UIAlertController
+        alertControllerWithTitle:SunPadGameButtonName(gameButton)
+                         message:@"Choose the physical controller button. If it is already assigned, the two assignments swap."
+                  preferredStyle:UIAlertControllerStyleAlert];
+    const SunPadPhysicalControllerButton physicalButtons[] = {
+        SunPadPhysicalControllerButtonA,
+        SunPadPhysicalControllerButtonB,
+        SunPadPhysicalControllerButtonX,
+        SunPadPhysicalControllerButtonY,
+        SunPadPhysicalControllerButtonRightShoulder,
+    };
+    __weak SunPadGameViewController *weakSelf = self;
+    for (SunPadPhysicalControllerButton physicalButton : physicalButtons) {
+        [alert addAction:[UIAlertAction
+            actionWithTitle:SunPadPhysicalControllerButtonName(physicalButton)
+                      style:UIAlertActionStyleDefault
+                    handler:^(__kindof UIAlertAction *action) {
+            (void)action;
+            SunPadControllerButtonMapping mapping = [SunPadControllerMappingStore mapping];
+            mapping = SunPadControllerButtonMappingByAssigning(
+                mapping, physicalButton, gameButton);
+            [SunPadControllerMappingStore setMapping:mapping];
+            [[SunPadInputMixer sharedMixer] clearInputFromTouch:NO];
+            SunPadLog(@"controller mapping changed game=%@ physical=%@",
+                      SunPadGameButtonName(gameButton),
+                      SunPadPhysicalControllerButtonName(physicalButton));
+            [weakSelf presentControllerMapping];
+        }]];
+    }
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                            style:UIAlertActionStyleCancel
+                                          handler:^(__kindof UIAlertAction *action) {
+        (void)action;
+        [weakSelf presentControllerMapping];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)presentGameDataImport {
