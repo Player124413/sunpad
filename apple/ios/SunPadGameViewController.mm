@@ -263,6 +263,13 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
         return hostPath;
 
     NSString *deviceRelativePath = configuration[@"DeviceModuleRelativePath"];
+#if !TARGET_OS_SIMULATOR
+    // Simulator and device provisioning share a generated development plist.
+    // A Simulator build may therefore leave DevModulePath pointing at the Mac.
+    // Device installs always use this stable, sandbox-relative module name.
+    if (deviceRelativePath.length == 0)
+        deviceRelativePath = @"gGMSE01_recomp.dylib";
+#endif
     if (deviceRelativePath.length > 0) {
         NSString *temporaryPath =
             [NSTemporaryDirectory() stringByAppendingPathComponent:deviceRelativePath];

@@ -85,26 +85,31 @@ Last updated: 2026-08-11
     beyond both edges, and gives the final quarter to the full-press detent.
     Run-and-spray, full press, cancel, multitouch, and restart need a fresh
     physical acceptance pass.
-16. **Physical controller remapping is intentionally narrow** — remapping is
+16. **Development device installs must provision the native module after each
+    app update** — use `scripts/deploy-ios-device.sh`. The helper installs in
+    place, copies the signed module to `tmp/gGMSE01_recomp.dylib`, and launches
+    only after both steps complete. The runtime also falls back to this stable
+    device filename when a Simulator-generated development plist is present.
+17. **Physical controller remapping is intentionally narrow** — remapping is
     is implemented for GameCube A/B/X/Y/Z across the four face buttons and
     right shoulder. Conflicts swap one-to-one and reset restores defaults.
     Sticks, D-pad, Start, left shoulder, and analog triggers stay fixed. Source
     regression tests pass; DualSense pressure, connect/disconnect handoff, and
     Apple system-remapping interaction require physical acceptance.
-17. **60 FPS is test-only** — Sunshine's confirmed baseline is approximately
+18. **60 FPS is test-only** — Sunshine's confirmed baseline is approximately
     30 FPS. A hidden `-sunpadExperimental60FPS` boot path exists for controlled
     GMSE01 testing; there is no user-facing option. It remains default-off and
     restart-required, and live switching is out of scope. Do not call it
     supported until gameplay speed, physics, animation, cutscenes, audio,
     controller polling, save/reload, static-recomp fallback/SMC behavior,
     thermals, and a sustained physical-device session pass.
-18. **One severe iPad slowdown is captured but not diagnosed** — the August 11
+19. **One severe iPad slowdown is captured but not diagnosed** — the August 11
     physical session stayed on the default 30 FPS path and the on-screen counter
     continued to report 30 FPS while gameplay and dialogue became visibly slow.
     The prior log lacked speed, thermal, and render-state samples. New builds
     record one bounded performance line every 10 seconds; reproduce and share
     that log before changing timing or renderer behavior.
-19. **Platform/accessory/mod requests are backlog research** — the Wii U
+20. **Platform/accessory/mod requests are backlog research** — the Wii U
     GameCube Adapter is disabled by the current iOS no-op backend. HD textures,
     Vision Pro, Apple TV, and Eclipse/general mods have no accepted mobile
     product path yet. Keep them separate from the current stability work and

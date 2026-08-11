@@ -125,8 +125,14 @@ codesign --force --sign <development-identity> --timestamp=none \
   --identifier gGMSE01_recomp /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib
 xcrun devicectl device copy to --device <device-udid> \
   --domain-type appDataContainer --domain-identifier com.sunpad.SunPad \
-  --source /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib --destination tmp
+  --source /tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib \
+  --destination tmp/gGMSE01_recomp.dylib
 ```
+
+For repeat deployments, use `scripts/deploy-ios-device.sh`. It performs the
+in-place app update, provisions the signed module at that exact path, and then
+launches SunPad. Installing the app alone clears its temporary module and will
+leave the build unable to start.
 
 This produces a locally signed source/developer build, not a distributable
 IPA. The runtime module is generated from the user's local disc-derived inputs

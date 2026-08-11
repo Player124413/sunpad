@@ -161,7 +161,17 @@ CoreDevice file service; the current save and preferences were backed up, the
 signed app was installed in place, and the app relaunched successfully. The
 post-install save hash is identical. The preferences retain the same values;
 only the two absolute game-data paths changed to the new iOS app-container
-UUID. Physical touch, controller, loading, and gameplay acceptance remain open.
+UUID. A later repeat deployment exposed two concrete module-provisioning bugs:
+the generated plist could still point at the Simulator module, and copying to
+`tmp` reported success while leaving that directory empty. The corrected
+`scripts/deploy-ios-device.sh` installed in place, copied the signed module to
+`tmp/gGMSE01_recomp.dylib`, and launched in one operation. The device log then
+recorded `moduleExists=1`, `runtime created`, input connection, and a sample of
+29.9 FPS / 0.995 speed ratio / nominal thermal state at 2× render scale. The GCI
+save remained byte-identical; all non-D-pad control origins remained exact,
+while the D-pad's stored directional centers reflect its accepted grouped
+position. Physical touch, controller, loading, and gameplay acceptance remain
+open.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
