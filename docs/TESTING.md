@@ -206,6 +206,15 @@ fully relaunched, and judged experimental 60 FPS unusable for normal play. The
 exact symptom breakdown was not captured, so the mode remains exposed only as
 a warned, default-off experiment and is excluded from support claims.
 
+Final reviewed source commit `41362de` built successfully in Release mode and
+passed `scripts/package-ios.sh` plus the strengthened IPA audit as the private
+artifact `/private/tmp/SunPad-merge-review-41362de.ipa`, SHA-256
+`6c59e7b05badda11a716b3883edf809e96892d73df92d69344e2ab1bac5f50a6`.
+It is an unpublished merge-review artifact only; no tag, GitHub release, or
+public asset was created. Rebuild from merged `main` before the later IPA
+republication so the public artifact and release notes point at the merge
+commit rather than this branch commit.
+
 | Area | Current state | Required acceptance |
 |---|---|---|
 | Loading polish | Visual iPad-Simulator pass: honest phases appeared before game output; first output hid the presentation; an invalid-module copy stopped the indicator and showed a readable rejection alert; reinstalling the untouched build rendered again. Host accessibility inspection exposes the standard controls and analog R value. Signed iPhoneOS build and in-place device launch also passed; physical-device VoiceOver observation remains open because this Simulator image does not expose VoiceOver | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
