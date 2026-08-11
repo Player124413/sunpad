@@ -50,11 +50,24 @@ verify_patch_scope() {
   # Checks that every locally changed file in the checkout is covered by the
   # given patches (all of them together — later snapshots build on earlier
   # ones, so files touched by 0001 must be allowed when verifying 0002).
-  local checkout=$1 extra_allowed=${2:-}
-  shift 2
+  # Usage: verify_patch_scope <checkout> [--allow <path>] <patch>...
+  local checkout=$1
+  shift
+  local extra_allowed=""
+  local patches=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --allow) extra_allowed=$2; shift 2 ;;
+      *) patches+=("$1"); shift ;;
+    esac
+  done
+  if (( ${#patches[@]} == 0 )); then
+    echo "verify_patch_scope: no patches given for $checkout" >&2
+    exit 1
+  fi
   local allowed=""
   local patch
-  for patch in "$@"; do
+  for patch in "${patches[@]}"; do
     allowed="$allowed
 $(awk '/^diff --git / {sub(/^b\//, "", $4); print $4}' "$patch")"
   done
@@ -120,7 +133,7 @@ apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.pa
 apply_patch_once "$MG/vendor/dolphin" \
   "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch"
 
-verify_patch_scope "$MG" vendor/dolphin \
+verify_patch_scope "$MG" --allow vendor/dolphin \
   "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch" \
   "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch"
 verify_patch_scope "$MG/vendor/dolphin" \
