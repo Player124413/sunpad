@@ -181,13 +181,15 @@ VoiceOver setting and therefore cannot replace a spoken-navigation run.
 
 A fresh local Release build was repackaged with the current install guidance
 and passed `scripts/package-ios.sh` and the IPA audit as
-`/private/tmp/SunPad-next-preview-unsigned-20260811.ipa`, SHA-256
-`0d407e2729480bdfc67fa7922e4986c633b0cf39d462f713c44ffaf23deff8a9`.
-The app and native-module hashes are byte-identical to the prior candidate;
-only packaged documentation changed. The audit enforces iOS 16.0 in the app
-plist and both app/module Mach-O files. This is private candidate evidence only;
-it has not been published or tagged. It predates the lifecycle source change
-below and is no longer the current-code candidate.
+`/private/tmp/SunPad-next-preview-unsigned-20260811-1539.ipa`, SHA-256
+`cb67e5b856b652b6fa4957ec1eeb908fc1697105fb75af438db33c2fded4f919`.
+The app executable hash is
+`422fe3646e730ec3f05b47d58e10d0ed3e55d0065fa8dac9ce7c86d1ea63ac1f`
+and the native-module hash is
+`4598ad489a01f0831563c777dbb1bf65fc8a833dae405b585993eb5be36d0f24`.
+The audit enforces iOS 16.0 in the app plist and both app/module Mach-O files.
+This is current-code private candidate evidence only; it has not been
+published, tagged, installed, or launched on a physical device.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
