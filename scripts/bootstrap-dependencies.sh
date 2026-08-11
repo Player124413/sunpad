@@ -110,21 +110,13 @@ ensure_checkout https://github.com/ExpansionPak/ModernGekko-Template.git "$TPL" 
 require_clean_checkout "$TPL"
 
 git -C "$MG" submodule update --init vendor/dolphin
-REQUIRED_DOLPHIN_SUBMODULES=(
-  DolRecomp
-  Externals/SDL/SDL Externals/SFML/SFML Externals/bzip2/bzip2
-  Externals/cpp-optparse/cpp-optparse Externals/cubeb/cubeb
-  Externals/curl/curl Externals/enet/enet Externals/fmt/fmt
-  Externals/glslang/glslang Externals/hidapi/hidapi-src
-  Externals/imgui/imgui Externals/implot/implot Externals/libspng/libspng
-  Externals/libusb/libusb Externals/lz4/lz4
-  Externals/minizip-ng/minizip-ng Externals/pugixml/pugixml
-  Externals/spirv_cross/SPIRV-Cross Externals/tinygltf/tinygltf
-  Externals/watcher/watcher Externals/xxhash/xxHash
-  Externals/zlib-ng/zlib-ng Externals/zstd/zstd
-)
-git -C "$MG/vendor/dolphin" submodule update --init "${REQUIRED_DOLPHIN_SUBMODULES[@]}"
-git -C "$MG/vendor/dolphin/Externals/cubeb/cubeb" submodule update --init --recursive
+
+# Initialize ALL of the vendored Dolphin submodules recursively. A curated
+# allow-list proved fragile: Dolphin's CMake references submodules outside
+# the list (cpp-ipc, expr, ...), and a missing one aborts the configure
+# ("does not contain a CMakeLists.txt"). Everything not built is disabled
+# by the CMake flags, so the extra checkouts are harmless.
+git -C "$MG/vendor/dolphin" submodule update --init --recursive
 
 actual_dolphin=$(git -C "$MG/vendor/dolphin" rev-parse HEAD)
 if [[ "$actual_dolphin" != "$DOLPHIN_REV" ]]; then
@@ -139,14 +131,9 @@ apply_patch_once "$MG/vendor/dolphin" \
   "Source/Core/DolphinNoGUI/PlatformIOS.mm"
 
 # Android runtime deltas (0002): ANativeWindow platform, SunPad OpenSL ES
-# audio wiring, and the Pipes-only input stance. The Vulkan backend needs
-# the Vulkan-Headers/VMA/libadrenotools submodules, so they are initialized
-# only when an Android NDK is available on this machine.
-if [[ -n "${ANDROID_NDK_HOME:-}${ANDROID_NDK_ROOT:-}" ]]; then
-  git -C "$MG/vendor/dolphin" submodule update --init \
-    Externals/Vulkan-Headers Externals/VulkanMemoryAllocator \
-    Externals/libadrenotools
-fi
+# audio wiring, and the Pipes-only input stance. The Vulkan backend's
+# submodules (Vulkan-Headers, VulkanMemoryAllocator, libadrenotools) are
+# already initialized by the recursive update above.
 apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch" \
   "CMakeLists.txt::MODERNGEKKO_HAVE_ANDROID"
 apply_patch_once "$MG/vendor/dolphin" \
