@@ -141,9 +141,8 @@ headlessly for verification.
 
 ## Approved mobile improvement boundaries
 
-These are ordered implementation and acceptance boundaries, not claims about
-the public Preview 1 release. Loading, touch, and narrow controller-mapping
-source work is present on the development branch. Large-iPad touch is accepted;
+These are ordered implementation and acceptance boundaries for follow-up work
+after the public Preview 2 release. Large-iPad touch is accepted;
 the loading presentation has visual Simulator acceptance, while a runtime
 VoiceOver pass on physical hardware, compact-iPhone touch, and physical
 controller mapping remain open. The installed iOS 26.5 Simulator image does not

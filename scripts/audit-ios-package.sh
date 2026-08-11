@@ -48,6 +48,8 @@ vtool -show-build "$module" | grep -Eq 'minos +16\.0$' || fail "module minimum O
   fail "unexpected bundle identifier"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")" = 0.1.0 ]] ||
   fail "unexpected app version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")" = 2 ]] ||
+  fail "unexpected app build number"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")" = 16.0 ]] ||
   fail "Info.plist minimum OS is not iOS 16.0"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :UIFileSharingEnabled' "$app/Info.plist")" = true ]] ||
