@@ -42,10 +42,14 @@ module="$app/gGMSE01_recomp.dylib"
 [[ "$(lipo -archs "$module")" = arm64 ]] || fail "module is not arm64-only"
 vtool -show-build "$executable" | grep -Eq 'platform +IOS$' || fail "app is not an iPhoneOS product"
 vtool -show-build "$module" | grep -Eq 'platform +IOS$' || fail "module is not an iPhoneOS product"
+vtool -show-build "$executable" | grep -Eq 'minos +16\.0$' || fail "app minimum OS is not iOS 16.0"
+vtool -show-build "$module" | grep -Eq 'minos +16\.0$' || fail "module minimum OS is not iOS 16.0"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Info.plist")" = com.sunpad.SunPad ]] ||
   fail "unexpected bundle identifier"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")" = 0.1.0 ]] ||
   fail "unexpected app version"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")" = 16.0 ]] ||
+  fail "Info.plist minimum OS is not iOS 16.0"
 [[ ! -d "$app/_CodeSignature" && ! -f "$app/embedded.mobileprovision" ]] ||
   fail "unsigned package contains signing material"
 codesign --verify --strict "$app" >/dev/null 2>&1 && fail "app is still signed"

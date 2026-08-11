@@ -178,7 +178,9 @@ acceptance remain open.
 A fresh local Release build also passed `scripts/package-ios.sh` and the IPA
 audit as `/private/tmp/SunPad-next-preview-unsigned.ipa`, SHA-256
 `55271a029dbb73bbd06c41ce7036517d5831d1221374e2f330d5a52fc41a5b0e`.
-This is private candidate evidence only; it has not been published or tagged.
+The audit now enforces iOS 16.0 in the app plist and both app/module Mach-O
+files. This is private candidate evidence only; it has not been published or
+tagged.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
