@@ -47,9 +47,18 @@ apply_patch_once() {
 }
 
 verify_patch_scope() {
-  local checkout=$1 patch=$2 extra_allowed=${3:-}
-  local allowed changed
-  allowed=$(awk '/^diff --git / {sub(/^b\//, "", $4); print $4}' "$patch")
+  # Checks that every locally changed file in the checkout is covered by the
+  # given patches (all of them together — later snapshots build on earlier
+  # ones, so files touched by 0001 must be allowed when verifying 0002).
+  local checkout=$1 extra_allowed=${2:-}
+  shift 2
+  local allowed=""
+  local patch
+  for patch in "$@"; do
+    allowed="$allowed
+$(awk '/^diff --git / {sub(/^b\//, "", $4); print $4}' "$patch")"
+  done
+  local changed
   while IFS= read -r changed; do
     [[ -z "$changed" || "$changed" == "$extra_allowed" ]] && continue
     if ! grep -Fqx "$changed" <<<"$allowed"; then
@@ -97,10 +106,6 @@ fi
 apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch"
 apply_patch_once "$MG/vendor/dolphin" \
   "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch"
-verify_patch_scope "$MG" \
-  "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch" vendor/dolphin
-verify_patch_scope "$MG/vendor/dolphin" \
-  "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch"
 
 # Android runtime deltas (0002): ANativeWindow platform, SunPad OpenSL ES
 # audio wiring, and the Pipes-only input stance. The Vulkan backend needs
@@ -114,9 +119,12 @@ fi
 apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch"
 apply_patch_once "$MG/vendor/dolphin" \
   "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch"
-verify_patch_scope "$MG" \
-  "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch" vendor/dolphin
+
+verify_patch_scope "$MG" vendor/dolphin \
+  "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch" \
+  "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch"
 verify_patch_scope "$MG/vendor/dolphin" \
+  "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch" \
   "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch"
 
 echo "SunPad dependencies are pinned and patched."
