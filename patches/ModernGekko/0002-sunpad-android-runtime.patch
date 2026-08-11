@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index ecbfc47..b9b457b 100644
+index ecbfc47..37aaf72 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -115,7 +115,11 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
@@ -30,7 +30,46 @@ index ecbfc47..b9b457b 100644
          # SunPad's CAMetalLayer platform for iOS (no macOS windowing APIs)
          target_sources(moderngekko PRIVATE
              vendor/dolphin/Source/Core/DolphinNoGUI/PlatformIOS.mm)
-@@ -371,7 +381,9 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+@@ -292,24 +302,29 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+         target_compile_definitions(moderngekko PRIVATE HAVE_X11=1)
+     endif()
+     if(TARGET PkgConfig::WAYLAND)
++        # All Wayland pieces are optional: a missing wayland-scanner or
++        # protocol XML must not fail the configure (SunPad's desktop build
++        # only generates the recompiled module and does not need Wayland).
+         find_program(MODERNGEKKO_WAYLAND_SCANNER wayland-scanner
+-            HINTS "${_moderngekko_sdk_usr}/bin" REQUIRED)
++            HINTS "${_moderngekko_sdk_usr}/bin")
+         find_file(MODERNGEKKO_XDG_SHELL_XML xdg-shell.xml
+             HINTS "${_moderngekko_sdk_usr}/share/wayland-protocols/stable/xdg-shell"
+-                  "/usr/share/wayland-protocols/stable/xdg-shell"
+-            REQUIRED)
++                  "/usr/share/wayland-protocols/stable/xdg-shell")
+         find_file(MODERNGEKKO_XDG_DECORATION_XML xdg-decoration-unstable-v1.xml
+             HINTS "${_moderngekko_sdk_usr}/share/wayland-protocols/unstable/xdg-decoration"
+-                  "/usr/share/wayland-protocols/unstable/xdg-decoration"
+-            REQUIRED)
++                  "/usr/share/wayland-protocols/unstable/xdg-decoration")
+         find_file(MODERNGEKKO_IDLE_INHIBIT_XML idle-inhibit-unstable-v1.xml
+             HINTS "${_moderngekko_sdk_usr}/share/wayland-protocols/unstable/idle-inhibit"
+-                  "/usr/share/wayland-protocols/unstable/idle-inhibit"
+-            REQUIRED)
++                  "/usr/share/wayland-protocols/unstable/idle-inhibit")
+         find_library(MODERNGEKKO_WAYLAND_CURSOR_LIBRARY wayland-cursor
+-            HINTS "${_moderngekko_sdk_lib}" REQUIRED)
++            HINTS "${_moderngekko_sdk_lib}")
+         find_library(MODERNGEKKO_XKBCOMMON_LIBRARY xkbcommon
+-            HINTS "${_moderngekko_sdk_lib}" REQUIRED)
++            HINTS "${_moderngekko_sdk_lib}")
++    endif()
++    if(TARGET PkgConfig::WAYLAND AND MODERNGEKKO_WAYLAND_SCANNER AND
++       MODERNGEKKO_XDG_SHELL_XML AND MODERNGEKKO_XDG_DECORATION_XML AND
++       MODERNGEKKO_IDLE_INHIBIT_XML AND MODERNGEKKO_WAYLAND_CURSOR_LIBRARY AND
++       MODERNGEKKO_XKBCOMMON_LIBRARY)
+         set(_moderngekko_wayland_generated
+             "${CMAKE_CURRENT_BINARY_DIR}/generated/wayland")
+         set(_moderngekko_xdg_header
+@@ -371,7 +386,9 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
              "${MODERNGEKKO_WAYLAND_CURSOR_LIBRARY}"
              "${MODERNGEKKO_XKBCOMMON_LIBRARY}")
          target_compile_definitions(moderngekko PRIVATE HAVE_WAYLAND=1)
@@ -41,7 +80,7 @@ index ecbfc47..b9b457b 100644
          if(MODERNGEKKO_FRONTEND_SDK)
              target_link_directories(moderngekko PRIVATE "${_moderngekko_sdk_lib}")
          endif()
-@@ -403,7 +415,11 @@ target_link_libraries(moderngekko-module-info
+@@ -403,7 +420,11 @@ target_link_libraries(moderngekko-module-info
      PRIVATE ModernGekko::Runtime
  )
  
