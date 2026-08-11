@@ -1,3 +1,7 @@
+# NOTE: this workflow is temporarily parked outside .github/workflows/ so
+# that changes to it can be pushed without the GitHub App "workflows"
+# permission. Move it back to .github/workflows/repository-checks.yml to
+# re-enable CI; the android-patches job is already included.
 name: Repository checks
 
 on:
@@ -14,6 +18,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Repository safety and focused tests
         run: ./scripts/check-repository.sh
+
+  android-patches:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Android runtime patches reproduce from pinned revisions
+        run: SUNPAD_NETWORK_TESTS=1 ./tests/test-android-patches.sh
 
   patch-reproducibility:
     runs-on: macos-15

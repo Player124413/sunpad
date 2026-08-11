@@ -146,8 +146,10 @@ Adreno custom drivers, and the Android paths in the Dolphin CMake.
 ```text
 SunPadActivity
   ├── SurfaceView ──> ANativeWindow ──> Dolphin Vulkan backend
-  ├── TouchControlsView (BellPad-style overlay, landscape)
-  ├── GamepadReader (KeyEvent + joystick MotionEvents)
+  ├── TouchControlsView (BellPad-style overlay, landscape,
+  │                      drag-and-resize layout editor)
+  ├── GamepadReader (KeyEvent + joystick MotionEvents,
+  │                  A/B/X/Y/Z remapping layer)
   ├── merged GameInputState (OR buttons, strongest-wins sticks)
   │        └── ~60 Hz Choreographer loop → nativePublishInput
   │                 └── Pipes FIFO → Dolphin pipe device
@@ -162,17 +164,49 @@ libsunpad.so
 The game module (`gGMSE01_recomp.so`) is loaded at runtime with `dlopen`
 from app-private storage, exactly like the iOS `gGMSE01_recomp.dylib`.
 
+## Touch layout editor
+
+Ported from the iOS overlay. From the menu choose **Edit touch layout…**:
+
+- drag any control (move stick, camera stick, A/B/X/Y/Z, L, R, Start) to a
+  new position; positions persist as normalized origins
+  (`SunPadControlOrigins` in app preferences, keyed like the iOS app);
+- the grouped D-pad moves as one group and persists under
+  `SunPadExperimentalDPadOriginKey`;
+- tap a control to resize it (per-control scale 0.6–1.75, persisted in
+  `SunPadControlSizeScales`; the D-pad group uses
+  `SunPadExperimentalDPadScaleKey`);
+- the editor bar at the bottom offers **Reset** (restores every position and
+  size to defaults) and **Done**;
+- while editing, touch input is suppressed and every editable control gets a
+  selection border (yellow, blue when selected).
+
+## Gamepad remapping
+
+Ported from `apple/shared/SunPadControllerMapping.mm` to
+`com.sunpad.android.ControllerMapping` with identical semantics and the same
+regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
+
+- only A, B, X, Y, and the right shoulder (GameCube Z by default) are
+  remappable; sticks, D-pad, Start, L, and analog triggers keep their
+  BellPad direct mappings (right shoulder = Z, trigger axes = L/R pressure);
+- **Controller button mapping…** in the menu lists each GameCube button with
+  its current physical assignment; choosing one opens the five physical
+  options; assigning an already-used button swaps the two assignments;
+  **Reset to Default** restores A/B/X/Y + right-shoulder = Z;
+- the mapping persists in `SunPadControllerMappingV1` and applies live to
+  the merged input on the next frame (the Pipes device input is unaffected).
+
 ## Current boundaries and known gaps
 
 - **No acceptance run**: nothing in `android/` has been compiled or booted on
   a device or emulator yet. The runtime patches are verified to apply at the
   pinned revisions (CI runs the network-mode patch test); the app compiles
   in principle but awaits a first NDK/Gradle build and hardware acceptance.
-- **Layout editing** (drag controls around, as in the iOS app) is not
-  implemented; the overlay uses a fixed BellPad-style layout with opacity and
-  size settings.
-- **Gamepad remapping** (the iOS controller-mapping screen) is not ported;
-  the default Android gamepad mapping is fixed.
+- The CI workflow is parked at `ci/repository-checks.yml` (outside
+  `.github/workflows/` so it can be pushed without the GitHub App
+  "workflows" permission); move it back to
+  `.github/workflows/repository-checks.yml` to re-enable checks.
 - **Saves**: Dolphin save files under the user directory are preserved by the
   removal flow (only imported game data is removed), matching iOS behavior.
 - **OpenGL ES fallback**: `graphics.backend` is hardcoded to `"Vulkan"` in

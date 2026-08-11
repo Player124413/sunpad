@@ -18,11 +18,13 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.PopupMenu
 import android.widget.SeekBar
+import android.view.InputDevice
 import android.widget.TextView
 import android.widget.Toast
 import com.sunpad.android.input.GamepadReader
 import com.sunpad.android.input.TouchControlsView
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * SunPad Android main activity: hosts the game Surface handed to the Vulkan
@@ -36,7 +38,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private lateinit var surfaceView: SurfaceView
     private lateinit var controls: TouchControlsView
     private lateinit var hud: TextView
-    private val gamepad = GamepadReader()
+    private lateinit var gamepad: GamepadReader
 
     private val merged = GameInputState()
     private val touchState = GameInputState()
@@ -54,6 +56,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         importer = GameDataImporter(this)
+        gamepad = GamepadReader(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setImmersive()
 
@@ -66,6 +69,10 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         controls = TouchControlsView(this)
         controls.listener = object : TouchControlsView.Listener {
             override fun onMenuTap() = showMenu()
+
+            override fun onResizeRequested(controlId: String, currentScale: Float) {
+                showResizeDialog(controlId, currentScale)
+            }
         }
         rootView.addView(controls, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -283,9 +290,12 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         menu.menu.add(0, MENU_OPACITY, 2, "Control opacity…")
         menu.menu.add(0, MENU_SIZE, 3, "Control size…")
         menu.menu.add(0, MENU_CSTICK, 4, "Modern C-stick (flip horizontal)")
-        menu.menu.add(0, MENU_HUD, 5, if (hudVisible) "Hide diagnostics" else "Show diagnostics")
-        menu.menu.add(0, MENU_IMPORT, 6, "Import game data…")
-        menu.menu.add(0, MENU_QUIT, 7, "Quit")
+        menu.menu.add(0, MENU_EDIT_LAYOUT, 5, "Edit touch layout…")
+        menu.menu.add(0, MENU_RESET_LAYOUT, 6, "Reset touch layout…")
+        menu.menu.add(0, MENU_MAPPING, 7, "Controller button mapping…")
+        menu.menu.add(0, MENU_HUD, 8, if (hudVisible) "Hide diagnostics" else "Show diagnostics")
+        menu.menu.add(0, MENU_IMPORT, 9, "Import game data…")
+        menu.menu.add(0, MENU_QUIT, 10, "Quit")
         val cStickItem = menu.menu.getItem(4)
         cStickItem.isCheckable = true
         cStickItem.isChecked = prefs.getBoolean("modernCStick", false)
@@ -307,6 +317,12 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
                     prefs.edit().putBoolean("modernCStick", on).apply()
                     SunPadNative.nativeSetModernCStick(on)
                 }
+                MENU_EDIT_LAYOUT -> {
+                    controls.editingLayout = true
+                    Toast.makeText(this, "Drag controls • tap one to resize", Toast.LENGTH_SHORT).show()
+                }
+                MENU_RESET_LAYOUT -> confirmResetLayout()
+                MENU_MAPPING -> showMappingDialog()
                 MENU_HUD -> toggleHud()
                 MENU_IMPORT -> showSetupDialog()
                 MENU_QUIT -> finish()
@@ -398,6 +414,111 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         SunPadNative.nativePublishInput(merged)
     }
 
+
+    // ------------------------------------------------------------------ layout editing
+
+    private fun confirmResetLayout() {
+        AlertDialog.Builder(this)
+            .setTitle("Reset Touch Control Layout?")
+            .setMessage("All control positions and sizes, including the grouped D-pad, return to their defaults.")
+            .setPositiveButton("Reset") { _, _ -> controls.resetLayout() }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showResizeDialog(controlId: String, currentScale: Float) {
+        showSeekDialog(
+            "${controlLabel(controlId)} size",
+            60..175,
+            (currentScale * 100f).roundToInt().coerceIn(60, 175),
+        ) { value ->
+            controls.setSizeScale(controlId, value / 100f)
+        }
+    }
+
+    private fun controlLabel(controlId: String): String = when (controlId) {
+        TouchControlsView.ID_MOVE -> "Move stick"
+        TouchControlsView.ID_C -> "Camera stick"
+        TouchControlsView.ID_DPAD_GROUP -> "D-Pad"
+        else -> "Control $controlId"
+    }
+
+    // ------------------------------------------------------------------ controller mapping
+
+    private val gameButtons = listOf(
+        SunPadButtons.A, SunPadButtons.B, SunPadButtons.X,
+        SunPadButtons.Y, SunPadButtons.Z,
+    )
+
+    private fun gameButtonName(gameBit: Int): String = when (gameBit) {
+        SunPadButtons.A -> "GameCube A"
+        SunPadButtons.B -> "GameCube B"
+        SunPadButtons.X -> "GameCube X"
+        SunPadButtons.Y -> "GameCube Y"
+        SunPadButtons.Z -> "GameCube Z"
+        else -> "Unknown"
+    }
+
+    private fun connectedControllerName(): String? {
+        for (id in InputDevice.getDeviceIds()) {
+            val device = InputDevice.getDevice(id) ?: continue
+            if ((device.sources and InputDevice.SOURCE_GAMEPAD) != 0)
+                return device.name
+        }
+        return null
+    }
+
+    private fun showMappingDialog() {
+        val mapping = ControllerMapping.load(this)
+        val controllerName = connectedControllerName()
+        val message = if (controllerName != null)
+            "Connected: $controllerName\nOnly A, B, X, Y, and Z are remapped. " +
+            "Analog triggers, sticks, D-pad, Start, and L stay unchanged."
+        else
+            "No gamepad is connected. You can review or reset the saved " +
+            "mapping; connect a controller to test it."
+        val items = ArrayList<String>()
+        for (gameBit in gameButtons) {
+            val physical = mapping.physicalFor(gameBit)
+            items.add("${gameButtonName(gameBit)} — ${physical?.label ?: "?"}")
+        }
+        items.add("Reset to Default")
+        items.add("Done")
+        AlertDialog.Builder(this)
+            .setTitle("Controller Button Mapping")
+            .setMessage(message)
+            .setItems(items.toTypedArray()) { _, which ->
+                when {
+                    which < gameButtons.size -> showPhysicalChoices(gameButtons[which])
+                    which == gameButtons.size -> {
+                        ControllerMapping.reset(this)
+                        gamepad.reloadMapping()
+                        Toast.makeText(this, "Controller mapping reset to default", Toast.LENGTH_SHORT).show()
+                        showMappingDialog()
+                    }
+                    else -> { /* Done */ }
+                }
+            }
+            .show()
+    }
+
+    private fun showPhysicalChoices(gameBit: Int) {
+        AlertDialog.Builder(this)
+            .setTitle(gameButtonName(gameBit))
+            .setMessage("Choose the physical controller button. If it is already " +
+                        "assigned, the two assignments swap.")
+            .setItems(PhysicalButton.ALL.map { it.label }.toTypedArray()) { _, which ->
+                val physical = PhysicalButton.ALL[which]
+                val mapping = ControllerMapping.assign(
+                    ControllerMapping.load(this), physical, gameBit)
+                ControllerMapping.save(this, mapping)
+                gamepad.reloadMapping()
+                showMappingDialog()
+            }
+            .setNegativeButton("Cancel") { _, _ -> showMappingDialog() }
+            .show()
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private fun setImmersive() {
@@ -426,8 +547,11 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         private const val MENU_OPACITY = 3
         private const val MENU_SIZE = 4
         private const val MENU_CSTICK = 5
-        private const val MENU_HUD = 6
-        private const val MENU_IMPORT = 7
-        private const val MENU_QUIT = 8
+        private const val MENU_EDIT_LAYOUT = 6
+        private const val MENU_RESET_LAYOUT = 7
+        private const val MENU_MAPPING = 8
+        private const val MENU_HUD = 9
+        private const val MENU_IMPORT = 10
+        private const val MENU_QUIT = 11
     }
 }
