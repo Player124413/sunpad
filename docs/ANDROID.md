@@ -132,6 +132,17 @@ immediately). GitHub release assets, S3/GCS signed links, and similar work;
 share-link pages (Google Drive web UI, Mega) do not. The downloaded ISO is
 only used inside the runner and is not committed anywhere.
 
+Speed and retries:
+
+- the download uses **aria2 with 16 connections** (multi-connection speeds up
+  servers that support range requests);
+- the ISO is cached per URL in the GitHub Actions cache, so re-running the
+  workflow with the same link skips the download entirely (the cache holds
+  1.4 GB and is keyed by the URL you pasted);
+- for quick debugging of build errors, re-run **without** the ISO URL: the
+  core + APK build in a few minutes without the module step, and the ISO
+  cache is not touched.
+
 With the bundled module, the only remaining step on the device is
 importing your ISO through the app's setup dialog — everything else is in
 the APK.

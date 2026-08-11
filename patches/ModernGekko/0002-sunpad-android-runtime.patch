@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index ecbfc47..888c79f 100644
+index ecbfc47..b9b457b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -115,7 +115,11 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
@@ -30,7 +30,18 @@ index ecbfc47..888c79f 100644
          # SunPad's CAMetalLayer platform for iOS (no macOS windowing APIs)
          target_sources(moderngekko PRIVATE
              vendor/dolphin/Source/Core/DolphinNoGUI/PlatformIOS.mm)
-@@ -403,7 +413,11 @@ target_link_libraries(moderngekko-module-info
+@@ -371,7 +381,9 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+             "${MODERNGEKKO_WAYLAND_CURSOR_LIBRARY}"
+             "${MODERNGEKKO_XKBCOMMON_LIBRARY}")
+         target_compile_definitions(moderngekko PRIVATE HAVE_WAYLAND=1)
+-        target_compile_definitions(videovulkan PRIVATE HAVE_WAYLAND=1)
++        if(TARGET videovulkan)
++            target_compile_definitions(videovulkan PRIVATE HAVE_WAYLAND=1)
++        endif()
+         if(MODERNGEKKO_FRONTEND_SDK)
+             target_link_directories(moderngekko PRIVATE "${_moderngekko_sdk_lib}")
+         endif()
+@@ -403,7 +415,11 @@ target_link_libraries(moderngekko-module-info
      PRIVATE ModernGekko::Runtime
  )
  
