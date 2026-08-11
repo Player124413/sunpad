@@ -128,7 +128,9 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
 @end
 
 @interface SunPadGameViewController () <SunPadGameOverlayDelegate, UIDocumentPickerDelegate>
+- (NSArray<NSURL *> *)gameImagesInDocumentsDirectory;
 - (NSString *)modulePathFromConfiguration:(NSDictionary *)configuration;
+- (void)presentGameDataFolderImport;
 - (NSString *)resolvedImportTestPath:(NSString *)requestedPath;
 - (NSString *)sunPadSupportRoot;
 @end
@@ -602,6 +604,11 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     [self presentGameDataImport];
 }
 
+- (void)gameOverlayRequestsGameDataFolderImport:(SunPadGameOverlay *)overlay {
+    (void)overlay;
+    [self presentGameDataFolderImport];
+}
+
 - (void)gameOverlayRequestsGameDataRemoval:(SunPadGameOverlay *)overlay {
     (void)overlay;
     if (_coreHost != nil) {
@@ -733,15 +740,71 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     NSArray<UTType *> *types = @[
         [UTType typeWithFilenameExtension:@"iso"],
         [UTType typeWithFilenameExtension:@"gcm"],
-        [UTType typeWithFilenameExtension:@"rvz"],
         UTTypeData,
     ];
     UIDocumentPickerViewController *picker =
         [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types
-                                                               asCopy:NO];
+                                                               asCopy:YES];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
+    picker.shouldShowFileExtensions = YES;
     [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (NSArray<NSURL *> *)gameImagesInDocumentsDirectory {
+    NSURL *documentsURL = [[[NSFileManager defaultManager]
+        URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] firstObject];
+    if (documentsURL == nil)
+        return @[];
+
+    NSArray<NSURL *> *entries = [[NSFileManager defaultManager]
+        contentsOfDirectoryAtURL:documentsURL
+      includingPropertiesForKeys:@[NSURLIsRegularFileKey]
+                         options:NSDirectoryEnumerationSkipsHiddenFiles
+                           error:nil];
+    NSMutableArray<NSURL *> *images = [NSMutableArray array];
+    NSSet<NSString *> *extensions = [NSSet setWithArray:@[@"iso", @"gcm"]];
+    for (NSURL *entry in entries) {
+        NSNumber *isRegularFile = nil;
+        [entry getResourceValue:&isRegularFile forKey:NSURLIsRegularFileKey error:nil];
+        if (isRegularFile.boolValue &&
+            [extensions containsObject:entry.pathExtension.lowercaseString]) {
+            [images addObject:entry];
+        }
+    }
+    [images sortUsingComparator:^NSComparisonResult(NSURL *left, NSURL *right) {
+        return [left.lastPathComponent localizedStandardCompare:right.lastPathComponent];
+    }];
+    return images;
+}
+
+- (void)presentGameDataFolderImport {
+    NSArray<NSURL *> *images = [self gameImagesInDocumentsDirectory];
+    if (images.count == 1) {
+        [self importGameDataFromURL:images.firstObject];
+        return;
+    }
+
+    NSString *message = images.count == 0
+        ? @"No ISO or GCM was found. In Files, place the image directly in On My iPhone → SunPad, then try again."
+        : @"Choose an image from On My iPhone → SunPad.";
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"SunPad Folder"
+                                            message:message
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    __weak SunPadGameViewController *weakSelf = self;
+    for (NSURL *imageURL in images) {
+        [alert addAction:[UIAlertAction actionWithTitle:imageURL.lastPathComponent
+                                                  style:UIAlertActionStyleDefault
+                                                handler:^(__kindof UIAlertAction *action) {
+            (void)action;
+            [weakSelf importGameDataFromURL:imageURL];
+        }]];
+    }
+    [alert addAction:[UIAlertAction actionWithTitle:@"Cancel"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller

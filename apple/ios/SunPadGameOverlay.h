@@ -11,6 +11,8 @@ NS_ASSUME_NONNULL_BEGIN
 @protocol SunPadGameOverlayDelegate <NSObject>
 /* The user asked to change or reimport the game data image. */
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay;
+/* The user asked to import an image dropped into the Files-visible app folder. */
+- (void)gameOverlayRequestsGameDataFolderImport:(SunPadGameOverlay *)overlay;
 /* The user confirmed removal of the retained image and extracted game tree. */
 - (void)gameOverlayRequestsGameDataRemoval:(SunPadGameOverlay *)overlay;
 /* The user asked to configure the narrow physical-controller face-button map. */

@@ -65,7 +65,10 @@ The import flow is implemented; the original import/extract/boot path was
 verified on the Simulator, while the hardened reimport/removal path awaits a
 fresh acceptance run:
 
-1. **Document picker** opens from "Game Data & Saves > Change or Reimport".
+1. **Choose a source** with either "Game Data & Saves > Change or Reimport" or
+   by placing an ISO/GCM directly in **On My iPhone > SunPad** and choosing
+   **Import from SunPad Folder**. The Files picker requests its own local copy
+   so providers that cannot grant open-in-place access can still be used.
 2. **Access and validate** the security-scoped Files URL, exact
    1,459,978,240-byte raw-image size, GameCube magic, `GMSE01` game code, disc
    number 0, and revision 0.

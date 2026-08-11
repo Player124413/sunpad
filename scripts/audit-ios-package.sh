@@ -50,6 +50,10 @@ vtool -show-build "$module" | grep -Eq 'minos +16\.0$' || fail "module minimum O
   fail "unexpected app version"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")" = 16.0 ]] ||
   fail "Info.plist minimum OS is not iOS 16.0"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :UIFileSharingEnabled' "$app/Info.plist")" = true ]] ||
+  fail "Files-visible Documents sharing is not enabled"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :LSSupportsOpeningDocumentsInPlace' "$app/Info.plist")" = true ]] ||
+  fail "opening Documents in place is not enabled"
 [[ -f "$app/dev-config.plist" ]] || fail "device module manifest is missing"
 module_relative_path="$(/usr/libexec/PlistBuddy -c 'Print :DeviceModuleRelativePath' \
   "$app/dev-config.plist")"

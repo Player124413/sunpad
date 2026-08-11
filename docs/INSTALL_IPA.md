@@ -18,6 +18,12 @@ unreleased until their documented gates close and a new audited IPA is tagged.
 4. Install it, open **••• → Game Data & Saves → Change or Reimport**, and
    select your own legally obtained `GMSE01` USA revision 0 ISO/GCM image.
 
+If selecting the image through a Files provider does not work, put it directly
+in **Files → On My iPhone → SunPad**, then choose **••• → Game Data & Saves
+→ Import from SunPad Folder**. SunPad keeps the dropped file in Documents and
+imports a validated private copy, so remove the dropped file yourself only
+after the game has launched successfully if you want to reclaim that space.
+
 The IPA contains the open-source SunPad/ModernGekko runtime and its required
 GMSE01 ahead-of-time recompiled executable module. It contains no disc image,
 extracted game assets, save, settings, certificate, or provisioning profile.

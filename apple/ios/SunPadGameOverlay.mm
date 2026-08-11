@@ -425,6 +425,12 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
             (void)action;
             [weakSelf.delegate gameOverlayRequestsGameDataChange:weakSelf];
         }],
+        [UIAction actionWithTitle:@"Import from SunPad Folder"
+                            image:[UIImage systemImageNamed:@"folder"]
+                       identifier:nil handler:^(__kindof UIAction *action) {
+            (void)action;
+            [weakSelf.delegate gameOverlayRequestsGameDataFolderImport:weakSelf];
+        }],
         [UIAction actionWithTitle:@"Remove Stored Game Data"
                             image:[UIImage systemImageNamed:@"trash"]
                        identifier:nil handler:^(__kindof UIAction *action) {
