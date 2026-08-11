@@ -148,9 +148,21 @@ settings, module, or game-data updates.
 No row below is a pass until the required source, automated, and physical
 evidence has been recorded.
 
+Current branch evidence: `./scripts/check-repository.sh` passes; the
+ModernGekko iPhoneOS core and provisioned archive rebuild successfully; and a
+generic iPhoneOS Debug app containing the signed local GMSE01 module passes
+`codesign --verify --deep --strict`. A clean iPad-simulator core/module/app
+build also reaches a live game frame: the legacy layout remains the default,
+the experimental menu state and analog-R accessibility value are present when
+enabled, and editor mode exposes one outlined D-pad group with one persisted
+size control. The simulator was restored to the legacy/default setting after
+the A/B check. The current physical-iPad backup attempt is still open because
+CoreDevice's app-container stream stalled and the host service now times out.
+No app install or container write has occurred.
+
 | Area | Current state | Required acceptance |
 |---|---|---|
-| Loading polish | Implemented in source; full unsigned iPhoneOS build passed; device run pending | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
+| Loading polish | Implemented in source; signed iPhoneOS build passed; device run pending | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
 | Grouped D-pad layout | Implemented in source behind default-off experiment; focused UIKit syntax check passed | Four directions move/resize/reset as one layout group; directional hit regions and simultaneous/rolling direction behavior stay unchanged; compact iPhone and large iPad layout persistence/readback pass |
 | Experimental analog R touch | Implemented in source; required default off | Existing tap/full-press behavior remains the default; opt-in setting persists; half/full pressure, run-and-spray, cancel, multitouch, layout edit, controller coexistence, and restart pass on physical iPhone and iPad |
 | Physical controller mapping | Implemented in source; pure mapping/persistence test passed | A/B/X/Y/Z only; one-to-one conflict swap; reset/default/corrupt persistence; no stuck input while using the mapping menu; DualSense Bluetooth and USB preserve analog L/R pressure; sticks, D-pad, Start, left shoulder, connect/disconnect handoff, touch hiding, and Modern C-stick behavior remain unchanged |

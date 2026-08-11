@@ -40,15 +40,19 @@ ninja -C "$BUILD" libmoderngekko.a -j8
 
 echo "==> Building GMSE01 recompiled module for iOS Simulator"
 ACTIVE_FILE="$TPL/build/modules-macos14/GMSE01/active-module.txt"
-if [[ ! -f "$ACTIVE_FILE" ]]; then
-  echo "prepared module manifest missing; run scripts/prepare-game.sh first" >&2
+if [[ -f "$ACTIVE_FILE" ]]; then
+  ACTIVE_MODULE="$(<"$ACTIVE_FILE")"
+  if [[ "$ACTIVE_MODULE" != /* ]]; then
+    ACTIVE_MODULE="$TPL/$ACTIVE_MODULE"
+  fi
+  GEN="$(dirname "$ACTIVE_MODULE")/dolrecomp-output/generated"
+else
+  GEN="$TPL/extracted/Super-Mario-Sunshine/recomp/generated"
+fi
+if [[ ! -f "$GEN/generated.c" || ! -f "$GEN/generated.h" ]]; then
+  echo "prepared module sources missing; run scripts/prepare-game.sh first" >&2
   exit 1
 fi
-ACTIVE_MODULE="$(<"$ACTIVE_FILE")"
-if [[ "$ACTIVE_MODULE" != /* ]]; then
-  ACTIVE_MODULE="$TPL/$ACTIVE_MODULE"
-fi
-GEN="$(dirname "$ACTIVE_MODULE")/dolrecomp-output/generated"
 if [[ ! -f "$GEN/main.dol" ]]; then
   cp "$TPL/extracted/Super-Mario-Sunshine/sys/main.dol" "$GEN/main.dol"
 fi
