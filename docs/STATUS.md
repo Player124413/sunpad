@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-08-10
+Last updated: 2026-08-11
 
 Current phase: **SunPad now boots Super Mario Sunshine on a physical iPad as
 well as the iPhone and iPad simulators** as an ahead-of-time statically
@@ -90,6 +90,10 @@ code-generating loader).
     recompiled module package as a deterministic unsigned IPA. The audit checks
     iPhoneOS/arm64 identity and rejects disc images, extracted game data, saves,
     personal build paths, credentials, and signing material.
+15. **Startup feedback**: mobile launch presents an activity indicator with
+    honest Preparing runtime, Starting game, and Waiting for first frame
+    phases. It uses no synthetic progress percentage and disappears only after
+    the first measured game frame.
 
 ### Desktop (previously proven)
 
@@ -120,6 +124,23 @@ code-generating loader).
   input are proven. Broader performance and memory acceptance remain open.
 - iPhone 14 boot is proven but performance is below the iPad experience even
   at 1×; iPhone 15 Pro or newer is recommended for iPhone development testing.
+- A community iPhone 15 Pro report describes slowdown after several minutes,
+  but diagnosis is blocked on receiving the offered SunPad log and exact
+  reproduction details. No cause or device-specific fix is confirmed.
+- LiveContainer is not a supported or verified launch path. One failure report
+  exists, but its LiveContainer version, device/OS, nested-module signature,
+  launch output, and SunPad log have not been collected.
+- The current touch layout remains the baseline. Grouped D-pad layout editing
+  and analog R touch behavior are implemented behind a persisted default-off
+  experiment; physical iPhone/iPad play acceptance remains open.
+- Physical-controller button remapping is implemented in source for A/B/X/Y/Z
+  only, with one-to-one swaps, persistence, and reset. Sticks, D-pad, Start,
+  left shoulder, and analog triggers remain fixed. Physical DualSense
+  acceptance remains open.
+- A hidden `-sunpadExperimental60FPS` boot path exists for GMSE01 testing, but
+  60 FPS is not a supported gameplay mode. It remains test-only, default-off,
+  and restart-required until timing, audio, cutscene, save/reload, static-recomp,
+  and sustained physical-device gates pass.
 - iOS 16.0 and macOS 14.0 deployment targets are configured, but fresh final
   artifacts still need minimum-OS inspection and oldest-target runtime checks.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
@@ -131,7 +152,26 @@ code-generating loader).
   save-flushing before suspension and audio-interruption restoration are not
   implemented.
 
-## Next highest-priority tasks
+## Approved stability-improvement order
+
+This is the stability order being executed, not evidence that implemented
+behavior has shipped or passed:
+
+1. Keep release/install/log instructions current and collect the blocked
+   iPhone slowdown and LiveContainer evidence before diagnosing either report.
+2. Polish launch feedback without changing runtime startup architecture.
+3. Group the D-pad only for touch-layout move/resize/reset, then place analog R
+   touch behavior behind a persisted default-off experimental switch.
+4. Add narrow physical-controller remapping for A/B/X/Y/Z only, with
+   one-to-one conflicts, reset, persistence, and DualSense half-press
+   regression coverage.
+5. Treat 60 FPS as a restart-required test mode; do not expose it as supported
+   until all timing and physical-device gates pass.
+6. Keep Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV, and
+   Eclipse/general mods in feasibility backlog, separate from the stability
+   update.
+
+## Next core/runtime tasks
 
 1. Re-run physical-iPad audio acceptance with the fixed core (rebuild via
    `scripts/ios-build-core-device.sh`); use the pre-output capture gate plus

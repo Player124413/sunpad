@@ -1,6 +1,6 @@
 # Testing
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 ## Principles
 
@@ -121,6 +121,7 @@ acceptance gate; source inspection alone is not recorded as a runtime pass:
 | Stored-data removal | Implemented in source | Retained image and extracted tree removed; save and unrelated preferences preserved |
 | Diagnostic privacy prompt | Implemented in source | Metadata disclosure appears before the share sheet; cancel shares nothing; confirmed snapshot excludes game data and saves |
 | Diagnostic path redaction | Implemented in source | New persistent messages replace current app-container and temporary prefixes |
+| Loading presentation polish | Implemented in source; runtime acceptance open | Activity indicator; Preparing runtime → Starting game → Waiting for first frame; no fake percentage; first frame hides it; errors stop it |
 | iOS 16.0 / macOS 14.0 targets | Configured in build scripts | Fresh-build every final artifact, inspect recorded minimum OS, then run oldest-target acceptance |
 
 The separate `SunPad.cpu_resource-2026-08-09-102551.ips` report observed 90
@@ -141,6 +142,26 @@ app-data domain than the requested nested destination. Final recovery uploaded
 the runtime module first, then overlaid `Library` with
 `--remove-existing-content false`. Do not use the removing form for save,
 settings, module, or game-data updates.
+
+## Stability-improvement acceptance queue (2026-08-11)
+
+No row below is a pass until the required source, automated, and physical
+evidence has been recorded.
+
+| Area | Current state | Required acceptance |
+|---|---|---|
+| Loading polish | Implemented in source; full unsigned iPhoneOS build passed; device run pending | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
+| Grouped D-pad layout | Implemented in source behind default-off experiment; focused UIKit syntax check passed | Four directions move/resize/reset as one layout group; directional hit regions and simultaneous/rolling direction behavior stay unchanged; compact iPhone and large iPad layout persistence/readback pass |
+| Experimental analog R touch | Implemented in source; required default off | Existing tap/full-press behavior remains the default; opt-in setting persists; half/full pressure, run-and-spray, cancel, multitouch, layout edit, controller coexistence, and restart pass on physical iPhone and iPad |
+| Physical controller mapping | Implemented in source; pure mapping/persistence test passed | A/B/X/Y/Z only; one-to-one conflict swap; reset/default/corrupt persistence; no stuck input while using the mapping menu; DualSense Bluetooth and USB preserve analog L/R pressure; sticks, D-pad, Start, left shoulder, connect/disconnect handoff, touch hiding, and Modern C-stick behavior remain unchanged |
+| 60 FPS | Hidden boot-time source path; config/build checks passed; not supported | Default off; restart required; no live switch; verify real-time gameplay speed, physics, animation, cutscenes, audio pitch/continuity, controller polling, save/reload compatibility, 30 FPS fallback, thermal/memory behavior, static-recomp fallback/SMC counters, and at least one sustained physical-device session before any support claim |
+| iPhone 15 Pro slowdown | Blocked on reporter log | Capture release/commit, device/OS, scene, render/aspect setting, controller, elapsed time, thermal state, FPS before/after, privacy-reviewed SunPad log, and any `cpu_resource` report; reproduce before tuning |
+| LiveContainer | Unverified; one failure report | Exact IPA/hash, LiveContainer version/source, device/OS, signing/JIT settings, app and nested-module signature evidence, visible launch/error, LiveContainer output, SunPad log, and comparison with a normal re-signed install |
+| Wii U adapter / HD textures / Vision Pro / Apple TV / Eclipse or mods | Backlog research | Separate feasibility result and legal/data boundary before implementation; no generic Dolphin/GameController capability counts as SunPad runtime acceptance |
+
+Preserve and read back device saves, controller settings, touch preferences,
+and imported game data around every physical update. Compilation, installation,
+a PID, or a clean log alone does not satisfy hands-on input or gameplay rows.
 
 ## Audio root-cause verification (2026-08-08, Apple Silicon Mac)
 

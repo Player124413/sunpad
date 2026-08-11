@@ -42,8 +42,8 @@ game module.
 | Native app | Universal arm64 iPhone/iPad target plus a local Apple Silicon `SunPad.app` packager |
 | Rendering | Dolphin Metal backend reaches the title sequence and playable Delfino Plaza gameplay |
 | Game setup | Exact GMSE01 USA Rev 0 validation, staged private import, atomic activation, and real removal |
-| Touch | Move stick, C-stick, D-pad, A/B/X/Y/Z, L/R, Start, and a persistent settings menu |
-| Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS |
+| Touch | Move stick, C-stick, D-pad, A/B/X/Y/Z, L/R, Start, and a persistent settings menu; analog-R experimentation remains opt-in and default-off |
+| Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS; narrow A/B/X/Y/Z physical-button remapping is implemented in source and awaiting device acceptance |
 | Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
 | Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
 | Distribution | Unsigned developer-preview IPA for user-side signing; no game image, saves, signing material, TestFlight, or App Store release |
@@ -65,7 +65,16 @@ claims: fresh complete artifacts still need minimum-OS inspection and runtime
 acceptance on the oldest supported hardware before the badges can be treated
 as verified support.
 
-## Get started
+## Download the iPhone/iPad preview
+
+The current public download is the unsigned
+[`SunPad-0.1.0-preview.1-unsigned.ipa`](https://github.com/chrissotraidis/sunpad/releases/download/v0.1.0-preview.1/SunPad-0.1.0-preview.1-unsigned.ipa).
+It must be re-signed with your Apple identity, including its nested
+`gGMSE01_recomp.dylib`, before installation. It contains no game image or
+save. Follow [`docs/INSTALL_IPA.md`](docs/INSTALL_IPA.md) for the short install
+path, checksum, current compatibility boundary, and first launch.
+
+## Build from source
 
 You need:
 
@@ -168,6 +177,19 @@ larger iPads:
 - **Controller handoff:** a connected physical controller can hide the touch
   overlay automatically.
 
+The current touch behavior remains the stable default. **Experimental Touch
+Controls** is persisted but off by default; when enabled, the four D-pad
+directions move and resize as one layout group and R uses horizontal touch
+position for analog pressure with a full-press detent. These changes are
+implemented in source but are not support claims until physical play acceptance.
+
+The **Controller Button Mapping…** menu is likewise narrow: GameCube A/B/X/Y/Z
+can be assigned one-to-one across the four face buttons and right shoulder,
+with conflicts swapped and a default reset. Sticks, D-pad, Start, left
+shoulder, and analog triggers stay fixed so DualSense trigger pressure is not
+disturbed. Focused source mapping tests pass; physical-controller acceptance
+remains open.
+
 Touch and GameController input merge through the same thread-safe GameCube
 state. Button presses are edge-latched, the strongest stick input wins, and
 analog triggers preserve FLUDD pressure control.
@@ -180,8 +202,11 @@ metadata that can appear: OS and app versions, display and controller details,
 the game-image filename, runtime errors, and diagnostic paths. App-container
 and temporary-directory prefixes are redacted in newly written messages. The
 snapshot does not include the game image, extracted game data, or save files.
-Review the destination in the standard share sheet and send the `.log` with a
-short description of what happened.
+Review the destination in the standard share sheet. For a public report, open
+the [bug-report form](https://github.com/chrissotraidis/sunpad/issues/new?template=bug_report.yml)
+with reproduction steps and only the smallest privacy-reviewed excerpt. Share
+the complete `.log` privately only when the maintainer requests it; never
+upload game data, saves, signing material, or a device container.
 
 If SunPad cannot reopen, use **Settings → Privacy & Security → Analytics &
 Improvements → Analytics Data**, select the newest entry beginning with
@@ -265,6 +290,15 @@ ahead-of-time recompiled executable module, but no disc image, extracted game
 assets, save, settings, certificate, or provisioning profile. See
 [`docs/INSTALL_IPA.md`](docs/INSTALL_IPA.md).
 
+### Does the IPA work in LiveContainer?
+
+LiveContainer is not currently a supported or verified install path. A user
+has reported that the preview does not work there, but SunPad does not yet have
+the LiveContainer version, device details, signatures, and logs needed to
+identify why. The supported preview path remains re-signing both the app and
+its nested module, then installing the IPA normally. See
+[`docs/INSTALL_IPA.md`](docs/INSTALL_IPA.md) for the evidence checklist.
+
 ### Do saves survive an app update?
 
 An in-place development install preserves the app container. Clean uninstall,
@@ -276,8 +310,12 @@ No save belongs in Git or a release artifact.
 
 No. The current build is playable and useful for development testing, but
 physical-device audio re-acceptance, iPhone performance, broader scene
-coverage, lifecycle/save hardening, compressed image support, distribution
-packaging, and broader macOS gameplay acceptance remain explicit work.
+coverage, lifecycle/save hardening, compressed image support, and broader
+macOS gameplay acceptance remain explicit work. A 60 FPS option is test-only,
+default-off, and restart-required until timing, audio, save, and sustained
+hardware gates pass. Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV,
+and Eclipse/general mod support remain backlog research rather than promised
+features.
 
 ## Project map
 

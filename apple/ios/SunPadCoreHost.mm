@@ -158,9 +158,15 @@ namespace fs = std::filesystem;
         config.graphics.backend = "Metal";
         config.headless = false;
         config.show_fps_in_title = false;
+        config.enable_gmse01_60fps =
+            [NSProcessInfo.processInfo.arguments containsObject:@"-sunpadExperimental60FPS"];
         config.render_surface = (__bridge void *)_layer;
         config.module = moderngekko::ModuleSource::DynamicPath(
             modulePath.fileSystemRepresentation);
+
+        SunPadLog(@"runtime frame mode=%@ source=%@",
+                  config.enable_gmse01_60fps ? @"60 FPS experimental" : @"original 30 FPS",
+                  config.enable_gmse01_60fps ? @"launch argument" : @"default");
 
         auto created = moderngekko::Runtime::Create(std::move(config));
         if (!created) {

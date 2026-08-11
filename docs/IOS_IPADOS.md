@@ -1,6 +1,6 @@
 # iOS and iPadOS
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 ## Current status
 
@@ -116,9 +116,11 @@ headlessly for verification.
     --destination /tmp/sunpad-app-logs
   ```
 
-- While the runtime is booting, a visible startup message replaces the former
-  unexplained black surface. It disappears after the first measured game
-  frame.
+- While the runtime is booting, an activity indicator and honest **Preparing
+  runtime**, **Starting game**, and **Waiting for first frame** phases replace
+  the former unexplained black surface. There is no synthetic percentage. The
+  loading presentation disappears after the first measured game frame and
+  stops on a visible boot error.
 - Development provisioning must use non-removing CoreDevice directory
   overlays. On the current iOS/Xcode combination,
   `--remove-existing-content true` cleared unrelated app-container data even
@@ -130,6 +132,45 @@ headlessly for verification.
   `NSUserDefaults` and deletes the temporary payload. This avoids direct plist
   replacement being discarded by iOS's preferences daemon during a
   device-settings recovery.
+
+## Approved mobile improvement boundaries
+
+These are ordered implementation and acceptance boundaries, not claims about
+the current release. Loading, touch, and narrow controller-mapping source work
+is present on the development branch; physical acceptance remains open:
+
+1. **Evidence intake first.** The reported iPhone 15 Pro slowdown is blocked on
+   the offered SunPad log plus scene, render scale, controller, thermal state,
+   and elapsed-time details. The LiveContainer failure is blocked on the
+   checklist in [INSTALL_IPA.md](INSTALL_IPA.md). Do not guess at either cause.
+2. **Loading polish only.** Improve the existing presentation while keeping the
+   current startup architecture and first-frame completion signal.
+3. **Touch controls.** Treat the four D-pad directions as one layout group for
+   move/resize/reset without changing directional hit testing. Keep analog R
+   touch behavior behind a persisted, default-off experimental switch until
+   physical iPhone/iPad play acceptance.
+4. **Physical-controller mapping.** Limit v1 to GameCube A/B/X/Y/Z mapped
+   one-to-one across the four face buttons and right shoulder. Preserve sticks,
+   D-pad, Start, left shoulder, analog L/R pressure, touch/controller merging,
+   and controller handoff. Reset and corrupt persistence must return to the
+   current default mapping.
+5. **60 FPS testing.** Any mode is default-off, requires a restart, and is not
+   supported until gameplay timing, physics, animation, cutscenes, audio,
+   controller polling, save/reload, thermal behavior, and a sustained physical
+   session pass. Live switching is out of scope.
+6. **Backlog only.** Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV,
+   and Eclipse/general mods require separate feasibility work. The current iOS
+   GameCube-adapter backend is a no-op, and generic runtime capabilities do not
+   prove any of these product paths.
+
+### LiveContainer evidence checklist
+
+Record the exact IPA filename/hash, LiveContainer version and source, device
+and OS, signing and JIT settings, signatures reported for both `SunPad` and
+`gGMSE01_recomp.dylib`, whether the app window appears, the first visible error,
+LiveContainer output, and a privacy-reviewed SunPad diagnostic log. Compare the
+same IPA with a normal re-signed install. Never attach the game image, extracted
+assets, saves, signing material, or a device container.
 
 ## HDMI + wired-controller crash investigation (2026-08-09)
 
@@ -152,6 +193,7 @@ used an out-of-bounds pointer and the stack protector aborted the app.
 
 The mirrored HDMI display does not appear anywhere in the exception path and
 is not needed to reproduce the defect. It may have made the relaunch look worse
-because a connected controller hides the touch overlay, leaving only the black
-Metal boot surface. External-display mode changes are now logged so a separate
-display failure can be distinguished if one occurs later.
+because a connected controller hides the touch overlay while the Metal runtime
+starts. The app now keeps explicit loading phases visible until the first game
+frame. External-display mode changes are logged so a separate display failure
+can be distinguished if one occurs later.

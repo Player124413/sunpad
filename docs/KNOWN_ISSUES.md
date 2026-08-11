@@ -1,6 +1,6 @@
 # Known Issues
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 ## iOS / iPadOS
 
@@ -64,6 +64,42 @@ Last updated: 2026-08-09
     data. Provision the module before user data and use a non-removing
     directory overlay. Back up and read back each device's saves and settings;
     never treat an app-install success message as preservation proof.
+13. **iPhone slowdown report needs its log** — an iPhone 15 Pro tester reports
+    slowdown after several minutes and has offered a diagnostic log. Until the
+    log, exact scene, render scale, controller connection, thermal state, and
+    elapsed time are captured, this remains an undiagnosed report rather than
+    evidence for a particular runtime fix.
+14. **LiveContainer is unverified** — one user reports that the Preview 1 IPA
+    does not work in LiveContainer. SunPad's supported preview path re-signs
+    both the app and nested `gGMSE01_recomp.dylib` and installs normally. A
+    useful LiveContainer report must include its version/source, device and OS,
+    signing/JIT settings, signatures for both Mach-O files, visible launch
+    behavior, LiveContainer output, and a privacy-reviewed SunPad log. It must
+    also compare the same IPA against a normal re-signed install. Do not upload
+    game data, saves, signing material, or a device container.
+15. **Touch improvements are not yet defaults** — grouped D-pad move/resize/reset
+    and analog R touch are implemented behind the persisted, default-off
+    Experimental Touch Controls switch. Directional hit testing is unchanged.
+    Run-and-spray, full press, cancel, multitouch, layout editing, and restart
+    still need physical iPhone/iPad acceptance.
+16. **Physical controller remapping is intentionally narrow** — remapping is
+    is implemented for GameCube A/B/X/Y/Z across the four face buttons and
+    right shoulder. Conflicts swap one-to-one and reset restores defaults.
+    Sticks, D-pad, Start, left shoulder, and analog triggers stay fixed. Source
+    regression tests pass; DualSense pressure, connect/disconnect handoff, and
+    Apple system-remapping interaction require physical acceptance.
+17. **60 FPS is test-only** — Sunshine's confirmed baseline is approximately
+    30 FPS. A hidden `-sunpadExperimental60FPS` boot path exists for controlled
+    GMSE01 testing; there is no user-facing option. It remains default-off and
+    restart-required, and live switching is out of scope. Do not call it
+    supported until gameplay speed, physics, animation, cutscenes, audio,
+    controller polling, save/reload, static-recomp fallback/SMC behavior,
+    thermals, and a sustained physical-device session pass.
+18. **Platform/accessory/mod requests are backlog research** — the Wii U
+    GameCube Adapter is disabled by the current iOS no-op backend. HD textures,
+    Vision Pro, Apple TV, and Eclipse/general mods have no accepted mobile
+    product path yet. Keep them separate from the current stability work and
+    do not imply support from generic Dolphin or GameController capabilities.
 
 ## Desktop Stage 1 gaps
 

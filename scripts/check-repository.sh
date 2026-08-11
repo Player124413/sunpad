@@ -16,6 +16,8 @@ plutil -lint apple/ios/Info.plist apple/macos/Info.plist
 ./scripts/check-markdown-links.py
 
 ./tests/test-input-pipe-encoder.sh
+./tests/test-controller-mapping.sh
+./tests/test-experimental-60fps-config.sh
 ./tests/test-diagnostics.sh
 
 test -x scripts/package-ios.sh
@@ -33,7 +35,8 @@ if git grep -n -I -E 'BEGIN [A-Z ]*PRIVATE KEY|github_pat_[A-Za-z0-9_]{20,}|gh[p
   exit 1
 fi
 
-if git grep -n -I '/Users/' -- . ':!scripts/check-repository.sh'; then
+if git grep -n -I '/Users/' -- . \
+    ':!scripts/check-repository.sh' ':!scripts/audit-ios-package.sh'; then
   echo "personal absolute path found" >&2
   exit 1
 fi

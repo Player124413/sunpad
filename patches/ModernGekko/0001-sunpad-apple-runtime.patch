@@ -46,9 +46,12 @@ index af75a25..f406d32 100644
    std::filesystem::path user_directory;
    ModuleSource module;
    std::vector<std::filesystem::path> mod_directories;
-@@ -66,6 +69,9 @@ struct RuntimeConfig
+@@ -66,6 +69,12 @@ struct RuntimeConfig
    bool allow_interpreter = false;
    bool show_fps_in_title = true;
++  // Test-only Sunshine frame-rate experiment. When enabled for GMSE01, the
++  // runtime activates only Dolphin's bundled 60FPS Gecko code at boot.
++  bool enable_gmse01_60fps = false;
    std::optional<std::string> window_title;
 +  // Host-provided render surface (a CAMetalLayer on iOS). The platform hands
 +  // this to the video backend as WindowSystemInfo::render_surface.
@@ -60,7 +63,22 @@ diff --git a/src/runtime/dolphin_runtime.cpp b/src/runtime/dolphin_runtime.cpp
 index 981e098..41926e2 100644
 --- a/src/runtime/dolphin_runtime.cpp
 +++ b/src/runtime/dolphin_runtime.cpp
-@@ -24,6 +24,10 @@
+@@ -5,8 +5,14 @@
++#include "Common/IniFile.h"
+ #include "Common/HookableEvent.h"
+ #include "Core/Boot/Boot.h"
+ #include "Core/Boot/BootManager.h"
++#include "Core/Cheats/GeckoCode.h"
++#include "Core/Cheats/GeckoCodeConfig.h"
++#include "Core/Config/CheatSettings.h"
++#include "Core/Config/ConfigManager.h"
+ #include "Core/Config/GraphicsSettings.h"
+ #include "Core/Config/MainSettings.h"
++#include "Core/Config/SessionSettings.h"
+ #include "Core/Core.h"
+ #include "Core/HW/GBACore.h"
+ #include "Core/Host.h"
+@@ -24,6 +29,10 @@
  #include "moderngekko/mod_loader.hpp"
  #include "moderngekko/module_loader.hpp"
  
@@ -87,7 +105,41 @@ index 981e098..41926e2 100644
    const ModernGekkoModuleRequirements requirements = {
        MODERNGEKKO_CPU_ABI_VERSION, static_cast<std::uint32_t>(sizeof(CPUState)),
        inspected.metadata->disc_id.c_str()};
-@@ -244,6 +257,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -240,10 +258,44 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+     UICommon::Init();
+     impl->ui_initialized = true;
+   }
++
++  if (impl->config.enable_gmse01_60fps) {
++    if (impl->metadata.disc_id != "GMSE01") {
++      if (impl->ui_initialized)
++        UICommon::Shutdown();
++      return {{}, RuntimeError{RuntimeErrorCode::InvalidGame,
++                               "experimental 60FPS is available only for GMSE01"}};
++    }
++
++    Common::IniFile empty_local_ini;
++    auto codes = Gecko::LoadCodes(SConfig::LoadDefaultGameIni("GMSE01", std::nullopt),
++                                  empty_local_ini);
++    const auto sixty_fps = std::ranges::find(codes, std::string("60FPS"),
++                                             &Gecko::GeckoCode::name);
++    if (sixty_fps == codes.end()) {
++      if (impl->ui_initialized)
++        UICommon::Shutdown();
++      return {{}, RuntimeError{RuntimeErrorCode::InitializationFailed,
++                               "bundled GMSE01 60FPS Gecko code is unavailable"}};
++    }
++
++    for (auto& code : codes)
++      code.enabled = &code == &*sixty_fps;
++    Gecko::UpdateSyncedCodes(codes);
++    Config::SetBase(Config::MAIN_ENABLE_CHEATS, true);
++    Config::SetBase(Config::SESSION_CODE_SYNC_OVERRIDE, true);
++    std::fprintf(stderr,
++                 "[moderngekko] experimental GMSE01 60FPS boot code enabled; "
++                 "StaticRecomp SMC/fallback counters follow at shutdown\n");
++  }
+   Config::SetBase(Config::MAIN_FULLSCREEN, impl->config.fullscreen);
  
    if (impl->config.headless)
      impl->platform = Platform::CreateHeadlessPlatform();

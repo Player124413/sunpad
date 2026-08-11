@@ -13,6 +13,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay;
 /* The user confirmed removal of the retained image and extracted game tree. */
 - (void)gameOverlayRequestsGameDataRemoval:(SunPadGameOverlay *)overlay;
+/* The user asked to configure the narrow physical-controller face-button map. */
+- (void)gameOverlayRequestsControllerMapping:(SunPadGameOverlay *)overlay;
 @end
 
 /* UIKit overlay above the game render surface: the three-dot menu, render
