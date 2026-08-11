@@ -319,12 +319,12 @@ No save belongs in Git or a release artifact.
 
 No. The current build is playable and useful for development testing, but
 physical-device audio re-acceptance, iPhone performance, broader scene
-coverage, lifecycle/save hardening, compressed image support, and broader
-macOS gameplay acceptance remain explicit work. A 60 FPS option is test-only,
-default-off, and restart-required until timing, audio, save, and sustained
-hardware gates pass. Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV,
-and Eclipse/general mod support remain backlog research rather than promised
-features.
+coverage, physical lifecycle/save acceptance, compressed image support, and
+broader macOS gameplay acceptance remain explicit work. A hidden 60 FPS boot
+path is test-only, default-off, and restart-required until timing, audio, save,
+and sustained hands-on hardware gates pass. Wii U GameCube Adapter, HD
+textures, Vision Pro, Apple TV, and Eclipse/general mod support remain backlog
+research rather than promised features.
 
 ## Project map
 

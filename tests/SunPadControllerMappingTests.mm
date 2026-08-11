@@ -5,9 +5,18 @@
 
 #import "SunPadControllerMapping.h"
 
+static bool MappingsEqual(SunPadControllerButtonMapping lhs,
+                          SunPadControllerButtonMapping rhs) {
+    return lhs.gameA == rhs.gameA && lhs.gameB == rhs.gameB &&
+           lhs.gameX == rhs.gameX && lhs.gameY == rhs.gameY &&
+           lhs.gameZ == rhs.gameZ;
+}
+
 int main(void) {
     @autoreleasepool {
-        SunPadControllerButtonMapping mapping = SunPadDefaultControllerButtonMapping();
+        const SunPadControllerButtonMapping defaults =
+            SunPadDefaultControllerButtonMapping();
+        SunPadControllerButtonMapping mapping = defaults;
         assert(SunPadControllerButtonMappingIsValid(mapping));
         assert(SunPadApplyControllerButtonMapping(mapping,
             SunPadPhysicalControllerButtonA | SunPadPhysicalControllerButtonRightShoulder) ==
@@ -26,6 +35,31 @@ int main(void) {
         assert(!SunPadControllerButtonMappingIsValid(corrupt));
         assert(SunPadApplyControllerButtonMapping(corrupt,
             SunPadPhysicalControllerButtonRightShoulder) == SunPadButtonZ);
+
+        [SunPadControllerMappingStore reset];
+        assert(MappingsEqual([SunPadControllerMappingStore mapping], defaults));
+
+        [SunPadControllerMappingStore setMapping:mapping];
+        assert(MappingsEqual([SunPadControllerMappingStore mapping], mapping));
+
+        [SunPadControllerMappingStore reset];
+        assert(MappingsEqual([SunPadControllerMappingStore mapping], defaults));
+
+        NSDictionary *corruptSavedMapping = @{
+            @"A": @(SunPadPhysicalControllerButtonA),
+            @"B": @(SunPadPhysicalControllerButtonA),
+            @"X": @(SunPadPhysicalControllerButtonX),
+            @"Y": @(SunPadPhysicalControllerButtonY),
+            @"Z": @(SunPadPhysicalControllerButtonRightShoulder),
+        };
+        [[NSUserDefaults standardUserDefaults]
+            setObject:corruptSavedMapping
+               forKey:@"SunPadControllerButtonMappingV1"];
+        assert(MappingsEqual([SunPadControllerMappingStore mapping], defaults));
+
+        [SunPadControllerMappingStore setMapping:corrupt];
+        assert(MappingsEqual([SunPadControllerMappingStore mapping], defaults));
+        [SunPadControllerMappingStore reset];
 
         std::cout << "SunPad controller mapping regression test passed\n";
     }

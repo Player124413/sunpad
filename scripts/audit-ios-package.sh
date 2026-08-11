@@ -50,6 +50,15 @@ vtool -show-build "$module" | grep -Eq 'minos +16\.0$' || fail "module minimum O
   fail "unexpected app version"
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")" = 16.0 ]] ||
   fail "Info.plist minimum OS is not iOS 16.0"
+[[ -f "$app/dev-config.plist" ]] || fail "device module manifest is missing"
+module_relative_path="$(/usr/libexec/PlistBuddy -c 'Print :DeviceModuleRelativePath' \
+  "$app/dev-config.plist")"
+[[ "$module_relative_path" = gGMSE01_recomp.dylib ]] ||
+  fail "unexpected device module relative path"
+if /usr/libexec/PlistBuddy -c 'Print :DevGameRoot' "$app/dev-config.plist" >/dev/null 2>&1 ||
+   /usr/libexec/PlistBuddy -c 'Print :DevModulePath' "$app/dev-config.plist" >/dev/null 2>&1; then
+  fail "package manifest contains a development host path key"
+fi
 [[ ! -d "$app/_CodeSignature" && ! -f "$app/embedded.mobileprovision" ]] ||
   fail "unsigned package contains signing material"
 codesign --verify --strict "$app" >/dev/null 2>&1 && fail "app is still signed"

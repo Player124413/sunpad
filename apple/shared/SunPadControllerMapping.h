@@ -36,8 +36,8 @@ FOUNDATION_EXPORT NSString *SunPadPhysicalControllerButtonName(
     SunPadPhysicalControllerButton button);
 
 /* Versioned, app-local persistence for the deliberately narrow A/B/X/Y/Z
- * remapping layer. Sticks, D-pad, Menu, shoulders, and analog triggers remain
- * outside this store and keep their established direct mappings. */
+ * remapping layer. Sticks, D-pad, Menu, left shoulder, and analog triggers
+ * remain outside this store and keep their established direct mappings. */
 @interface SunPadControllerMappingStore : NSObject
 
 + (SunPadControllerButtonMapping)mapping;

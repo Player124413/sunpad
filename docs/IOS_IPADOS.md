@@ -163,8 +163,9 @@ expose a VoiceOver setting:
    current default mapping.
 5. **60 FPS testing.** Any mode is default-off, requires a restart, and is not
    supported until gameplay timing, physics, animation, cutscenes, audio,
-   controller polling, save/reload, thermal behavior, and a sustained physical
-   session pass. Live switching is out of scope.
+   controller polling, save/reload, and a sustained hands-on physical gameplay
+   session pass. The telemetry/thermal subgate has passed; live switching is
+   out of scope.
 6. **Backlog only.** Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV,
    and Eclipse/general mods require separate feasibility work. The current iOS
    GameCube-adapter backend is a no-op, and generic runtime capabilities do not
