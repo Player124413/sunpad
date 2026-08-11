@@ -343,6 +343,7 @@ research rather than promised features.
 | [`patches/ModernGekko/`](patches/ModernGekko/) | Complete ModernGekko Apple-runtime snapshot |
 | [`patches/ModernGekko-dolphin/`](patches/ModernGekko-dolphin/) | Complete vendored Dolphin iOS/runtime snapshot |
 | [`docs/BUILDING.md`](docs/BUILDING.md) | Exact desktop, Simulator, and device build commands |
+| [`docs/ANDROID-FEASIBILITY.md`](docs/ANDROID-FEASIBILITY.md) | Source-backed Android architecture, build plan, effort, and acceptance gates |
 | [`docs/TESTING.md`](docs/TESTING.md) | Dated evidence and remaining acceptance gates |
 | [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md) | Current limitations and workarounds |
 | [`docs/LEGAL_AND_PROVENANCE.md`](docs/LEGAL_AND_PROVENANCE.md) | Asset, game-data, attribution, and license boundary |
