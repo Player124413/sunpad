@@ -51,13 +51,11 @@ Last updated: 2026-08-11
     every inspected `cpu_resource` report says `Action taken: none`. This is a
     performance/energy concern, not evidence that iPadOS killed the app in the
     2026-08-08 controller crash sequence.
-11. **Older deployment targets are configured, not yet artifact-verified** —
-    the earlier generated physical-device module reported iOS 26.5 as its
-    minimum even though the app target was iOS 16.0. The current core/module
-    scripts now set iOS 16.0 explicitly, and the desktop/package path sets
-    macOS 14.0. Fresh complete builds still need minimum-OS inspection across
-    all final Mach-O files plus runtime acceptance on the oldest claimed OS;
-    the configuration alone is not a compatibility result.
+11. **Oldest-target runtime acceptance remains open** — the signed iOS app
+    plist and the app/module `LC_BUILD_VERSION` commands now verify an iOS 16.0
+    minimum. Runtime acceptance on iOS 16 hardware is still required. The
+    macOS 14.0 path remains configured but needs equivalent final-artifact
+    inspection and oldest-target runtime acceptance.
 12. **CoreDevice removing uploads are unsafe for provisioning** — on the
     currently used iOS 26.5.2/Xcode toolchain, a nested `devicectl device copy
     to` with `--remove-existing-content true` cleared unrelated app-container

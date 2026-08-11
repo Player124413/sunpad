@@ -42,8 +42,8 @@ code-generating loader).
 
 1. The ModernGekko / Dolphin-derived runtime is configured to build as arm64
    iOS Simulator and physical-device binaries with an iOS 16.0 deployment
-   target. Fresh complete artifacts and oldest-OS runtime acceptance are still
-   required before claiming verified iOS 16 compatibility.
+   target. The signed app and generated module both record iOS 16.0 in their
+   final metadata; oldest-OS runtime acceptance remains open.
 2. The GMSE01 recompiled module builds for the Simulator and a physical arm64
    device development workflow.
 3. The SunPad iOS app links the core statically, boots the game on a
@@ -166,9 +166,9 @@ behavior has shipped or passed:
 2. Polish launch feedback without changing runtime startup architecture.
 3. Keep grouped D-pad editing and analog R as the accepted touch baseline;
    validate compact-iPhone defaults separately before changing their layout.
-4. Add narrow physical-controller remapping for A/B/X/Y/Z only, with
-   one-to-one conflicts, reset, persistence, and DualSense half-press
-   regression coverage.
+4. Validate the implemented narrow physical-controller remapping for A/B/X/Y/Z
+   with one-to-one conflicts, reset, persistence, and DualSense half-press
+   coverage.
 5. Treat 60 FPS as a restart-required test mode; do not expose it as supported
    until all timing and physical-device gates pass.
 6. Keep Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV, and

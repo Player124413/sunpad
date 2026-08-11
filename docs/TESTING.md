@@ -122,7 +122,7 @@ acceptance gate; source inspection alone is not recorded as a runtime pass:
 | Diagnostic privacy prompt | Implemented in source | Metadata disclosure appears before the share sheet; cancel shares nothing; confirmed snapshot excludes game data and saves |
 | Diagnostic path redaction | Implemented in source | New persistent messages replace current app-container and temporary prefixes |
 | Loading presentation polish | Implemented in source; runtime acceptance open | Activity indicator; Preparing runtime → Starting game → Waiting for first frame; no fake percentage; first frame hides it; errors stop it |
-| iOS 16.0 / macOS 14.0 targets | Configured in build scripts | Fresh-build every final artifact, inspect recorded minimum OS, then run oldest-target acceptance |
+| iOS 16.0 / macOS 14.0 targets | Signed iOS app plist and app/module Mach-O metadata verify iOS 16.0; macOS 14.0 is configured | Run iOS 16 hardware acceptance; inspect the final macOS artifact and run oldest-target acceptance |
 
 The separate `SunPad.cpu_resource-2026-08-09-102551.ips` report observed 90
 CPU seconds over 118 seconds (76% average) and memory growth from 327.67 MB to
@@ -174,6 +174,11 @@ position. The final physical-iPad pass accepted the longer R slider, continuous
 pressure adjustment, run-and-spray behavior, grouped D-pad editing, and the
 adjusted iPad mapping. Controller, loading accessibility, and compact-iPhone
 acceptance remain open.
+
+A fresh local Release build also passed `scripts/package-ios.sh` and the IPA
+audit as `/private/tmp/SunPad-next-preview-unsigned.ipa`, SHA-256
+`55271a029dbb73bbd06c41ce7036517d5831d1221374e2f330d5a52fc41a5b0e`.
+This is private candidate evidence only; it has not been published or tagged.
 
 | Area | Current state | Required acceptance |
 |---|---|---|

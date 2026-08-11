@@ -16,9 +16,8 @@ desktop and the Simulator; fresh physical-device audio re-acceptance is open.
 ## What is built
 
 - `SunPad.xcodeproj` — universal iPhone/iPad target (device family 1,2),
-  arm64, configured for an iOS 16.0 deployment target. Fresh final-artifact
-  inspection and oldest-OS runtime acceptance remain before claiming verified
-  iOS 16 compatibility.
+  arm64. The signed app plist and app/module Mach-O metadata verify an iOS 16.0
+  minimum; oldest-OS runtime acceptance remains before claiming compatibility.
 - `SunPadCoreHost` — boots the game on a background thread, owns the
   CAMetalLayer surface and the pipe-input bridge.
 - `SunPadGameOverlay` — BellPad-inspired overlay: three-dot menu with render
@@ -136,8 +135,10 @@ headlessly for verification.
 ## Approved mobile improvement boundaries
 
 These are ordered implementation and acceptance boundaries, not claims about
-the current release. Loading, touch, and narrow controller-mapping source work
-is present on the development branch; physical acceptance remains open:
+the public Preview 1 release. Loading, touch, and narrow controller-mapping
+source work is present on the development branch. Large-iPad touch is accepted;
+loading accessibility, compact-iPhone touch, and physical controller mapping
+remain open:
 
 1. **Evidence intake first.** The reported iPhone 15 Pro slowdown is blocked on
    the offered SunPad log plus scene, render scale, controller, thermal state,

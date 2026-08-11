@@ -59,16 +59,18 @@ launched with its Metal and keyboard defaults. See
 [the testing ledger](docs/TESTING.md) for the dated evidence and remaining
 hands-on acceptance checks.
 
-The project and module build configuration now set deployment targets of iOS
-16.0 and macOS 14.0. Those are configured targets, not yet compatibility
-claims: fresh complete artifacts still need minimum-OS inspection and runtime
-acceptance on the oldest supported hardware before the badges can be treated
-as verified support.
+The signed iOS app and generated module now record iOS 16.0 in their final
+artifact metadata. Runtime acceptance on iOS 16 hardware is still required
+before treating that as verified compatibility. macOS 14.0 remains configured
+but still needs final-artifact inspection and oldest-target runtime acceptance.
 
 ## Download the iPhone/iPad preview
 
 The current public download is the unsigned
 [`SunPad-0.1.0-preview.1-unsigned.ipa`](https://github.com/chrissotraidis/sunpad/releases/download/v0.1.0-preview.1/SunPad-0.1.0-preview.1-unsigned.ipa).
+It is the earlier Preview 1 build and does not yet contain the current
+development branch's promoted analog-R/grouped-D-pad baseline, accepted iPad
+default mapping, controller remapping, loading polish, or performance logging.
 It must be re-signed with your Apple identity, including its nested
 `gGMSE01_recomp.dylib`, before installation. It contains no game image or
 save. Follow [`docs/INSTALL_IPA.md`](docs/INSTALL_IPA.md) for the short install
