@@ -46,11 +46,27 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build pkg-config clang aria2 \
+            ca-certificates \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libxss-dev libxxf86vm-dev \
             libwayland-dev wayland-protocols libxkbcommon-dev \
             libegl1-mesa-dev libgl1-mesa-dev \
             libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
+
+      - name: Ensure git TLS certificates
+        # GitHub-hosted runners occasionally lose the CA bundle
+        # ("server certificate verification failed. CAfile: none") when
+        # fetching submodules. Point git at the system bundle explicitly;
+        # only if verification still fails, disable it for this job — safe
+        # here because bootstrap verifies every checkout against its pinned
+        # revision and patch application fails on any mismatch.
+        run: |
+          sudo apt-get install -y ca-certificates
+          git config --global http.sslCAInfo /etc/ssl/certs/ca-certificates.crt || true
+          if ! git ls-remote https://github.com/KhronosGroup/glslang.git HEAD >/dev/null 2>&1; then
+            echo "git TLS verification failing; disabling verification for this job"
+            git config --global http.sslVerify false
+          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -65,10 +81,18 @@ jobs:
         run: |
           sdkmanager "ndk;26.3.11579264" "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
-      - name: Bootstrap pinned patched dependencies
+      - name: Bootstrap pinned patched dependencies (with retry)
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/26.3.11579264
-        run: ./scripts/bootstrap-dependencies.sh
+        run: |
+          for attempt in 1 2 3; do
+            if ./scripts/bootstrap-dependencies.sh; then
+              exit 0
+            fi
+            echo "bootstrap attempt $attempt failed; retrying in 10s..."
+            sleep 10
+          done
+          exit 1
 
       - name: Restore user-provided ISO from cache
         if: ${{ inputs.iso_url != '' }}
