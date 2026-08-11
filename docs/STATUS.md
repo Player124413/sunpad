@@ -93,7 +93,9 @@ code-generating loader).
 15. **Startup feedback**: mobile launch presents an activity indicator with
     honest Preparing runtime, Starting game, and Waiting for first frame
     phases. It uses no synthetic progress percentage and disappears only after
-    the first measured game frame.
+    the first measured game frame. Visual iPad-Simulator acceptance passed for
+    the phase transition, first-frame dismissal, and stopped-indicator module
+    failure alert; a runtime VoiceOver navigation pass remains open.
 
 ### Desktop (previously proven)
 

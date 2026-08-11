@@ -137,8 +137,9 @@ headlessly for verification.
 These are ordered implementation and acceptance boundaries, not claims about
 the public Preview 1 release. Loading, touch, and narrow controller-mapping
 source work is present on the development branch. Large-iPad touch is accepted;
-loading accessibility, compact-iPhone touch, and physical controller mapping
-remain open:
+the loading presentation has visual Simulator acceptance, while a runtime
+VoiceOver pass, compact-iPhone touch, and physical controller mapping remain
+open:
 
 1. **Evidence intake first.** The reported iPhone 15 Pro slowdown is blocked on
    the offered SunPad log plus scene, render scale, controller, thermal state,
