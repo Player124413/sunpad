@@ -33,7 +33,7 @@ index 5de06b9..ecbfc47 100644
          target_sources(moderngekko PRIVATE
              vendor/dolphin/Source/Core/DolphinNoGUI/PlatformMacos.mm)
 diff --git a/include/moderngekko/runtime.hpp b/include/moderngekko/runtime.hpp
-index af75a25..f406d32 100644
+index af75a25..f6bc86c 100644
 --- a/include/moderngekko/runtime.hpp
 +++ b/include/moderngekko/runtime.hpp
 @@ -54,6 +54,9 @@ enum class WindowSystem
@@ -46,7 +46,8 @@ index af75a25..f406d32 100644
    std::filesystem::path user_directory;
    ModuleSource module;
    std::vector<std::filesystem::path> mod_directories;
-@@ -66,6 +69,12 @@ struct RuntimeConfig
+@@ -65,7 +68,13 @@ struct RuntimeConfig
+   bool fullscreen = false;
    bool allow_interpreter = false;
    bool show_fps_in_title = true;
 +  // Test-only Sunshine frame-rate experiment. When enabled for GMSE01, the
@@ -60,10 +61,13 @@ index af75a25..f406d32 100644
  
  enum class RuntimeErrorCode
 diff --git a/src/runtime/dolphin_runtime.cpp b/src/runtime/dolphin_runtime.cpp
-index 981e098..41926e2 100644
+index 981e098..1ddc25c 100644
 --- a/src/runtime/dolphin_runtime.cpp
 +++ b/src/runtime/dolphin_runtime.cpp
-@@ -5,8 +5,14 @@
+@@ -2,11 +2,17 @@
+ 
+ #include "AudioCommon/AudioCommon.h"
+ #include "Common/Config/Config.h"
 +#include "Common/IniFile.h"
  #include "Common/HookableEvent.h"
  #include "Core/Boot/Boot.h"
@@ -78,7 +82,7 @@ index 981e098..41926e2 100644
  #include "Core/Core.h"
  #include "Core/HW/GBACore.h"
  #include "Core/Host.h"
-@@ -24,6 +29,10 @@
+@@ -24,6 +30,10 @@
  #include "moderngekko/mod_loader.hpp"
  #include "moderngekko/module_loader.hpp"
  
@@ -89,7 +93,7 @@ index 981e098..41926e2 100644
  #include <algorithm>
  #include <array>
  #include <atomic>
-@@ -186,6 +190,15 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -186,6 +196,15 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    if (!inspected)
      return {{}, RuntimeError{RuntimeErrorCode::InvalidGame, inspected.error}};
  
@@ -105,7 +109,7 @@ index 981e098..41926e2 100644
    const ModernGekkoModuleRequirements requirements = {
        MODERNGEKKO_CPU_ABI_VERSION, static_cast<std::uint32_t>(sizeof(CPUState)),
        inspected.metadata->disc_id.c_str()};
-@@ -240,10 +258,44 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -240,10 +259,44 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
      UICommon::Init();
      impl->ui_initialized = true;
    }
@@ -150,7 +154,7 @@ index 981e098..41926e2 100644
  #ifdef _WIN32
    else
      impl->platform = Platform::CreateWin32Platform();
-@@ -267,6 +284,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -267,6 +320,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
                           "the requested Dolphin host platform is unavailable"}};
    }
  
@@ -161,7 +165,7 @@ index 981e098..41926e2 100644
    const WindowSystemInfo wsi = impl->platform->GetWindowSystemInfo();
    UICommon::InitControllers(wsi);
    impl->controllers_initialized = true;
-@@ -284,6 +305,14 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -284,6 +341,14 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
                    ShaderCompilationMode::AsynchronousUberShaders);
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
@@ -176,7 +180,7 @@ index 981e098..41926e2 100644
    const std::vector<std::string> audio_backends =
        AudioCommon::GetSoundBackends();
    if (impl->config.headless) {
-@@ -292,6 +321,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -292,6 +357,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
               !std::ranges::contains(audio_backends,
                                      impl->config.audio.backend)) {
      constexpr std::array preferred_backends = {
@@ -186,7 +190,7 @@ index 981e098..41926e2 100644
          BACKEND_CUBEB, BACKEND_PULSEAUDIO, BACKEND_ALSA};
      const auto preferred =
          std::ranges::find_if(preferred_backends, [&](const char *backend) {
-@@ -356,12 +388,13 @@ RuntimeRunResult Runtime::Run() {
+@@ -356,12 +424,13 @@ RuntimeRunResult Runtime::Run() {
    std::unique_ptr<BootParameters> boot;
    {
      std::lock_guard lock(s_runtime_mutex);
@@ -203,6 +207,32 @@ index 981e098..41926e2 100644
      s_boot_session_data.reset();
    }
    if (!boot) {
+@@ -383,18 +452,20 @@ RuntimeRunResult Runtime::Run() {
+                          "Dolphin could not boot sys/main.dol"}};
+   }
+   m_impl->booted = true;
+-  std::jthread title_thread;
++  std::atomic_bool stop_title_thread = false;
++  std::thread title_thread;
+   if (!m_impl->config.headless && m_impl->config.show_fps_in_title) {
+-    title_thread = std::jthread([](std::stop_token stop_token) {
+-      while (!stop_token.stop_requested()) {
++    title_thread = std::thread([&stop_title_thread] {
++      while (!stop_title_thread.load(std::memory_order_relaxed)) {
+         Host_UpdateTitle({});
+-        for (int i = 0; i < 10 && !stop_token.stop_requested(); ++i)
++        for (int i = 0;
++             i < 10 && !stop_title_thread.load(std::memory_order_relaxed); ++i)
+           std::this_thread::sleep_for(std::chrono::milliseconds(100));
+       }
+     });
+   }
+   m_impl->platform->MainLoop();
+-  title_thread.request_stop();
++  stop_title_thread.store(true, std::memory_order_relaxed);
+   if (title_thread.joinable())
+     title_thread.join();
+   m_impl->platform->SaveWindowGeometry();
 diff --git a/tools/frontend_config.cpp b/tools/frontend_config.cpp
 index 03740d4..0aa2492 100644
 --- a/tools/frontend_config.cpp
