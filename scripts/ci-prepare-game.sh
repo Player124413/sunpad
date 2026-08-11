@@ -47,7 +47,11 @@ cmake -S "$MG" -B "$DESKTOP_BUILD" -G Ninja \
   -DUSE_DISCORD_PRESENCE=OFF -DUSE_MGBA=OFF \
   -DUSE_RETRO_ACHIEVEMENTS=OFF -DENABLE_AUTOUPDATE=OFF \
   -DENABLE_ANALYTICS=OFF -DUSE_UPNP=OFF \
-  -DENABLE_CUBEB=OFF -DENABLE_SDL=OFF
+  -DENABLE_CUBEB=OFF
+# NOTE: ENABLE_SDL stays ON (the default): ModernGekko's frontend targets
+# (moderngekko-run/launcher/port) require an SDL3 target at configure time,
+# so the vendored SDL3 submodule is configured (and built as a dependency
+# of inputcommon).
 
 echo "==> Building desktop generation tools"
 cmake --build "$DESKTOP_BUILD" --target moderngekko-port \

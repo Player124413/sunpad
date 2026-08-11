@@ -71,6 +71,19 @@ index 28fe285..768863f 100644
  
    INFO_LOG_FMT(AUDIO, "OpenSLES configuration: {} Hz, {} frames per buffer", sample_rate,
                 m_frames_per_buffer);
+diff --git a/Source/Core/Common/GL/GLContext.cpp b/Source/Core/Common/GL/GLContext.cpp
+index 2414a9e..76c11fb 100644
+--- a/Source/Core/Common/GL/GLContext.cpp
++++ b/Source/Core/Common/GL/GLContext.cpp
+@@ -87,7 +87,7 @@ std::unique_ptr<GLContext> GLContext::Create(const WindowSystemInfo& wsi, bool s
+   if (wsi.type == WindowSystemType::Windows)
+     context = std::make_unique<GLContextWGL>();
+ #endif
+-#if defined(ANDROID)
++#if defined(ANDROID) && HAVE_EGL
+   if (wsi.type == WindowSystemType::Android)
+     context = std::make_unique<GLContextEGLAndroid>();
+ #endif
 diff --git a/Source/Core/DolphinNoGUI/Platform.h b/Source/Core/DolphinNoGUI/Platform.h
 index 3c9b5fd..478c494 100644
 --- a/Source/Core/DolphinNoGUI/Platform.h
