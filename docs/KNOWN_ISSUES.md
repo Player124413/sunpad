@@ -93,13 +93,15 @@ Last updated: 2026-08-11
     Apple system-remapping interaction require physical acceptance.
 18. **60 FPS is test-only** — Sunshine's confirmed baseline is approximately
     30 FPS. A hidden `-sunpadExperimental60FPS` boot path exists for controlled
-    GMSE01 testing; there is no user-facing option. An August 11 physical-iPad
-    smoke held 59.8–59.9 FPS at 0.990–1.007 speed ratio, 2× scale, and nominal
-    thermals, then returned cleanly to 30 FPS. Two StaticRecomp SMC hash
-    mismatches demoted patched chunks to the interpreter, so the path remains
-    default-off and restart-required. Do not call it supported until those
-    warnings, gameplay speed, physics, animation, cutscenes, audio, controller
-    polling, save/reload, thermals, and a sustained session pass.
+    GMSE01 testing; there is no user-facing option. A 14-minute-49-second
+    physical-iPad telemetry pass held 59.7–60.0 FPS at near-1.0 speed ratio,
+    2× scale, and nominal thermals except for one recovered 42.1 FPS / 0.897
+    sample, then returned cleanly to 30 FPS with save/preferences unchanged.
+    The only two SMC mismatches are the exact chunks intentionally modified by
+    the Gecko code; interpreter demotion is required for correctness. Keep the
+    path default-off until hands-on gameplay speed, physics, animation,
+    cutscenes, audio, controller polling, save/reload, and graceful-shutdown
+    fallback evidence pass.
 19. **One severe iPad slowdown is captured but not diagnosed** — the August 11
     physical session stayed on the default 30 FPS path and the on-screen counter
     continued to report 30 FPS while gameplay and dialogue became visibly slow.
