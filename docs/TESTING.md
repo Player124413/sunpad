@@ -190,6 +190,11 @@ and the native-module hash is
 The audit enforces iOS 16.0 in the app plist and both app/module Mach-O files.
 This is current-code private candidate evidence only; it has not been
 published, tagged, installed, or launched on a physical device.
+An exact-HEAD rebuild after the controller-test, package-audit, and
+documentation commits produced
+`/private/tmp/SunPad-next-preview-unsigned-20260811-1601.ipa` with the same
+SHA-256, confirming those non-product changes did not alter the candidate
+bytes.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
