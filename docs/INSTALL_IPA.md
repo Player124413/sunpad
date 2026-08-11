@@ -30,12 +30,30 @@ user reports that Preview 1 does not work there, but no actionable environment,
 signature, or log evidence has been collected. The supported preview workflow
 remains re-signing both Mach-O files and installing the IPA normally.
 
+A bounded August 11, 2026 source/package audit found no obvious structural
+conflict to patch in SunPad. At upstream LiveContainer commit
+[`fe4c0ea`](https://github.com/LiveContainer/LiveContainer/blob/fe4c0ea7607322f7a2c7aa3111d7082054b14c8b/ZSign/zsign.mm#L262-L285),
+the ZSign path recursively enumerates and signs every regular 64-bit Mach-O in
+the guest bundle rather than only files under `Frameworks`. LiveContainer also
+[redirects `NSBundle.mainBundle` to the guest app](https://github.com/LiveContainer/LiveContainer/blob/fe4c0ea7607322f7a2c7aa3111d7082054b14c8b/README.md#patching-nsbundlemainbundle).
+The audited SunPad IPA contains `SunPad.app/gGMSE01_recomp.dylib` and
+`DeviceModuleRelativePath = gGMSE01_recomp.dylib`, so the current evidence does
+not support moving the module or changing the loader speculatively. This is a
+source-level compatibility finding, not proof that SunPad launches there.
+
+Before reporting a failure, use a current official LiveContainer build, run its
+JIT-Less Mode Diagnose when applicable, and use the app-specific **Force
+Re-sign** action if diagnosis succeeds. LiveContainer's own
+[signing troubleshooting](https://livecontainer.github.io/docs/faq/installing-livecontainer)
+recommends those checks for invalid-signature failures.
+
 For a useful LiveContainer investigation, record:
 
 - exact IPA filename and SHA-256;
 - LiveContainer version and download source;
 - device model and OS version;
 - signing and JIT settings;
+- result of JIT-Less Mode Diagnose and Force Re-sign, when applicable;
 - signature/identity output for both `SunPad.app/SunPad` and
   `SunPad.app/gGMSE01_recomp.dylib`;
 - whether a window appears and the first visible error;

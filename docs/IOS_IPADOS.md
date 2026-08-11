@@ -175,6 +175,13 @@ LiveContainer output, and a privacy-reviewed SunPad diagnostic log. Compare the
 same IPA with a normal re-signed install. Never attach the game image, extracted
 assets, saves, signing material, or a device container.
 
+Current upstream source recursively sends every regular 64-bit Mach-O in a
+guest bundle through its signer and redirects `NSBundle.mainBundle` to that
+guest. The audited SunPad candidate includes the root-level module and its
+relative configuration name. No package-layout defect is therefore proven;
+collect the JIT-less diagnostic and Force Re-sign result in addition to the
+evidence above before changing SunPad's loader or package.
+
 ## HDMI + wired-controller crash investigation (2026-08-09)
 
 The iPad retained seven ordinary SunPad crash reports from the prior evening.

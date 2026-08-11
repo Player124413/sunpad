@@ -74,7 +74,12 @@ Last updated: 2026-08-11
     signing/JIT settings, signatures for both Mach-O files, visible launch
     behavior, LiveContainer output, and a privacy-reviewed SunPad log. It must
     also compare the same IPA against a normal re-signed install. Do not upload
-    game data, saves, signing material, or a device container.
+    game data, saves, signing material, or a device container. A current
+    upstream-source audit confirms that LiveContainer recursively signs regular
+    64-bit Mach-O files and redirects `NSBundle.mainBundle` to the guest, while
+    SunPad's audited IPA contains the module and its relative name. No
+    SunPad-side package-layout defect is currently proven; also capture the
+    JIT-less diagnostic and Force Re-sign result.
 15. **Compact-iPhone touch acceptance remains open** — the grouped D-pad and
     longer analog R slider are now the single standard touch path. The physical
     iPad layout, run-and-spray behavior, continuous tracking, full-pressure
