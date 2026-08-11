@@ -179,12 +179,14 @@ acceptance remain open. The host accessibility tree exposes the standard touch
 buttons and analog R value, but the installed iOS 26.5 Simulator image has no
 VoiceOver setting and therefore cannot replace a spoken-navigation run.
 
-A fresh local Release build also passed `scripts/package-ios.sh` and the IPA
-audit as `/private/tmp/SunPad-next-preview-unsigned.ipa`, SHA-256
-`55271a029dbb73bbd06c41ce7036517d5831d1221374e2f330d5a52fc41a5b0e`.
-The audit now enforces iOS 16.0 in the app plist and both app/module Mach-O
-files. This is private candidate evidence only; it has not been published or
-tagged.
+A fresh local Release build was repackaged with the current install guidance
+and passed `scripts/package-ios.sh` and the IPA audit as
+`/private/tmp/SunPad-next-preview-unsigned-20260811.ipa`, SHA-256
+`0d407e2729480bdfc67fa7922e4986c633b0cf39d462f713c44ffaf23deff8a9`.
+The app and native-module hashes are byte-identical to the prior candidate;
+only packaged documentation changed. The audit enforces iOS 16.0 in the app
+plist and both app/module Mach-O files. This is private candidate evidence only;
+it has not been published or tagged.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
