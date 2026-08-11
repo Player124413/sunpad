@@ -1,8 +1,10 @@
-# Android APK build on GitHub Actions.
+# Android APK build on GitHub Actions — LATEST VERSION.
 #
-# NOTE: this workflow is parked outside .github/workflows/ so that changes
-# to it can be pushed without the GitHub App "workflows" permission. Move
-# it to .github/workflows/android-build.yml to activate it.
+# This copy lives in ci/ so it can be pushed without the GitHub App
+# "workflows" permission. The ACTIVE file is .github/workflows/android-build.yml
+# (moved there by the maintainer); when this copy changes, copy it over:
+#   cp ci/android-build.yml .github/workflows/android-build.yml
+#   git add .github/workflows/android-build.yml && git commit && git push
 #
 # What this builds:
 #   - the ModernGekko / Dolphin-derived core for Android arm64-v8a
@@ -31,6 +33,7 @@ on:
 
 permissions:
   contents: read
+  actions: write   # artifacts upload + ISO cache
 
 jobs:
   build-apk:
@@ -42,7 +45,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config clang \
+          sudo apt-get install -y ninja-build pkg-config clang aria2 \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libxss-dev libxxf86vm-dev \
             libwayland-dev wayland-protocols libxkbcommon-dev \
@@ -67,12 +70,25 @@ jobs:
           ANDROID_NDK_HOME: ${{ env.ANDROID_SDK_ROOT }}/ndk/26.3.11579264
         run: ./scripts/bootstrap-dependencies.sh
 
-      - name: Download and validate user-provided ISO
+      - name: Restore user-provided ISO from cache
         if: ${{ inputs.iso_url != '' }}
+        id: iso-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/gmse01.iso
+          key: gmse01-iso-${{ inputs.iso_url }}
+
+      - name: Download user-provided ISO (aria2, multi-connection)
+        if: ${{ inputs.iso_url != '' && steps.iso-cache.outputs.cache-hit != 'true' }}
         env:
           ISO_URL: ${{ inputs.iso_url }}
         run: |
-          curl -L --fail --retry 3 -o /tmp/gmse01.iso "$ISO_URL"
+          aria2c -x16 -s16 -k1M --console-log-level=warn -d /tmp -o gmse01.iso "$ISO_URL"
+          ls -l /tmp/gmse01.iso
+
+      - name: Validate user-provided ISO
+        if: ${{ inputs.iso_url != '' }}
+        run: |
           ls -l /tmp/gmse01.iso
           echo "67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d  /tmp/gmse01.iso" | sha256sum -c -
 
