@@ -129,18 +129,25 @@ static CGFloat const SunPadTriggerDetentEnter = 0.75;
 static CGFloat const SunPadTriggerDetentExit = 0.70;
 static CGFloat const SunPadTriggerAnalogMinimum = 0.25;
 static CGFloat const SunPadTriggerAnalogMaximum = 0.89;
+
+static CGRect SunPadFrameAtNormalizedCenter(CGRect safe, CGFloat x, CGFloat y,
+                                             CGFloat width, CGFloat height) {
+    return CGRectMake(CGRectGetMinX(safe) + x * safe.size.width - width * 0.5,
+                      CGRectGetMinY(safe) + y * safe.size.height - height * 0.5,
+                      width, height);
+}
+
 // Keep the original persisted key names so layouts created while the D-pad
 // grouping was experimental continue to work after grouping becomes standard.
 static NSString *const SunPadExperimentalDPadOriginKey = @"SunPadExperimentalDPadOrigin";
 static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPadScale";
 
-@interface SunPadExperimentalTriggerButton : SunPadGameButton
-@property(nonatomic, assign, getter=isExperimentalEnabled) BOOL experimentalEnabled;
+@interface SunPadTriggerButton : SunPadGameButton
 @property(nonatomic, copy) void (^pressureChanged)(uint8_t pressure, BOOL fullPress);
-- (void)resetExperimentalState;
+- (void)resetState;
 @end
 
-@implementation SunPadExperimentalTriggerButton {
+@implementation SunPadTriggerButton {
     CAShapeLayer *_waterLayer;
     CAShapeLayer *_detentLayer;
     UIImpactFeedbackGenerator *_detentFeedback;
@@ -153,30 +160,18 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
         _waterLayer = [CAShapeLayer layer];
         _waterLayer.fillColor =
             [UIColor colorWithRed:0.10 green:0.67 blue:0.92 alpha:0.72].CGColor;
-        _waterLayer.hidden = YES;
         [self.layer insertSublayer:_waterLayer atIndex:0];
 
         _detentLayer = [CAShapeLayer layer];
         _detentLayer.fillColor = UIColor.clearColor.CGColor;
         _detentLayer.strokeColor = [UIColor colorWithWhite:1.0 alpha:0.48].CGColor;
         _detentLayer.lineWidth = 1.5;
-        _detentLayer.hidden = YES;
         [self.layer insertSublayer:_detentLayer above:_waterLayer];
+        self.layer.masksToBounds = YES;
+        self.accessibilityHint =
+            @"Touch farther right for more pressure. The final section is a full press.";
     }
     return self;
-}
-
-- (void)setExperimentalEnabled:(BOOL)experimentalEnabled {
-    if (_experimentalEnabled == experimentalEnabled)
-        return;
-    _experimentalEnabled = experimentalEnabled;
-    self.layer.masksToBounds = experimentalEnabled;
-    _waterLayer.hidden = !experimentalEnabled;
-    _detentLayer.hidden = !experimentalEnabled;
-    self.accessibilityHint = experimentalEnabled ?
-        @"Touch farther right for more pressure. The final section is a full press." : nil;
-    [self resetExperimentalState];
-    [self setNeedsLayout];
 }
 
 - (void)layoutSubviews {
@@ -275,8 +270,6 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 }
 
 - (BOOL)beginTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
-    if (!self.isExperimentalEnabled)
-        return [super beginTrackingWithTouch:touch withEvent:event];
     _detentFeedback = [[UIImpactFeedbackGenerator alloc]
         initWithStyle:UIImpactFeedbackStyleLight];
     [_detentFeedback prepare];
@@ -286,8 +279,6 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 }
 
 - (BOOL)continueTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
-    if (!self.isExperimentalEnabled)
-        return [super continueTrackingWithTouch:touch withEvent:event];
     // Returning YES keeps this control tracking when the finger drifts past
     // either edge. updateFromTouch clamps the position instead of cancelling
     // the spray while the player is also moving with another finger.
@@ -296,32 +287,24 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 }
 
 - (void)endTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
-    if (!self.isExperimentalEnabled) {
-        [super endTrackingWithTouch:touch withEvent:event];
-        return;
-    }
     self.highlighted = NO;
     if (self.pressureChanged)
         self.pressureChanged(0, NO);
-    [self resetExperimentalState];
+    [self resetState];
 }
 
 - (void)cancelTrackingWithEvent:(UIEvent *)event {
-    if (!self.isExperimentalEnabled) {
-        [super cancelTrackingWithEvent:event];
-        return;
-    }
     self.highlighted = NO;
     if (self.pressureChanged)
         self.pressureChanged(0, NO);
-    [self resetExperimentalState];
+    [self resetState];
 }
 
-- (void)resetExperimentalState {
+- (void)resetState {
     _pressure = 0.0;
     _fullPress = NO;
     _detentFeedback = nil;
-    self.accessibilityValue = self.isExperimentalEnabled ? @"0 percent" : nil;
+    self.accessibilityValue = @"0 percent";
     [self updateWaterAnimated:YES];
 }
 
@@ -354,7 +337,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     UIButton *_menuButton;          // the three-dot menu
     SunPadStickView *_moveStick;
     SunPadStickView *_cStick;
-    SunPadExperimentalTriggerButton *_experimentalRButton;
+    SunPadTriggerButton *_rTriggerButton;
     SunPadDPadEditorGroup *_experimentalDPadGroup;
     NSMutableArray<SunPadGameButton *> *_buttons;
     NSMutableArray<UIGestureRecognizer *> *_editGestures;
@@ -462,27 +445,6 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     }];
     fpsAction.state = settings.showFPSCounter ? UIMenuElementStateOn : UIMenuElementStateOff;
 
-    UIAction *experimentalTouchAction =
-        [UIAction actionWithTitle:@"Experimental Touch Controls"
-                            image:[UIImage systemImageNamed:@"wand.and.stars"]
-                       identifier:nil
-                          handler:^(__kindof UIAction *action) {
-        (void)action;
-        SunPadGameOverlay *strongSelf = weakSelf;
-        if (strongSelf == nil)
-            return;
-        if (strongSelf->_editingLayout)
-            [strongSelf finishLayoutEditing];
-        [strongSelf clearTouchInput];
-        SunPadSettings *currentSettings = [SunPadSettings sharedSettings];
-        currentSettings.experimentalTouchControls = !currentSettings.experimentalTouchControls;
-        [currentSettings synchronize];
-        [strongSelf applyExperimentalTouchControls];
-        [strongSelf refreshMenuButton];
-    }];
-    experimentalTouchAction.state = settings.experimentalTouchControls ?
-        UIMenuElementStateOn : UIMenuElementStateOff;
-
     UIAction *shareLogAction =
         [UIAction actionWithTitle:@"Share Diagnostic Log…"
                             image:[UIImage systemImageNamed:@"square.and.arrow.up"]
@@ -495,7 +457,6 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
         renderMenu,
         aspectMenu,
         fpsAction,
-        experimentalTouchAction,
         [UIAction actionWithTitle:@"Controller Button Mapping…"
                             image:[UIImage systemImageNamed:@"gamecontroller"]
                        identifier:nil handler:^(__kindof UIAction *action) {
@@ -671,7 +632,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 
 - (void)addButton:(NSString *)label mask:(uint16_t)mask {
     SunPadGameButton *button = mask == SunPadButtonR ?
-        [SunPadExperimentalTriggerButton buttonWithType:UIButtonTypeSystem] :
+        [SunPadTriggerButton buttonWithType:UIButtonTypeSystem] :
         [SunPadGameButton buttonWithType:UIButtonTypeSystem];
     [button setTitle:label forState:UIControlStateNormal];
     UIColor *fill = [UIColor colorWithWhite:0.22 alpha:0.88];
@@ -716,10 +677,10 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     [self addEditGesturesToControl:button];
 
     if (mask == SunPadButtonR) {
-        _experimentalRButton = (SunPadExperimentalTriggerButton *)button;
+        _rTriggerButton = (SunPadTriggerButton *)button;
         __weak SunPadGameOverlay *weakSelf = self;
-        _experimentalRButton.pressureChanged = ^(uint8_t pressure, BOOL fullPress) {
-            [weakSelf experimentalRChanged:pressure fullPress:fullPress];
+        _rTriggerButton.pressureChanged = ^(uint8_t pressure, BOOL fullPress) {
+            [weakSelf rPressureChanged:pressure fullPress:fullPress];
         };
     }
 }
@@ -743,8 +704,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 - (void)buttonDown:(SunPadGameButton *)button {
     if (_editingLayout)
         return;
-    if (button.inputMask == SunPadButtonR &&
-        [SunPadSettings sharedSettings].experimentalTouchControls)
+    if (button.inputMask == SunPadButtonR)
         return;
     _touchState.buttons |= button.inputMask;
     if (button.inputMask == SunPadButtonL)
@@ -759,8 +719,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 - (void)buttonUp:(SunPadGameButton *)button {
     if (_editingLayout)
         return;
-    if (button.inputMask == SunPadButtonR &&
-        [SunPadSettings sharedSettings].experimentalTouchControls)
+    if (button.inputMask == SunPadButtonR)
         return;
     _touchState.buttons &= ~button.inputMask;
     if (button.inputMask == SunPadButtonL)
@@ -772,8 +731,8 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     [[SunPadInputMixer sharedMixer] setInputState:_touchState fromTouch:YES];
 }
 
-- (void)experimentalRChanged:(uint8_t)pressure fullPress:(BOOL)fullPress {
-    if (_editingLayout || ![SunPadSettings sharedSettings].experimentalTouchControls)
+- (void)rPressureChanged:(uint8_t)pressure fullPress:(BOOL)fullPress {
+    if (_editingLayout)
         return;
     _touchState.triggerR = pressure;
     if (fullPress)
@@ -789,7 +748,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
         button.transform = CGAffineTransformIdentity;
     [_moveStick reset];
     [_cStick reset];
-    [_experimentalRButton resetExperimentalState];
+    [_rTriggerButton resetState];
     _touchState = {};
     [[SunPadInputMixer sharedMixer] clearInputFromTouch:YES];
 }
@@ -817,66 +776,98 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     CGFloat medium = (pad ? 76.0 : 58.0 * baseScale) * controlScale;
     CGFloat large = (pad ? 104.0 : 78.0 * baseScale) * controlScale;
 
+    CGRect moveDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.1310395315, 0.7905894519, stick, stick) :
+        CGRectMake(CGRectGetMinX(safe) + margin,
+                   CGRectGetMaxY(safe) - stick - margin, stick, stick);
     [self placeControl:_moveStick
-          defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin,
-                                  CGRectGetMaxY(safe) - stick - margin, stick, stick)
+          defaultFrame:moveDefault
             identifier:@"move"];
     CGFloat camera = (pad ? 112.0 : 86.0 * baseScale) * controlScale;
+    CGRect cameraDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.9062957540, 0.8583247156, camera, camera) :
+        CGRectMake(CGRectGetMaxX(safe) - margin - camera,
+                   CGRectGetMaxY(safe) - margin - camera, camera, camera);
     [self placeControl:_cStick
-          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - camera,
-                                  CGRectGetMaxY(safe) - margin - camera, camera, camera)
+          defaultFrame:cameraDefault
             identifier:@"c"];
 
     SunPadGameButton *a = [self buttonWithMask:SunPadButtonA];
     SunPadGameButton *b = [self buttonWithMask:SunPadButtonB];
     SunPadGameButton *x = [self buttonWithMask:SunPadButtonX];
     SunPadGameButton *y = [self buttonWithMask:SunPadButtonY];
+    CGRect aDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.8916544656, 0.7409513961, large, large) :
+        CGRectMake(CGRectGetMaxX(safe) - margin - large,
+                   CGRectGetMaxY(safe) - margin - camera - large - 18.0 * scale,
+                   large, large);
     [self placeControl:a
-          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - large,
-                                  CGRectGetMaxY(safe) - margin - camera - large - 18.0 * scale,
-                                  large, large)
+          defaultFrame:aDefault
             identifier:@"A"];
+    CGRect bDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.8360175695, 0.8092037229, medium, medium) :
+        CGRectMake(CGRectGetMinX(a.frame) - medium - 12.0 * scale,
+                   CGRectGetMidY(a.frame) + 8.0, medium, medium);
     [self placeControl:b
-          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - medium - 12.0 * scale,
-                                  CGRectGetMidY(a.frame) + 8.0, medium, medium)
+          defaultFrame:bDefault
             identifier:@"B"];
+    CGRect xDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.9593704246, 0.7156153051, small, small) :
+        CGRectMake(CGRectGetMidX(a.frame) - small * 0.5,
+                   CGRectGetMinY(a.frame) - small - 10.0 * scale, small, small);
     [self placeControl:x
-          defaultFrame:CGRectMake(CGRectGetMidX(a.frame) - small * 0.5,
-                                  CGRectGetMinY(a.frame) - small - 10.0 * scale,
-                                  small, small)
+          defaultFrame:xDefault
             identifier:@"X"];
+    CGRect yDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.9542459736, 0.7869700103, small, small) :
+        CGRectMake(CGRectGetMinX(a.frame) - small - 8.0 * scale,
+                   CGRectGetMinY(a.frame) - small + 8.0, small, small);
     [self placeControl:y
-          defaultFrame:CGRectMake(CGRectGetMinX(a.frame) - small - 8.0 * scale,
-                                  CGRectGetMinY(a.frame) - small + 8.0, small, small)
+          defaultFrame:yDefault
             identifier:@"Y"];
 
     CGFloat shoulderWidth = (pad ? 132.0 : 94.0 * baseScale) * controlScale;
     CGFloat shoulderY = CGRectGetMinY(safe) + (pad ? 92.0 : 68.0 * baseScale);
+    CGRect lDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.1281112738, 0.6633919338,
+                                      shoulderWidth, small) :
+        CGRectMake(CGRectGetMinX(safe) + margin, shoulderY, shoulderWidth, small);
     [self placeControl:[self buttonWithMask:SunPadButtonL]
-          defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin, shoulderY, shoulderWidth, small)
+          defaultFrame:lDefault
             identifier:@"L"];
-    BOOL experimentalTouch = [SunPadSettings sharedSettings].experimentalTouchControls;
-    CGFloat rightShoulderWidth = experimentalTouch ?
-        shoulderWidth + 2.0 * small + 24.0 * scale : shoulderWidth;
+    CGFloat rightShoulderWidth = shoulderWidth + 2.0 * small + 24.0 * scale;
     SunPadGameButton *rightShoulder = [self buttonWithMask:SunPadButtonR];
+    CGRect rDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.8960468521, 0.6478800414,
+                                      rightShoulderWidth, small) :
+        CGRectMake(CGRectGetMaxX(safe) - margin - rightShoulderWidth, shoulderY,
+                   rightShoulderWidth, small);
     [self placeControl:rightShoulder
-          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - rightShoulderWidth, shoulderY,
-                                  rightShoulderWidth, small)
+          defaultFrame:rDefault
             identifier:@"R"];
+    CGRect zDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.8275988287, 0.7213029990, small, small) :
+        CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth - small - 12.0 * scale,
+                   shoulderY, small, small);
     [self placeControl:[self buttonWithMask:SunPadButtonZ]
-          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth - small - 12.0 * scale,
-                                  shoulderY, small, small)
+          defaultFrame:zDefault
             identifier:@"Z"];
     CGFloat startWidth = (pad ? 116.0 : 92.0 * baseScale) * controlScale;
+    CGRect startDefault = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.8967789165, 0.5780765253,
+                                      startWidth, small) :
+        CGRectMake(CGRectGetMidX(safe) - startWidth * 0.5,
+                   CGRectGetMinY(safe) + margin, startWidth, small);
     [self placeControl:[self buttonWithMask:SunPadButtonStart]
-          defaultFrame:CGRectMake(CGRectGetMidX(safe) - startWidth * 0.5,
-                                  CGRectGetMinY(safe) + margin, startWidth, small)
+          defaultFrame:startDefault
             identifier:@"Start"];
 
     CGFloat d = (pad ? 48.0 : 36.0 * baseScale) * controlScale;
     CGFloat dx = CGRectGetMaxX(_moveStick.frame) + (pad ? 34.0 : 18.0 * scale);
-    CGRect defaultGroupFrame = CGRectMake(dx, CGRectGetMidY(_moveStick.frame) - 1.5 * d,
-                                           3.0 * d, 3.0 * d);
+    CGRect defaultGroupFrame = pad ?
+        SunPadFrameAtNormalizedCenter(safe, 0.2686676428, 0.7947259566,
+                                      3.0 * d, 3.0 * d) :
+        CGRectMake(dx, CGRectGetMidY(_moveStick.frame) - 1.5 * d, 3.0 * d, 3.0 * d);
     [self placeExperimentalDPadGroupWithDefaultFrame:defaultGroupFrame safeArea:safe];
     [self layoutExperimentalDPadButtons];
 
@@ -1494,15 +1485,6 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 
 #pragma mark - Settings application
 
-- (void)applyExperimentalTouchControls {
-    BOOL enabled = [SunPadSettings sharedSettings].experimentalTouchControls;
-    _experimentalRButton.experimentalEnabled = enabled;
-    [_resetLayoutButton setTitle:@"Reset This Device Layout"
-                        forState:UIControlStateNormal];
-    [self setNeedsLayout];
-    [self updateControlAppearance];
-}
-
 - (void)applySettings {
     SunPadSettings *settings = [SunPadSettings sharedSettings];
     [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"SunPadEditingControlLayout"];
@@ -1512,7 +1494,10 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     _hideControlsSwitch.on = settings.hideTouchControlsWhenControllerConnected;
     _modernCStickSwitch.on = settings.modernCStickHorizontal;
     _editLayoutSwitch.on = NO;
-    [self applyExperimentalTouchControls];
+    [[NSUserDefaults standardUserDefaults]
+        removeObjectForKey:@"SunPadExperimentalTouchControls"];
+    [_resetLayoutButton setTitle:@"Reset This Device Layout"
+                        forState:UIControlStateNormal];
     [self endLayoutEditing];
     [self setNeedsLayout];
 }

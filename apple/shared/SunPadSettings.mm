@@ -79,14 +79,6 @@
     [[NSUserDefaults standardUserDefaults] setBool:value forKey:@"SunPadHideControlsOnController"];
 }
 
-- (BOOL)experimentalTouchControls {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"SunPadExperimentalTouchControls"];
-}
-
-- (void)setExperimentalTouchControls:(BOOL)value {
-    [[NSUserDefaults standardUserDefaults] setBool:value forKey:@"SunPadExperimentalTouchControls"];
-}
-
 - (BOOL)modernCStickHorizontal {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"SunPadModernCStickHorizontal"];
 }

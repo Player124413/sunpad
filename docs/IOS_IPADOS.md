@@ -145,10 +145,10 @@ is present on the development branch; physical acceptance remains open:
    checklist in [INSTALL_IPA.md](INSTALL_IPA.md). Do not guess at either cause.
 2. **Loading polish only.** Improve the existing presentation while keeping the
    current startup architecture and first-frame completion signal.
-3. **Touch controls.** Treat the four D-pad directions as one layout group for
-   move/resize/reset without changing directional hit testing. Keep analog R
-   touch behavior behind a persisted, default-off experimental switch until
-   physical iPhone/iPad play acceptance.
+3. **Touch controls.** Grouped D-pad editing and the wider analog R slider are
+   the accepted standard path. The August 11 physical-iPad mapping is the
+   large-iPad default; compact-iPhone defaults remain unchanged pending their
+   own play pass.
 4. **Physical-controller mapping.** Limit v1 to GameCube A/B/X/Y/Z mapped
    one-to-one across the four face buttons and right shoulder. Preserve sticks,
    D-pad, Start, left shoulder, analog L/R pressure, touch/controller merging,

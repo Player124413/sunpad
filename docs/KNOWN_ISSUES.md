@@ -77,21 +77,18 @@ Last updated: 2026-08-11
     behavior, LiveContainer output, and a privacy-reviewed SunPad log. It must
     also compare the same IPA against a normal re-signed install. Do not upload
     game data, saves, signing material, or a device container.
-15. **Analog R remains experimental** — grouped D-pad move/resize/reset is now
-    standard in both touch modes; directional hit testing is unchanged. The
-    persisted, default-off Experimental Touch Controls switch enables only the
-    longer horizontal R pressure slider. Its second iPad iteration keeps R, Z,
-    and the face-button cluster in their existing saved positions, tracks
-    beyond both edges, and gives the final quarter to the full-press detent.
-    Run-and-spray, full press, cancel, multitouch, and restart need a fresh
-    physical acceptance pass.
+15. **Compact-iPhone touch acceptance remains open** — the grouped D-pad and
+    longer analog R slider are now the single standard touch path. The physical
+    iPad layout, run-and-spray behavior, continuous tracking, full-pressure
+    detent, animation, and editing were accepted on August 11, 2026. iPhone
+    defaults were intentionally left unchanged and need a separate play pass.
 16. **Development device installs must provision the native module after each
     app update** — use `scripts/deploy-ios-device.sh`. The helper installs in
     place, copies the signed module to `tmp/gGMSE01_recomp.dylib`, and launches
     only after both steps complete. The runtime also falls back to this stable
     device filename when a Simulator-generated development plist is present.
 17. **Physical controller remapping is intentionally narrow** — remapping is
-    is implemented for GameCube A/B/X/Y/Z across the four face buttons and
+    implemented for GameCube A/B/X/Y/Z across the four face buttons and
     right shoulder. Conflicts swap one-to-one and reset restores defaults.
     Sticks, D-pad, Start, left shoulder, and analog triggers stay fixed. Source
     regression tests pass; DualSense pressure, connect/disconnect handoff, and

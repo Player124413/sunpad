@@ -152,11 +152,9 @@ Current branch evidence: `./scripts/check-repository.sh` passes; the
 ModernGekko iPhoneOS core and provisioned archive rebuild successfully; and a
 generic iPhoneOS Debug app containing the signed local GMSE01 module passes
 `codesign --verify --deep --strict`. A clean iPad-simulator core/module/app
-build also reaches a live game frame: the legacy layout remains the default,
-the experimental menu state and analog-R accessibility value are present when
-enabled, and editor mode exposes one outlined D-pad group with one persisted
-size control. The simulator was restored to the legacy/default setting after
-the A/B check. On the physical iPad, a normal device reboot recovered a wedged
+build also reaches a live game frame, exposes the analog-R accessibility value,
+and shows one outlined D-pad group with one persisted size control in editor
+mode. On the physical iPad, a normal device reboot recovered a wedged
 CoreDevice file service; the current save and preferences were backed up, the
 signed app was installed in place, and the app relaunched successfully. The
 post-install save hash is identical. The preferences retain the same values;
@@ -170,14 +168,16 @@ recorded `moduleExists=1`, `runtime created`, input connection, and a sample of
 29.9 FPS / 0.995 speed ratio / nominal thermal state at 2× render scale. The GCI
 save remained byte-identical; all non-D-pad control origins remained exact,
 while the D-pad's stored directional centers reflect its accepted grouped
-position. Physical touch, controller, loading, and gameplay acceptance remain
-open.
+position. The final physical-iPad pass accepted the longer R slider, continuous
+pressure adjustment, run-and-spray behavior, grouped D-pad editing, and the
+adjusted iPad mapping. Controller, loading accessibility, and compact-iPhone
+acceptance remain open.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
 | Loading polish | Implemented in source; signed iPhoneOS build and in-place device launch passed; hands-on observation pending | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
-| Grouped D-pad layout | First iPad pass accepted grouped move/resize; promoted to both touch modes for the second build | Four directions move/resize/reset as one layout group; directional hit regions and simultaneous/rolling direction behavior stay unchanged; compact iPhone and large iPad layout persistence/readback pass |
-| Experimental analog R touch | First iPad pass accepted the animation/pressure behavior but found the control too short and tracking could drop while sliding; wider continuous-tracking iteration implemented without moving R, Z, or the face-button cluster | Existing tap/full-press behavior remains the default; longer opt-in slider stays in the saved R position; minimum pressure clamps beyond the left edge; final-quarter full-pressure haptic clamps beyond the right edge; run-and-spray, cancel, multitouch, layout edit, controller coexistence, and restart pass on physical iPhone and iPad |
+| Grouped D-pad layout | Physical-iPad move/resize and gameplay accepted; it is the single standard D-pad layout path | Four directions move/resize/reset as one group; directional hit regions and rolling-direction behavior stay unchanged; compact-iPhone layout pass remains open |
+| Analog R touch | Physical-iPad animation, run-and-spray, pressure adjustment, continuous tracking, and full-pressure behavior accepted; it is the single standard R path | Accepted normalized position is the large-iPad default; minimum and maximum edge clamping and final-quarter haptic remain stable; compact-iPhone layout and gameplay pass remains open |
 | Physical controller mapping | Implemented in source; pure mapping/persistence test passed | A/B/X/Y/Z only; one-to-one conflict swap; reset/default/corrupt persistence; no stuck input while using the mapping menu; DualSense Bluetooth and USB preserve analog L/R pressure; sticks, D-pad, Start, left shoulder, connect/disconnect handoff, touch hiding, and Modern C-stick behavior remain unchanged |
 | 60 FPS | Hidden boot-time source path; config/build checks passed; not supported | Default off; restart required; no live switch; verify real-time gameplay speed, physics, animation, cutscenes, audio pitch/continuity, controller polling, save/reload compatibility, 30 FPS fallback, thermal/memory behavior, static-recomp fallback/SMC counters, and at least one sustained physical-device session before any support claim |
 | iPad/iPhone slowdown | One August 11 iPad reproduction: visible 30 FPS counter remained at 30 while gameplay/dialogue slowed; captured log proves default 30 FPS mode but lacks performance samples | New builds log FPS, speed ratio, EFB, render scale, thermal state, and Low Power Mode every 10 seconds; reproduce and share the bounded log before timing/render changes. For external reports also capture release/commit, device/OS, scene, controller, elapsed time, and any `cpu_resource` report |
