@@ -215,6 +215,18 @@ public asset was created. Rebuild from merged `main` before the later IPA
 republication so the public artifact and release notes point at the merge
 commit rather than this branch commit.
 
+The Preview 2 release candidate adds the corrected copy-based document picker
+and Files-visible SunPad-folder import from commit `5a16b2f`, then carries the
+accepted touch, diagnostics, lifecycle, and experimental-60-FPS work forward
+as app build 2. The fresh iPhoneOS core/module build, unsigned Release app,
+repository gate, and package audit passed. Two independent IPA packages were
+byte-identical at 26,179,123 bytes and SHA-256
+`a84579cc089f9afaf39a7e3b7c36d97bb9430549c9fca1dc49c6c375b7442e3e`.
+The audit confirmed arm64 iPhoneOS binaries, iOS 16.0 minimum metadata, build
+2, both Files-import plist flags, the nested GMSE01 module, and exclusion of
+game data, saves, logs, signing material, and personal paths. Rebuild and
+re-audit once from merged `main` before attaching the public Preview 2 asset.
+
 | Area | Current state | Required acceptance |
 |---|---|---|
 | Loading polish | Visual iPad-Simulator pass: honest phases appeared before game output; first output hid the presentation; an invalid-module copy stopped the indicator and showed a readable rejection alert; reinstalling the untouched build rendered again. Host accessibility inspection exposes the standard controls and analog R value. Signed iPhoneOS build and in-place device launch also passed; physical-device VoiceOver observation remains open because this Simulator image does not expose VoiceOver | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |

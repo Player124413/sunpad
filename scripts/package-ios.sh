@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 APP="${1:-/tmp/SunPadReleaseData/Build/Products/Release-iphoneos/SunPad.app}"
 MODULE="${2:-/tmp/sunpad-module-ios-device/gGMSE01_recomp.dylib}"
-OUTPUT="${3:-$ROOT/artifacts/SunPad-0.1.0-preview.1-unsigned.ipa}"
+OUTPUT="${3:-$ROOT/artifacts/SunPad-0.1.0-preview.2-unsigned.ipa}"
 
 [[ "$APP" = /* ]] || APP="$ROOT/$APP"
 [[ "$MODULE" = /* ]] || MODULE="$ROOT/$MODULE"
