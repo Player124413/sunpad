@@ -34,10 +34,26 @@ ensure_checkout() {
 }
 
 apply_patch_once() {
-  local checkout=$1 patch=$2
-  if git -C "$checkout" apply --reverse --check "$patch" >/dev/null 2>&1; then
+  # Idempotent application. "Already applied" is detected by a signature
+  # marker (a file the patch adds, or a string it introduces), NOT by
+  # `git apply --reverse --check`: later snapshots (0002) edit the same
+  # files at overlapping hunks (e.g. ModernGekko/CMakeLists.txt), which
+  # breaks reverse-checking of earlier patches (0001) on an 0001+0002 tree.
+  local checkout=$1 patch=$2 marker=$3
+  local applied=0
+  if [[ "$marker" == *"::"* ]]; then
+    local marker_file="${marker%%::*}" marker_regex="${marker#*::}"
+    if grep -qE "$marker_regex" "$checkout/$marker_file" 2>/dev/null; then
+      applied=1
+    fi
+  elif [[ -f "$checkout/$marker" ]]; then
+    applied=1
+  fi
+  if (( applied )); then
     echo "already applied: ${patch#$ROOT/}"
-  elif git -C "$checkout" apply --check "$patch" >/dev/null 2>&1; then
+    return
+  fi
+  if git -C "$checkout" apply --check "$patch" >/dev/null 2>&1; then
     git -C "$checkout" apply "$patch"
     echo "applied: ${patch#$ROOT/}"
   else
@@ -116,9 +132,11 @@ if [[ "$actual_dolphin" != "$DOLPHIN_REV" ]]; then
   exit 1
 fi
 
-apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch"
+apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch" \
+  "CMakeLists.txt::MODERNGEKKO_HAVE_IOS"
 apply_patch_once "$MG/vendor/dolphin" \
-  "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch"
+  "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch" \
+  "Source/Core/DolphinNoGUI/PlatformIOS.mm"
 
 # Android runtime deltas (0002): ANativeWindow platform, SunPad OpenSL ES
 # audio wiring, and the Pipes-only input stance. The Vulkan backend needs
@@ -129,9 +147,11 @@ if [[ -n "${ANDROID_NDK_HOME:-}${ANDROID_NDK_ROOT:-}" ]]; then
     Externals/Vulkan-Headers Externals/VulkanMemoryAllocator \
     Externals/libadrenotools
 fi
-apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch"
+apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch" \
+  "CMakeLists.txt::MODERNGEKKO_HAVE_ANDROID"
 apply_patch_once "$MG/vendor/dolphin" \
-  "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch"
+  "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch" \
+  "Source/Core/DolphinNoGUI/PlatformAndroid.cpp"
 
 verify_patch_scope "$MG" --allow vendor/dolphin \
   "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch" \
