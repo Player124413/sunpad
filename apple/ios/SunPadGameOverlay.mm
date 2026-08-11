@@ -458,11 +458,13 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 
         NSString *nextMode = currentSettings.experimental60FPS ?
             @"experimental 60 FPS" : @"the original 30 FPS mode";
+        NSString *warning = currentSettings.experimental60FPS ?
+            @"Experimental 60 FPS is known to be unsuitable for normal play. " : @"";
         UIAlertController *alert =
             [UIAlertController alertControllerWithTitle:@"Restart Required"
                                                 message:[NSString stringWithFormat:
-                @"This change applies the next time SunPad launches. Close and reopen the app to use %@.",
-                nextMode]
+                @"%@This change applies the next time SunPad launches. Close and reopen the app to use %@.",
+                warning, nextMode]
                                          preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"OK"
                                                   style:UIAlertActionStyleDefault

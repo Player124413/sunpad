@@ -322,8 +322,8 @@ physical-device audio re-acceptance, iPhone performance, broader scene
 coverage, physical lifecycle/save acceptance, compressed image support, and
 broader macOS gameplay acceptance remain explicit work. A default-off
 **Experimental 60 FPS (Restart Required)** three-dot-menu option is test-only
-until timing, audio, save, and sustained hands-on hardware gates pass. Original
-30 FPS remains the default. Wii U GameCube Adapter, HD
+and is known from hands-on physical-iPad testing to be unsuitable for normal
+play. Original 30 FPS remains the supported default. Wii U GameCube Adapter, HD
 textures, Vision Pro, Apple TV, and Eclipse/general mod support remain backlog
 research rather than promised features.
 

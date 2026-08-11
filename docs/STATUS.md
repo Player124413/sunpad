@@ -150,8 +150,10 @@ code-generating loader).
   thermals apart from one recovered hitch, then restored normal 30 FPS with
   save/preferences unchanged. The two SMC demotions exactly match the intended
   Gecko code patches and are required for correctness. It remains test-only,
-  default-off, and restart-required until hands-on timing/audio/controller and
-  graceful-shutdown counter gates pass.
+  default-off, and restart-required. A subsequent hands-on physical-iPad test
+  judged the mode unusable for normal play, so this release does not claim 60
+  FPS support; the option remains available only to expose that experimental
+  limitation.
 - The signed iOS app plist and both app/module `LC_BUILD_VERSION` commands
   verify an iOS 16.0 minimum. Oldest-device runtime acceptance remains open;
   the corresponding final macOS artifact inspection is still pending.
@@ -179,8 +181,8 @@ behavior has shipped or passed:
 4. Validate the implemented narrow physical-controller remapping for A/B/X/Y/Z
    with one-to-one conflicts, reset, persistence, and DualSense half-press
    coverage.
-5. Treat the exposed 60 FPS switch as a restart-required test mode; do not
-   describe it as supported until all timing and physical-device gates pass.
+5. Treat the exposed 60 FPS switch as a restart-required test mode known to be
+   unsuitable for normal play; keep 30 FPS as the supported default.
 6. Keep Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV, and
    Eclipse/general mods in feasibility backlog, separate from the stability
    update.

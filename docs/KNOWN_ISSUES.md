@@ -109,10 +109,12 @@ Last updated: 2026-08-11
     recovered 42.1 FPS / 0.897 sample, then returned cleanly to 30 FPS with
     save/preferences unchanged.
     The only two SMC mismatches are the exact chunks intentionally modified by
-    the Gecko code; interpreter demotion is required for correctness. Keep the
-    path default-off until hands-on gameplay speed, physics, animation,
-    cutscenes, audio, controller polling, save/reload, and graceful-shutdown
-    fallback evidence pass.
+    the Gecko code; interpreter demotion is required for correctness. A
+    subsequent hands-on physical-iPad test judged 60 FPS unusable for normal
+    play. Keep the option default-off and explicitly experimental. If this work
+    is revisited, capture the specific gameplay timing, physics, animation,
+    cutscene, audio, controller, save/reload, and graceful-shutdown failures
+    before attempting another patch.
 19. **One severe iPad slowdown is captured but not diagnosed** — the August 11
     physical session stayed on the default 30 FPS path and the on-screen counter
     continued to report 30 FPS while gameplay and dialogue became visibly slow.
