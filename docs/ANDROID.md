@@ -67,6 +67,9 @@ Ninja, Git, Python) plus
 - a legally obtained Super Mario Sunshine USA revision 0 image (`GMSE01`)
   and the prepared module sources from `scripts/prepare-game.sh`.
 
+The repo carries a Gradle wrapper (`android/gradlew`, Gradle 8.9), so the
+app build does not need a system Gradle install.
+
 Build the core and provision the app:
 
 ```sh
@@ -74,10 +77,13 @@ Build the core and provision the app:
 ```
 
 This runs `bootstrap-dependencies.sh` (which now also applies the Android
-runtime patches and initializes `Externals/libadrenotools` when an NDK is
+runtime patches and initializes the Vulkan submodules —
+`Vulkan-Headers`, `VulkanMemoryAllocator`, `libadrenotools` — when an NDK is
 present), configures ModernGekko for `arm64-v8a` with Vulkan, builds
 `libmoderngekko.a` and the full core library set, builds the GMSE01 module as
-`/tmp/sunpad-module-android/gGMSE01_recomp.so`, and writes the gitignored
+`/tmp/sunpad-module-android/gGMSE01_recomp.so` **when the prepared game
+sources exist** (otherwise the module step is skipped with a warning — the
+core and app do not need game data), and writes the gitignored
 `android/app/src/main/cpp/generated/core_libs.cmake` with the host-local
 archive list and include paths.
 
@@ -85,11 +91,54 @@ Build the APK:
 
 ```sh
 cd android
-gradle :app:assembleDebug
+./gradlew :app:assembleDebug
 ```
 
 The APK never contains game data or the game module. The debug APK is
 installable with `adb install app/build/outputs/apk/debug/app-debug.apk`.
+
+## Building with GitHub Actions
+
+The repository ships `ci/android-build.yml`, a workflow that builds the
+whole Android app on GitHub's `ubuntu-latest` runners — no local Mac, NDK,
+or game data needed:
+
+1. installs JDK 17, the Android SDK/NDK r26, and Ninja;
+2. runs `bootstrap-dependencies.sh` (pinned clones + the 0001/0002 patches);
+3. runs `android-build-core.sh` (Android arm64 core, Vulkan + OpenSL ES);
+4. builds `app-debug.apk` with `./gradlew :app:assembleDebug` and runs the
+   JUnit mapping tests;
+5. uploads the APK as the `sunpad-debug-apk` artifact (Actions → run →
+   Artifacts).
+
+To activate it, move the file back into GitHub's workflow directory (the
+GitHub App used by the Arena agent lacks the `workflows` permission, so the
+move must be done with your own account):
+
+```sh
+mkdir -p .github/workflows
+git mv ci/android-build.yml .github/workflows/android-build.yml
+git commit -m "Activate Android build workflow"
+git push
+```
+
+The workflow also runs on `workflow_dispatch`, so after activation you can
+trigger a build manually from the Actions tab even without pushing.
+
+What the CI APK contains and does not contain:
+
+- **Contains**: the app, the JNI shim, and the statically linked
+  ModernGekko/Dolphin core (Vulkan + OpenSL ES + Pipes input).
+- **Does not contain**: the GMSE01 recompiled module and game data. The
+  module must be generated from your own disc (`scripts/prepare-game.sh`)
+  and provisioned on the device, exactly as with a locally built APK
+  (step "On-device provisioning" below). The CI build therefore proves the
+  whole pipeline compiles; gameplay acceptance still happens on your
+  device.
+
+The first CI run may need small fixes (archive names in
+`android-build-core.sh`, NDK version bumps) — the build log will say
+precisely what is missing.
 
 ### On-device provisioning
 

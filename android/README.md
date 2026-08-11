@@ -8,8 +8,11 @@ Quick summary:
 
 ```sh
 ./scripts/android-build-core.sh   # NDK required; builds core + module, provisions app
-cd android && gradle :app:assembleDebug
+cd android && ./gradlew :app:assembleDebug
 ```
+
+A GitHub Actions workflow (`ci/android-build.yml`) builds the APK in CI —
+see `docs/ANDROID.md` → "Building with GitHub Actions" for activation.
 
 - The app targets `arm64-v8a`, Android 8.0 (API 26)+, renders with Vulkan
   into a `SurfaceView`, and plays audio through OpenSL ES.

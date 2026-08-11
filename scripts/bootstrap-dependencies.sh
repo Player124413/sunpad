@@ -103,11 +103,13 @@ verify_patch_scope "$MG/vendor/dolphin" \
   "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch"
 
 # Android runtime deltas (0002): ANativeWindow platform, SunPad OpenSL ES
-# audio wiring, and the Pipes-only input stance. libadrenotools is only
-# needed for Android arm64 Vulkan builds, so it is initialized only when an
-# Android NDK is available on this machine.
+# audio wiring, and the Pipes-only input stance. The Vulkan backend needs
+# the Vulkan-Headers/VMA/libadrenotools submodules, so they are initialized
+# only when an Android NDK is available on this machine.
 if [[ -n "${ANDROID_NDK_HOME:-}${ANDROID_NDK_ROOT:-}" ]]; then
-  git -C "$MG/vendor/dolphin" submodule update --init Externals/libadrenotools
+  git -C "$MG/vendor/dolphin" submodule update --init \
+    Externals/Vulkan-Headers Externals/VulkanMemoryAllocator \
+    Externals/libadrenotools
 fi
 apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch"
 apply_patch_once "$MG/vendor/dolphin" \

@@ -119,8 +119,9 @@ code-generating loader).
   and gamepad remapping, ported from iOS) + NDK tooling are in-tree, but
   nothing has been compiled with the NDK or booted on a device/emulator yet.
   Vulkan, OpenSL ES, ANativeWindow, SAF import, and the Pipes input path all
-  await their first acceptance run. The CI workflow is parked at
-  `ci/repository-checks.yml` until a maintainer moves it back to
+  await their first acceptance run. CI workflows are parked at
+  `ci/repository-checks.yml` and `ci/android-build.yml` (the latter builds
+  the full Android APK on GitHub Actions) until a maintainer moves them to
   `.github/workflows/`.
 - Physical-iPad audio re-acceptance with the fixed core has not run yet; the
   2026-08-08 timebase fix is verified on desktop parity runs and the iOS
