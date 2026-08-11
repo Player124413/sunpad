@@ -186,11 +186,13 @@ and passed `scripts/package-ios.sh` and the IPA audit as
 The app and native-module hashes are byte-identical to the prior candidate;
 only packaged documentation changed. The audit enforces iOS 16.0 in the app
 plist and both app/module Mach-O files. This is private candidate evidence only;
-it has not been published or tagged.
+it has not been published or tagged. It predates the lifecycle source change
+below and is no longer the current-code candidate.
 
 | Area | Current state | Required acceptance |
 |---|---|---|
 | Loading polish | Visual iPad-Simulator pass: honest phases appeared before game output; first output hid the presentation; an invalid-module copy stopped the indicator and showed a readable rejection alert; reinstalling the untouched build rendered again. Host accessibility inspection exposes the standard controls and analog R value. Signed iPhoneOS build and in-place device launch also passed; physical-device VoiceOver observation remains open because this Simulator image does not expose VoiceOver | Cold/warm launch shows each honest phase as applicable; no unexplained black wait or synthetic percentage; first measured frame hides indicator and label; missing data and runtime errors stop the indicator and remain readable; VoiceOver label matches the visible phase |
+| Lifecycle and audio session | iPhoneOS and iPad-Simulator builds pass. Foregrounding Settings paused the runtime and started/ended the two-second save grace; returning to SunPad resumed the same PID, reactivated the Speaker route, rendered again, and continued at 30 FPS / near-1.0 speed | Physical-device background/foreground with byte-identical recognized GCI; real audio interruption begin/end and audible recovery; no stuck input or audio; repeat after an in-game save |
 | Grouped D-pad layout | Physical-iPad move/resize and gameplay accepted; it is the single standard D-pad layout path | Four directions move/resize/reset as one group; directional hit regions and rolling-direction behavior stay unchanged; compact-iPhone layout pass remains open |
 | Analog R touch | Physical-iPad animation, run-and-spray, pressure adjustment, continuous tracking, and full-pressure behavior accepted; it is the single standard R path | Accepted normalized position is the large-iPad default; minimum and maximum edge clamping and final-quarter haptic remain stable; compact-iPhone layout and gameplay pass remains open |
 | Physical controller mapping | Implemented in source; pure mapping/persistence test passed | A/B/X/Y/Z only; one-to-one conflict swap; reset/default/corrupt persistence; no stuck input while using the mapping menu; DualSense Bluetooth and USB preserve analog L/R pressure; sticks, D-pad, Start, left shoulder, connect/disconnect handoff, touch hiding, and Modern C-stick behavior remain unchanged |

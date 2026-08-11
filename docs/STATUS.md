@@ -157,9 +157,11 @@ code-generating loader).
   save/reload, and extended-session acceptance remain open.
 - Touch controls are usable on physical iPad, including move mode, individual
   sizing, opacity, GameCube-style colors, and a closable settings panel.
-- App lifecycle hardening is partial: backgrounding/pause hooks exist but
-  save-flushing before suspension and audio-interruption restoration are not
-  implemented.
+- App lifecycle hardening now pauses/resumes the runtime, deactivates and
+  reactivates the audio session, and keeps a two-second background task alive
+  for Dolphin's existing one-second GCI-folder flush. The iPad Simulator passed
+  a same-process background/foreground cycle; physical save readback and a real
+  audio interruption remain open.
 
 ## Approved stability-improvement order
 
@@ -187,8 +189,9 @@ behavior has shipped or passed:
    audible checks in `docs/AUDIO_ISSUE.md`.
 2. Module provisioning for imported discs beyond the dev GMSE01 build
    (game-ID matching against the provisioned module).
-3. App lifecycle: save flushing before suspension, audio-interruption
-   restoration, controller connect/disconnect during gameplay.
+3. App lifecycle: physical save-hash readback after backgrounding, a real
+   audio-interruption restoration pass, and controller connect/disconnect
+   during gameplay.
 4. Desktop/macOS app gates: plaza gameplay, objective, save/reload, connected
    controller, and extended-session evidence.
 

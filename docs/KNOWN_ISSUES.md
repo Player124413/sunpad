@@ -17,9 +17,12 @@ Last updated: 2026-08-11
    recompiled module is provisioned from the Mac (`dev-config.plist`); iOS has
    no C compiler, so the module for a given disc must be produced by the Mac
    toolchain and matched by game ID.
-3. **Lifecycle stubs** — backgrounding/pause hooks exist, but save flushing
-   before suspension and audio-interruption restoration are not implemented
-   (Stage 4 lifecycle gate).
+3. **Physical lifecycle acceptance remains** — lifecycle hooks now pause the
+   runtime, deactivate/reactivate the audio session, and grant Dolphin's
+   one-second GCI-folder flush thread a two-second background grace window. The
+   iPad Simulator resumed the same process with continued full-speed telemetry,
+   but a physical save-hash readback and real audio-interruption replay remain
+   open.
 4. **Module loaded via `dlopen`** — works on Simulator; static linking of the
    generated module is the App Store-compatible target.
 5. **Developer-only device provisioning** — the signed app, retained ISO,

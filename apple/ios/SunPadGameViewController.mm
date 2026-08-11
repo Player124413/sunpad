@@ -585,6 +585,14 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     [_coreHost publishInput:merged];
 }
 
+- (void)pauseRuntimeForApplicationLifecycle {
+    [_coreHost pauseRuntimeForSystemEvent];
+}
+
+- (void)resumeRuntimeForApplicationLifecycle {
+    [_coreHost resumeRuntimeAfterSystemEvent];
+}
+
 #pragma mark - SunPadGameOverlayDelegate
 
 - (void)gameOverlayRequestsGameDataChange:(SunPadGameOverlay *)overlay {

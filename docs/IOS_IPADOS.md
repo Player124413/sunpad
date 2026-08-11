@@ -88,8 +88,12 @@ headlessly for verification.
 
 ## Lifecycle and controls
 
-- App delegate pause/resume/background hooks exist but are stubs; save
-  flushing before suspension is the next milestone.
+- App lifecycle hooks now pause the runtime and deactivate audio before
+  backgrounding, allow Dolphin's existing one-second GCI-folder flush thread a
+  two-second background grace window, then reactivate audio and resume the same
+  runtime on return. The iPad Simulator passed a background/foreground cycle on
+  one process with continued 30 FPS/full-speed telemetry. Physical save
+  readback and a real audio-interruption replay remain acceptance gates.
 - GameController polling merges into the same normalized input snapshot as
   touch; touch controls auto-hide when a controller is connected. The persisted
   **Modern C-stick L/R** setting reverses only the horizontal C-stick axis for
