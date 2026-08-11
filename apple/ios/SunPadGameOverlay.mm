@@ -445,6 +445,35 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     }];
     fpsAction.state = settings.showFPSCounter ? UIMenuElementStateOn : UIMenuElementStateOff;
 
+    UIAction *sixtyFPSAction =
+        [UIAction actionWithTitle:@"Experimental 60 FPS (Restart Required)"
+                            image:[UIImage systemImageNamed:@"speedometer"]
+                       identifier:nil handler:^(__kindof UIAction *action) {
+        (void)action;
+        SunPadSettings *currentSettings = [SunPadSettings sharedSettings];
+        currentSettings.experimental60FPS = !currentSettings.experimental60FPS;
+        [currentSettings synchronize];
+        [[[UISelectionFeedbackGenerator alloc] init] selectionChanged];
+        [weakSelf refreshMenuButton];
+
+        NSString *nextMode = currentSettings.experimental60FPS ?
+            @"experimental 60 FPS" : @"the original 30 FPS mode";
+        UIAlertController *alert =
+            [UIAlertController alertControllerWithTitle:@"Restart Required"
+                                                message:[NSString stringWithFormat:
+                @"This change applies the next time SunPad launches. Close and reopen the app to use %@.",
+                nextMode]
+                                         preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK"
+                                                  style:UIAlertActionStyleDefault
+                                                handler:nil]];
+        [weakSelf.window.rootViewController presentViewController:alert
+                                                         animated:YES
+                                                       completion:nil];
+    }];
+    sixtyFPSAction.state = settings.experimental60FPS ?
+        UIMenuElementStateOn : UIMenuElementStateOff;
+
     UIAction *shareLogAction =
         [UIAction actionWithTitle:@"Share Diagnostic Log…"
                             image:[UIImage systemImageNamed:@"square.and.arrow.up"]
@@ -457,6 +486,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
         renderMenu,
         aspectMenu,
         fpsAction,
+        sixtyFPSAction,
         [UIAction actionWithTitle:@"Controller Button Mapping…"
                             image:[UIImage systemImageNamed:@"gamecontroller"]
                        identifier:nil handler:^(__kindof UIAction *action) {

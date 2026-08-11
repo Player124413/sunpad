@@ -100,11 +100,14 @@ Last updated: 2026-08-11
     regression tests pass; DualSense pressure, connect/disconnect handoff, and
     Apple system-remapping interaction require physical acceptance.
 18. **60 FPS is test-only** — Sunshine's confirmed baseline is approximately
-    30 FPS. A hidden `-sunpadExperimental60FPS` boot path exists for controlled
-    GMSE01 testing; there is no user-facing option. A 14-minute-49-second
-    physical-iPad telemetry pass held 59.7–60.0 FPS at near-1.0 speed ratio,
-    2× scale, and nominal thermals except for one recovered 42.1 FPS / 0.897
-    sample, then returned cleanly to 30 FPS with save/preferences unchanged.
+    30 FPS. A default-off **Experimental 60 FPS (Restart Required)** menu
+    option now exposes the guarded GMSE01 boot path for hands-on testing; the
+    `-sunpadExperimental60FPS` argument remains for controlled developer runs.
+    Changing the menu option affects the next app launch only. A
+    14-minute-49-second physical-iPad telemetry pass held 59.7–60.0 FPS at
+    near-1.0 speed ratio, 2× scale, and nominal thermals except for one
+    recovered 42.1 FPS / 0.897 sample, then returned cleanly to 30 FPS with
+    save/preferences unchanged.
     The only two SMC mismatches are the exact chunks intentionally modified by
     the Gecko code; interpreter demotion is required for correctness. Keep the
     path default-off until hands-on gameplay speed, physics, animation,

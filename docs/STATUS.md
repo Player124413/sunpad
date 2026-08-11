@@ -141,8 +141,11 @@ code-generating loader).
   only, with one-to-one swaps, persistence, and reset. Sticks, D-pad, Start,
   left shoulder, and analog triggers remain fixed. Physical DualSense
   acceptance remains open.
-- A hidden `-sunpadExperimental60FPS` boot path exists for GMSE01 testing, but
-  60 FPS is not a supported gameplay mode. A 14-minute-49-second physical-iPad
+- A default-off **Experimental 60 FPS (Restart Required)** menu option now
+  exposes the guarded GMSE01 boot path for hands-on testing; the existing
+  `-sunpadExperimental60FPS` launch argument remains available for controlled
+  developer runs. Original 30 FPS remains the default, and 60 FPS is not yet a
+  supported gameplay mode. A 14-minute-49-second physical-iPad
   telemetry pass sustained near-60 FPS and real-time speed with nominal
   thermals apart from one recovered hitch, then restored normal 30 FPS with
   save/preferences unchanged. The two SMC demotions exactly match the intended
@@ -176,8 +179,8 @@ behavior has shipped or passed:
 4. Validate the implemented narrow physical-controller remapping for A/B/X/Y/Z
    with one-to-one conflicts, reset, persistence, and DualSense half-press
    coverage.
-5. Treat 60 FPS as a restart-required test mode; do not expose it as supported
-   until all timing and physical-device gates pass.
+5. Treat the exposed 60 FPS switch as a restart-required test mode; do not
+   describe it as supported until all timing and physical-device gates pass.
 6. Keep Wii U GameCube Adapter, HD textures, Vision Pro, Apple TV, and
    Eclipse/general mods in feasibility backlog, separate from the stability
    update.

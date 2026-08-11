@@ -14,6 +14,12 @@ clang++ \
 
 grep -Fq -- '-sunpadExperimental60FPS' \
   "$repo_root/apple/ios/SunPadCoreHost.mm"
+grep -Fq -- 'SunPadExperimental60FPS' \
+  "$repo_root/apple/shared/SunPadSettings.mm"
+grep -Fq -- 'Experimental 60 FPS (Restart Required)' \
+  "$repo_root/apple/ios/SunPadGameOverlay.mm"
+grep -Fq -- 'menuPreference60FPS' \
+  "$repo_root/apple/ios/SunPadCoreHost.mm"
 grep -Fq -- 'impl->metadata.disc_id != "GMSE01"' \
   "$repo_root/ref/ModernGekko/src/runtime/dolphin_runtime.cpp"
 grep -Fq -- 'Config::SetBase(Config::MAIN_ENABLE_CHEATS, true);' \
