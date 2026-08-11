@@ -144,8 +144,9 @@ code-generating loader).
   30 FPS, but two patched chunks produced StaticRecomp SMC hash mismatches. It
   remains test-only, default-off, and restart-required until those warnings and
   the broader timing, audio, save, and sustained-device gates pass.
-- iOS 16.0 and macOS 14.0 deployment targets are configured, but fresh final
-  artifacts still need minimum-OS inspection and oldest-target runtime checks.
+- The signed iOS app plist and both app/module `LC_BUILD_VERSION` commands
+  verify an iOS 16.0 minimum. Oldest-device runtime acceptance remains open;
+  the corresponding final macOS artifact inspection is still pending.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
 - The macOS app shell is proven, but plaza gameplay, objective completion,
   save/reload, and extended-session acceptance remain open.

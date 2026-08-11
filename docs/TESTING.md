@@ -151,7 +151,9 @@ evidence has been recorded.
 Current branch evidence: `./scripts/check-repository.sh` passes; the
 ModernGekko iPhoneOS core and provisioned archive rebuild successfully; and a
 generic iPhoneOS Debug app containing the signed local GMSE01 module passes
-`codesign --verify --deep --strict`. A clean iPad-simulator core/module/app
+`codesign --verify --deep --strict`. The signed app plist and the app/module
+`LC_BUILD_VERSION` commands all report an iOS 16.0 minimum. A clean
+iPad-simulator core/module/app
 build also reaches a live game frame, exposes the analog-R accessibility value,
 and shows one outlined D-pad group with one persisted size control in editor
 mode. On the physical iPad, a normal device reboot recovered a wedged
