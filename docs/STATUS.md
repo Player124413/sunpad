@@ -139,9 +139,11 @@ code-generating loader).
   left shoulder, and analog triggers remain fixed. Physical DualSense
   acceptance remains open.
 - A hidden `-sunpadExperimental60FPS` boot path exists for GMSE01 testing, but
-  60 FPS is not a supported gameplay mode. It remains test-only, default-off,
-  and restart-required until timing, audio, cutscene, save/reload, static-recomp,
-  and sustained physical-device gates pass.
+  60 FPS is not a supported gameplay mode. A physical-iPad smoke sustained
+  59.8–59.9 FPS at real-time speed and nominal thermals, then restored normal
+  30 FPS, but two patched chunks produced StaticRecomp SMC hash mismatches. It
+  remains test-only, default-off, and restart-required until those warnings and
+  the broader timing, audio, save, and sustained-device gates pass.
 - iOS 16.0 and macOS 14.0 deployment targets are configured, but fresh final
   artifacts still need minimum-OS inspection and oldest-target runtime checks.
 - Desktop Stage 1: plaza gameplay, objective completion, save/reload evidence.
