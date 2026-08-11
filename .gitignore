@@ -100,3 +100,14 @@ __pycache__/
 
 # Local iOS provisioning (build products + host paths)
 apple/ios/Provisioned/
+
+# Android build products and local provisioning (host paths)
+android/.gradle/
+android/local.properties
+android/**/build/
+android/.cxx/
+android/app/src/main/cpp/generated/
+android/app/src/main/assets/dev-config.json
+*.apk
+*.aab
+*.so

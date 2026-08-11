@@ -15,6 +15,7 @@
   <img alt="Metal renderer" src="https://img.shields.io/badge/renderer-Metal-5E5CE6">
   <img alt="Ahead-of-time static recompilation" src="https://img.shields.io/badge/PowerPC-static%20recompilation-FF9F0A">
   <img alt="Physical iPad tested" src="https://img.shields.io/badge/physical%20iPad-tested-30D158">
+  <img alt="Android port scaffold" src="https://img.shields.io/badge/Android%20port-scaffold%20%2F%20untested-3DDC84?logo=android">
   <img alt="Game data not included" src="https://img.shields.io/badge/game%20data-not%20included-FF453A">
 </p>
 
@@ -46,6 +47,7 @@ game module.
 | Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS; narrow A/B/X/Y/Z physical-button remapping is implemented in source and awaiting device acceptance |
 | Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
 | Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
+| Android | Port scaffold: runtime patches, Gradle app shell (Vulkan, OpenSL ES, touch + gamepad, SAF import), and NDK build tooling; no device/emulator acceptance run yet |
 | Distribution | Audited unsigned Preview 2 IPA for re-signing; no game image, saves, signing material, TestFlight, or App Store release |
 
 The mobile development build has been signed, installed, and played on a
@@ -136,6 +138,22 @@ distributed.
 Generated source trees, build products, GameCube data, saves, signing
 material, and locally recompiled modules are ignored and must never be
 committed.
+
+## Android port (in progress)
+
+An Android port of the same static-recompilation product lives in the
+repository as a scaffold: the runtime deltas (`PlatformAndroid`, Vulkan +
+OpenSL ES wiring, Pipes-only input), a Gradle/Kotlin app shell with a
+BellPad-style touch overlay and Android gamepad support, on-device game-data
+import through the Storage Access Framework, and NDK build tooling. It has
+**not** been acceptance-tested on a device or emulator yet.
+
+```sh
+./scripts/android-build-core.sh                # NDK required
+cd android && gradle :app:assembleDebug
+```
+
+See [`docs/ANDROID.md`](docs/ANDROID.md) for the full port document.
 
 ## First launch on iPhone or iPad
 

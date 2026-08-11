@@ -22,6 +22,7 @@ Focused source regression gates:
 ./tests/test-controller-mapping.sh
 ./tests/test-experimental-60fps-config.sh
 ./tests/test-diagnostics.sh
+./tests/test-android-patches.sh   # Android 0002 patch reproducibility (network mode: SUNPAD_NETWORK_TESTS=1)
 ```
 
 Before publishing or merging release-hardening work, run the combined

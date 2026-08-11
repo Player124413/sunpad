@@ -1,6 +1,6 @@
 # Architecture
 
-Last updated: 2026-08-09
+Last updated: 2026-08-11
 
 ## Goal architecture
 
@@ -18,7 +18,8 @@ User-owned GMSE01 disc image
         │
         ├── macOS app bundle (launcher + runner)
         ├── iOS app shell (SunPad.xcodeproj)
-        └── iPadOS app shell (same universal target)
+        ├── iPadOS app shell (same universal target)
+        └── Android app shell (android/, port scaffold)
 ```
 
 ## Repository layout
@@ -32,6 +33,7 @@ sunpad/
     shared/             SunPadSettings, SunPadInputState (macOS+iOS)
     ios/                UIKit app, game overlay, core host, Xcode assets
     macos/              macOS bundle metadata, wrapper, and keyboard defaults
+  android/              Android app shell (Kotlin + JNI shim; see docs/ANDROID.md)
   SunPad.xcodeproj      universal iPhone/iPad target
   ref/                  external clones + local disc (gitignored wholesale; see docs/DEPENDENCIES.md)
   tests/                test index and harness pointers (see docs/TESTING.md)
@@ -59,6 +61,24 @@ SunPadGameViewController
   └── SunPadGameOverlay (three-dot menu, render scale, touch controls)
         └── SunPadInputState (touch + GameController merged)
 ```
+
+## Android host layering (port scaffold)
+
+```text
+SunPadActivity
+  ├── SurfaceView ──> ANativeWindow ──> Dolphin Vulkan backend
+  ├── TouchControlsView (BellPad-style overlay) + GamepadReader
+  ├── GameInputState merge → ~60 Hz Choreographer → pipe encoder → Pipes device
+  ├── GameDataImporter (SAF copy → validate → DiscIO extract → activate)
+  └── libsunpad.so
+        ├── jni_bridge.cpp      JNI exports, JavaVM registration, extraction
+        ├── runtime_host.cpp    game thread + moderngekko::Runtime host
+        └── merged core archives (PlatformAndroid, Vulkan, OpenSL ES, Pipes)
+```
+
+The Android runtime deltas live in the 0002 patch snapshots; see
+[docs/ANDROID.md](ANDROID.md) for the mapping of each delta to upstream
+interfaces.
 
 ## Separation rules
 

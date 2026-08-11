@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Recreates SunPad's ignored upstream source tree at exact reviewed commits and
-# applies the complete Apple runtime patch set. No game data is downloaded.
+# applies the complete Apple + Android runtime patch set. No game data is
+# downloaded.
 set -euo pipefail
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -100,5 +101,20 @@ verify_patch_scope "$MG" \
   "$ROOT/patches/ModernGekko/0001-sunpad-apple-runtime.patch" vendor/dolphin
 verify_patch_scope "$MG/vendor/dolphin" \
   "$ROOT/patches/ModernGekko-dolphin/0001-sunpad-ios-runtime.patch"
+
+# Android runtime deltas (0002): ANativeWindow platform, SunPad OpenSL ES
+# audio wiring, and the Pipes-only input stance. libadrenotools is only
+# needed for Android arm64 Vulkan builds, so it is initialized only when an
+# Android NDK is available on this machine.
+if [[ -n "${ANDROID_NDK_HOME:-}${ANDROID_NDK_ROOT:-}" ]]; then
+  git -C "$MG/vendor/dolphin" submodule update --init Externals/libadrenotools
+fi
+apply_patch_once "$MG" "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch"
+apply_patch_once "$MG/vendor/dolphin" \
+  "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch"
+verify_patch_scope "$MG" \
+  "$ROOT/patches/ModernGekko/0002-sunpad-android-runtime.patch" vendor/dolphin
+verify_patch_scope "$MG/vendor/dolphin" \
+  "$ROOT/patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch"
 
 echo "SunPad dependencies are pinned and patched."

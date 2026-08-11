@@ -1,0 +1,78 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index ecbfc47..fbb8bc3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -247,7 +247,13 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+             vendor/dolphin/Source/Core/DolphinNoGUI/PlatformWin32.cpp)
+         target_link_libraries(moderngekko PRIVATE dwmapi)
+     endif()
+-    if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
++    if(CMAKE_SYSTEM_NAME STREQUAL "Android")
++        # SunPad's ANativeWindow platform for Android (Vulkan/OpenGL ES WSI)
++        target_sources(moderngekko PRIVATE
++            vendor/dolphin/Source/Core/DolphinNoGUI/PlatformAndroid.cpp)
++        target_compile_definitions(moderngekko PRIVATE MODERNGEKKO_HAVE_ANDROID=1)
++        target_link_libraries(moderngekko PRIVATE android log)
++    elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+         # SunPad's CAMetalLayer platform for iOS (no macOS windowing APIs)
+         target_sources(moderngekko PRIVATE
+             vendor/dolphin/Source/Core/DolphinNoGUI/PlatformIOS.mm)
+diff --git a/src/runtime/dolphin_runtime.cpp b/src/runtime/dolphin_runtime.cpp
+index 1ddc25c..87194e2 100644
+--- a/src/runtime/dolphin_runtime.cpp
++++ b/src/runtime/dolphin_runtime.cpp
+@@ -34,6 +34,10 @@
+ extern "C" void ModernGekkoSetIOSRenderSurface(void* surface);
+ #endif
+ 
++#ifdef MODERNGEKKO_HAVE_ANDROID
++extern "C" void ModernGekkoSetAndroidRenderSurface(void* surface);
++#endif
++
+ #include <algorithm>
+ #include <array>
+ #include <atomic>
+@@ -293,6 +297,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+ 
+   if (impl->config.headless)
+     impl->platform = Platform::CreateHeadlessPlatform();
++#ifdef MODERNGEKKO_HAVE_ANDROID
++  else
++    impl->platform = Platform::CreateAndroidPlatform();
++#endif
+ #ifdef MODERNGEKKO_HAVE_IOS
+   else
+     impl->platform = Platform::CreateIOSPlatform();
+@@ -320,6 +328,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+                          "the requested Dolphin host platform is unavailable"}};
+   }
+ 
++#ifdef MODERNGEKKO_HAVE_ANDROID
++  ModernGekkoSetAndroidRenderSurface(impl->config.render_surface);
++#endif
+ #ifdef MODERNGEKKO_HAVE_IOS
+   ModernGekkoSetIOSRenderSurface(impl->config.render_surface);
+ #endif
+@@ -341,9 +352,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+   Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
+                   ShaderCompilationMode::AsynchronousUberShaders);
+   Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
+-#ifdef MODERNGEKKO_HAVE_IOS
++#if defined(MODERNGEKKO_HAVE_IOS) || defined(MODERNGEKKO_HAVE_ANDROID)
+   // Dolphin's ARM64 vertex loader generates executable host code. iOS forbids
+-  // that JIT path, so use the portable software vertex loader.
++  // that JIT path and Android app code generation is equally restricted, so
++  // use the portable software vertex loader on both mobile platforms.
+   Config::SetBase(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
+   // Favor uninterrupted playback over the lower-latency desktop default.
+   Config::SetBase(Config::MAIN_AUDIO_BUFFER_SIZE, 120);
+@@ -359,6 +371,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+     constexpr std::array preferred_backends = {
+ #ifdef MODERNGEKKO_HAVE_IOS
+         BACKEND_COREAUDIO,
++#endif
++#ifdef MODERNGEKKO_HAVE_ANDROID
++        BACKEND_OPENSLES,
+ #endif
+         BACKEND_CUBEB, BACKEND_PULSEAUDIO, BACKEND_ALSA};
+     const auto preferred =

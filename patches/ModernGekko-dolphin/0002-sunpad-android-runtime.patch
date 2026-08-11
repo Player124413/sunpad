@@ -1,0 +1,194 @@
+diff --git a/Source/Core/AudioCommon/OpenSLESStream.cpp b/Source/Core/AudioCommon/OpenSLESStream.cpp
+index 28fe285..768863f 100644
+--- a/Source/Core/AudioCommon/OpenSLESStream.cpp
++++ b/Source/Core/AudioCommon/OpenSLESStream.cpp
+@@ -14,7 +14,17 @@
+ #include "Common/CommonTypes.h"
+ #include "Common/Logging/Log.h"
+ #include "Core/Config/ConfigManager.h"
+-#include "jni/AndroidCommon/IDCache.h"
++
++// SunPad Android audio: the app registers its JavaVM from the JNI_OnLoad of
++// its own native library, so this backend can query the native sample rate
++// and buffer size through the small com.sunpad.android.AudioUtils class.
++// Dolphin's app-side IDCache/JNI layer is not linked into the SunPad core.
++static JavaVM* s_sunpad_java_vm = nullptr;
++
++extern "C" void SunPadAndroidSetJavaVM(JavaVM* vm)
++{
++  s_sunpad_java_vm = vm;
++}
+ 
+ void OpenSLESStream::BQPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void* context)
+ {
+@@ -38,12 +48,43 @@ void OpenSLESStream::PushSamples(SLAndroidSimpleBufferQueueItf bq)
+ 
+ bool OpenSLESStream::Init()
+ {
+-  JNIEnv* env = IDCache::GetEnvForThread();
+-  jclass audio_utils = IDCache::GetAudioUtilsClass();
+-  const SLuint32 sample_rate =
+-      env->CallStaticIntMethod(audio_utils, IDCache::GetAudioUtilsGetSampleRate());
+-  m_frames_per_buffer =
+-      env->CallStaticIntMethod(audio_utils, IDCache::GetAudioUtilsGetFramesPerBuffer());
++  // Query the host audio properties through SunPad's AudioUtils class.
++  // Fall back to conservative defaults when the JavaVM was not registered or
++  // the class is missing, so the core can still boot (e.g. headless tooling).
++  SLuint32 sample_rate = 48000;
++  SLuint32 frames_per_buffer = 240;
++  if (s_sunpad_java_vm != nullptr)
++  {
++    JNIEnv* env = nullptr;
++    bool attached = false;
++    if (s_sunpad_java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) !=
++        JNI_OK)
++    {
++      attached =
++          s_sunpad_java_vm->AttachCurrentThread(&env, nullptr) == JNI_OK;
++    }
++    if (env != nullptr)
++    {
++      jclass audio_utils = env->FindClass("com/sunpad/android/AudioUtils");
++      if (audio_utils != nullptr)
++      {
++        const jmethodID get_sample_rate =
++            env->GetStaticMethodID(audio_utils, "getSampleRate", "()I");
++        const jmethodID get_frames_per_buffer =
++            env->GetStaticMethodID(audio_utils, "getFramesPerBuffer", "()I");
++        if (get_sample_rate != nullptr)
++          sample_rate = static_cast<SLuint32>(
++              env->CallStaticIntMethod(audio_utils, get_sample_rate));
++        if (get_frames_per_buffer != nullptr)
++          frames_per_buffer = static_cast<SLuint32>(
++              env->CallStaticIntMethod(audio_utils, get_frames_per_buffer));
++        env->DeleteLocalRef(audio_utils);
++      }
++      if (attached)
++        s_sunpad_java_vm->DetachCurrentThread();
++    }
++  }
++  m_frames_per_buffer = frames_per_buffer;
+ 
+   INFO_LOG_FMT(AUDIO, "OpenSLES configuration: {} Hz, {} frames per buffer", sample_rate,
+                m_frames_per_buffer);
+diff --git a/Source/Core/DolphinNoGUI/Platform.h b/Source/Core/DolphinNoGUI/Platform.h
+index 3c9b5fd..478c494 100644
+--- a/Source/Core/DolphinNoGUI/Platform.h
++++ b/Source/Core/DolphinNoGUI/Platform.h
+@@ -57,6 +57,10 @@ public:
+   static std::unique_ptr<Platform> CreateIOSPlatform();
+ #endif
+ 
++#ifdef __ANDROID__
++  static std::unique_ptr<Platform> CreateAndroidPlatform();
++#endif
++
+ protected:
+   void UpdateRunningFlag();
+ 
+diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
+new file mode 100644
+index 0000000..d1693f4
+--- /dev/null
++++ b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
+@@ -0,0 +1,75 @@
++// Copyright 2026 SunPad project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++// Android host platform for the ModernGekko runtime: hands the app-provided
++// ANativeWindow to the Vulkan (or OpenGL ES) video backend and pumps the
++// runtime without Dolphin's Android app/JNI frontend.
++
++#include "DolphinNoGUI/Platform.h"
++
++#include <chrono>
++#include <thread>
++
++#include "Core/Core.h"
++#include "Core/System.h"
++#include "VideoCommon/Present.h"
++
++namespace
++{
++void* g_render_surface = nullptr;
++}
++
++extern "C" void ModernGekkoSetAndroidRenderSurface(void* surface)
++{
++  g_render_surface = surface;
++  // While the video backend is up (surface recreated on rotation / app
++  // foreground), hand the new ANativeWindow to the presenter so the Vulkan
++  // swapchain is recreated instead of presenting into a stale window.
++  // Before the backend initializes, g_presenter is null and the handle is
++  // just stored for GetWindowSystemInfo(). A null surface is never routed
++  // to the presenter: the host pauses emulation around surface destruction
++  // and keeps the previous window reference until a replacement arrives.
++  if (surface != nullptr && VideoCommon::g_presenter)
++    VideoCommon::g_presenter->ChangeSurface(surface);
++}
++
++namespace
++{
++class PlatformAndroid : public Platform
++{
++public:
++  ~PlatformAndroid() override = default;
++
++  bool Init() override { return true; }
++
++  void SetTitle(const std::string& /*title*/) override {}
++
++  void MainLoop() override
++  {
++    while (IsRunning())
++    {
++      UpdateRunningFlag();
++      Core::HostDispatchJobs(Core::System::GetInstance());
++      std::this_thread::sleep_for(std::chrono::milliseconds(8));
++    }
++  }
++
++  WindowSystemInfo GetWindowSystemInfo() const override
++  {
++    WindowSystemInfo wsi;
++    // Vulkan's Android WSI (vkCreateAndroidSurfaceKHR) consumes the
++    // ANativeWindow directly as the render surface; the OpenGL ES path uses
++    // the same handle through EGL (ANativeWindow-based surface).
++    wsi.type = WindowSystemType::Android;
++    wsi.display_connection = nullptr;
++    wsi.render_window = g_render_surface;
++    wsi.render_surface = g_render_surface;
++    return wsi;
++  }
++};
++}  // namespace
++
++std::unique_ptr<Platform> Platform::CreateAndroidPlatform()
++{
++  return std::make_unique<PlatformAndroid>();
++}
+diff --git a/Source/Core/InputCommon/CMakeLists.txt b/Source/Core/InputCommon/CMakeLists.txt
+index e70d636..9e4d391 100644
+--- a/Source/Core/InputCommon/CMakeLists.txt
++++ b/Source/Core/InputCommon/CMakeLists.txt
+@@ -142,16 +142,14 @@ elseif(X11_FOUND)
+   )
+   target_link_libraries(inputcommon PRIVATE PkgConfig::X11_INPUT)
+ elseif(ANDROID)
+-  target_compile_definitions(inputcommon PRIVATE -DCIFACE_USE_ANDROID)
++  # SunPad Android: touch and gamepad input are merged in the app and written
++  # to the Pipes device, mirroring the SunPad iOS app. Dolphin's Android Java
++  # input interface (CIFACE_USE_ANDROID and the androidcommon/IDCache JNI
++  # layer) is deliberately not built; the core is app-JNI-independent.
+   target_sources(inputcommon PRIVATE
+-    ControllerInterface/Android/Android.cpp
+-    ControllerInterface/Android/Android.h
+     ControllerInterface/Touch/InputOverrider.cpp
+     ControllerInterface/Touch/InputOverrider.h
+   )
+-  target_link_libraries(inputcommon PRIVATE
+-    androidcommon
+-  )
+ endif()
+ 
+ if(TARGET LibUSB::LibUSB)

@@ -138,6 +138,26 @@ This produces a locally signed source/developer build, not a distributable
 IPA. The runtime module is generated from the user's local disc-derived inputs
 and provisioned separately into the development app container.
 
+## Android development build (port scaffold)
+
+Run the clean-clone preparation above first, then build the Android
+arm64-v8a core and provision the app (requires the Android NDK; see
+[`docs/ANDROID.md`](ANDROID.md) for prerequisites and the on-device
+game-data/module import flow):
+
+```sh
+./scripts/android-build-core.sh
+cd android
+gradle :app:assembleDebug
+```
+
+`android-build-core.sh` builds the ModernGekko core with the Vulkan and
+OpenSL ES backends, recompiles the GMSE01 module for Android, and writes the
+gitignored `android/app/src/main/cpp/generated/core_libs.cmake` the app's
+CMake links. The APK contains neither game data nor the module; both are
+imported on-device from the app's setup dialog. No Android acceptance run has
+been completed yet — this is a scaffold.
+
 ## Deployment targets and verification boundary
 
 The Xcode app, iOS core and iOS module configurations set iOS 16.0. The signed

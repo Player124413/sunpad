@@ -35,6 +35,7 @@ code-generating loader).
 | 2 | Native Apple Silicon macOS `.app` proof | **App bundle built, signed, and launched; gameplay acceptance remains** |
 | 3 | Mobile-runtime hardening | **In progress — Simulator/device core built; JIT disabled; interpreter + software-vertex fallbacks** |
 | 4 | iPhone + iPad apps | **In progress — physical iPad boot/render/input proven; fixed audio awaits device re-acceptance** |
+| 5 | Android app | **Scaffold — runtime patches (0002) applied and CI-verified, Gradle/Kotlin app shell + NDK build tooling in-tree; no device/emulator acceptance run yet** |
 
 ## What works right now
 
@@ -112,6 +113,12 @@ code-generating loader).
 
 ## What does not work / not yet proven
 
+- **Android port is a scaffold**: the 0002 runtime patches apply cleanly at
+  the pinned revisions (verified by CI and `tests/test-android-patches.sh` in
+  network mode), and the Gradle app shell + NDK tooling are in-tree, but
+  nothing has been compiled with the NDK or booted on a device/emulator yet.
+  Vulkan, OpenSL ES, ANativeWindow, SAF import, and the Pipes input path all
+  await their first acceptance run.
 - Physical-iPad audio re-acceptance with the fixed core has not run yet; the
   2026-08-08 timebase fix is verified on desktop parity runs and the iOS
   Simulator app only. Note the surviving device DSP dump from 2026-08-06 was

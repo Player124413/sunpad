@@ -70,6 +70,20 @@ Not selected as primary runtime:
   they do not consume unexplained prebuilt libraries from `/tmp`.
 - The iOS toolchain file lives at `scripts/ios-simulator-toolchain.cmake`.
 
+## Android build requirements (SunPad)
+
+- Android NDK r26+ (`ANDROID_NDK_HOME` or `ANDROID_NDK_ROOT`; the toolchain
+  wrapper is `scripts/android-toolchain.cmake`). arm64-v8a only.
+- JDK 17 and Gradle 8.7+ with the Android Gradle Plugin 8.5.2 for the
+  `android/` app module (minSdk 26).
+- `Externals/libadrenotools` (submodule of the vendored Dolphin, only used by
+  the Android arm64 Vulkan backend) is initialized by
+  `scripts/bootstrap-dependencies.sh` when an NDK is present.
+- No new external repositories are pinned for Android: the port builds on the
+  same ModernGekko / vendored-Dolphin revisions, whose upstream trees already
+  carry Dolphin's Android support (Vulkan Android WSI, OpenSL ES backend,
+  Android CMake paths).
+
 ## Update policy
 
 When any external checkout moves, update this file with the new SHA and the reason for the bump. Prefer official ExpansionPak / doldecomp upstreams over stale forks.
