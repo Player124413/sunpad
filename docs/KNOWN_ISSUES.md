@@ -77,11 +77,14 @@ Last updated: 2026-08-11
     behavior, LiveContainer output, and a privacy-reviewed SunPad log. It must
     also compare the same IPA against a normal re-signed install. Do not upload
     game data, saves, signing material, or a device container.
-15. **Touch improvements are not yet defaults** — grouped D-pad move/resize/reset
-    and analog R touch are implemented behind the persisted, default-off
-    Experimental Touch Controls switch. Directional hit testing is unchanged.
-    Run-and-spray, full press, cancel, multitouch, layout editing, and restart
-    still need physical iPhone/iPad acceptance.
+15. **Analog R remains experimental** — grouped D-pad move/resize/reset is now
+    standard in both touch modes; directional hit testing is unchanged. The
+    persisted, default-off Experimental Touch Controls switch enables only the
+    longer horizontal R pressure slider. Its second iPad iteration keeps R, Z,
+    and the face-button cluster in their existing saved positions, tracks
+    beyond both edges, and gives the final quarter to the full-press detent.
+    Run-and-spray, full press, cancel, multitouch, and restart need a fresh
+    physical acceptance pass.
 16. **Physical controller remapping is intentionally narrow** — remapping is
     is implemented for GameCube A/B/X/Y/Z across the four face buttons and
     right shoulder. Conflicts swap one-to-one and reset restores defaults.
@@ -95,7 +98,13 @@ Last updated: 2026-08-11
     supported until gameplay speed, physics, animation, cutscenes, audio,
     controller polling, save/reload, static-recomp fallback/SMC behavior,
     thermals, and a sustained physical-device session pass.
-18. **Platform/accessory/mod requests are backlog research** — the Wii U
+18. **One severe iPad slowdown is captured but not diagnosed** — the August 11
+    physical session stayed on the default 30 FPS path and the on-screen counter
+    continued to report 30 FPS while gameplay and dialogue became visibly slow.
+    The prior log lacked speed, thermal, and render-state samples. New builds
+    record one bounded performance line every 10 seconds; reproduce and share
+    that log before changing timing or renderer behavior.
+19. **Platform/accessory/mod requests are backlog research** — the Wii U
     GameCube Adapter is disabled by the current iOS no-op backend. HD textures,
     Vision Pro, Apple TV, and Eclipse/general mods have no accepted mobile
     product path yet. Keep them separate from the current stability work and

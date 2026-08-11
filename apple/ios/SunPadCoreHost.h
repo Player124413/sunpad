@@ -47,7 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 /* Current emulated FPS from the runtime (0 if not booted). */
 - (double)currentFPS;
 
-/* Emulation speed relative to real time (100 = full speed). */
+/* Emulation speed ratio relative to real time (1.0 = full speed). */
 - (double)currentSpeed;
 
 /* Internal (EFB) render resolution, e.g. "640x528". */

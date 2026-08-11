@@ -21,6 +21,16 @@ static constexpr CGFloat SunPadDrawableScale = 1.0;
 static NSString *const SunPadSupportedImageSHA256 =
     @"67cec1634e641227a4cd51e6a0b277730cb9a1adaa867530c9e66de45373e51d";
 
+static NSString *SunPadThermalStateName(NSProcessInfoThermalState state) {
+    switch (state) {
+    case NSProcessInfoThermalStateFair: return @"fair";
+    case NSProcessInfoThermalStateSerious: return @"serious";
+    case NSProcessInfoThermalStateCritical: return @"critical";
+    case NSProcessInfoThermalStateNominal:
+    default: return @"nominal";
+    }
+}
+
 static SunPadPhysicalControllerButton SunPadPressedFaceButtons(GCExtendedGamepad *pad) {
     uint8_t buttons = 0;
     if (pad.buttonA.isPressed) buttons |= SunPadPhysicalControllerButtonA;
@@ -132,6 +142,7 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     UILabel *_bootStatusLabel;
     UIActivityIndicatorView *_bootActivityIndicator;
     CGSize _lastLoggedDrawableSize;
+    NSUInteger _performanceLogSeconds;
 }
 
 - (BOOL)shouldAutorotate {
@@ -289,8 +300,18 @@ static NSUInteger SunPadRegularFileCount(NSString *directory) {
     if (fps > 0.0) {
         _bootStatusLabel.hidden = YES;
         [_bootActivityIndicator stopAnimating];
+        if (++_performanceLogSeconds >= 10) {
+            _performanceLogSeconds = 0;
+            NSProcessInfo *processInfo = NSProcessInfo.processInfo;
+            SunPadLog(@"performance fps=%.1f speedRatio=%.3f efb=%@ renderScale=%ld thermal=%@ lowPower=%d",
+                      fps, [_coreHost currentSpeed], [_coreHost efbResolution],
+                      (long)[SunPadSettings sharedSettings].renderScale,
+                      SunPadThermalStateName(processInfo.thermalState),
+                      processInfo.isLowPowerModeEnabled);
+        }
     } else if (_coreHost != nil && !_bootStatusLabel.hidden &&
                _bootActivityIndicator.isAnimating) {
+        _performanceLogSeconds = 0;
         _bootStatusLabel.text = @"Waiting for first frame…";
         _bootStatusLabel.accessibilityLabel = @"Waiting for first frame";
     }

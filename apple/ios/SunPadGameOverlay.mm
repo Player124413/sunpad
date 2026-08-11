@@ -125,10 +125,12 @@
 @implementation SunPadGameButton
 @end
 
-static CGFloat const SunPadTriggerDetentEnter = 0.82;
-static CGFloat const SunPadTriggerDetentExit = 0.76;
+static CGFloat const SunPadTriggerDetentEnter = 0.75;
+static CGFloat const SunPadTriggerDetentExit = 0.70;
 static CGFloat const SunPadTriggerAnalogMinimum = 0.25;
 static CGFloat const SunPadTriggerAnalogMaximum = 0.89;
+// Keep the original persisted key names so layouts created while the D-pad
+// grouping was experimental continue to work after grouping becomes standard.
 static NSString *const SunPadExperimentalDPadOriginKey = @"SunPadExperimentalDPadOrigin";
 static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPadScale";
 
@@ -272,35 +274,44 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
         self.pressureChanged((uint8_t)std::lround(_pressure * 255.0), _fullPress);
 }
 
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesBegan:touches withEvent:event];
+- (BOOL)beginTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
     if (!self.isExperimentalEnabled)
-        return;
+        return [super beginTrackingWithTouch:touch withEvent:event];
     _detentFeedback = [[UIImpactFeedbackGenerator alloc]
         initWithStyle:UIImpactFeedbackStyleLight];
     [_detentFeedback prepare];
-    [self updateFromTouch:touches.anyObject];
+    self.highlighted = YES;
+    [self updateFromTouch:touch];
+    return YES;
 }
 
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesMoved:touches withEvent:event];
-    if (self.isExperimentalEnabled)
-        [self updateFromTouch:touches.anyObject];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesEnded:touches withEvent:event];
+- (BOOL)continueTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
     if (!self.isExperimentalEnabled)
+        return [super continueTrackingWithTouch:touch withEvent:event];
+    // Returning YES keeps this control tracking when the finger drifts past
+    // either edge. updateFromTouch clamps the position instead of cancelling
+    // the spray while the player is also moving with another finger.
+    [self updateFromTouch:touch];
+    return YES;
+}
+
+- (void)endTrackingWithTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (!self.isExperimentalEnabled) {
+        [super endTrackingWithTouch:touch withEvent:event];
         return;
+    }
+    self.highlighted = NO;
     if (self.pressureChanged)
         self.pressureChanged(0, NO);
     [self resetExperimentalState];
 }
 
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesCancelled:touches withEvent:event];
-    if (!self.isExperimentalEnabled)
+- (void)cancelTrackingWithEvent:(UIEvent *)event {
+    if (!self.isExperimentalEnabled) {
+        [super cancelTrackingWithEvent:event];
         return;
+    }
+    self.highlighted = NO;
     if (self.pressureChanged)
         self.pressureChanged(0, NO);
     [self resetExperimentalState];
@@ -844,9 +855,13 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
     [self placeControl:[self buttonWithMask:SunPadButtonL]
           defaultFrame:CGRectMake(CGRectGetMinX(safe) + margin, shoulderY, shoulderWidth, small)
             identifier:@"L"];
-    [self placeControl:[self buttonWithMask:SunPadButtonR]
-          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth, shoulderY,
-                                  shoulderWidth, small)
+    BOOL experimentalTouch = [SunPadSettings sharedSettings].experimentalTouchControls;
+    CGFloat rightShoulderWidth = experimentalTouch ?
+        shoulderWidth + 2.0 * small + 24.0 * scale : shoulderWidth;
+    SunPadGameButton *rightShoulder = [self buttonWithMask:SunPadButtonR];
+    [self placeControl:rightShoulder
+          defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - rightShoulderWidth, shoulderY,
+                                  rightShoulderWidth, small)
             identifier:@"R"];
     [self placeControl:[self buttonWithMask:SunPadButtonZ]
           defaultFrame:CGRectMake(CGRectGetMaxX(safe) - margin - shoulderWidth - small - 12.0 * scale,
@@ -860,22 +875,10 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 
     CGFloat d = (pad ? 48.0 : 36.0 * baseScale) * controlScale;
     CGFloat dx = CGRectGetMaxX(_moveStick.frame) + (pad ? 34.0 : 18.0 * scale);
-    CGFloat dy = CGRectGetMidY(_moveStick.frame) - d * 0.5;
-    if ([SunPadSettings sharedSettings].experimentalTouchControls) {
-        CGRect defaultGroupFrame = CGRectMake(dx, CGRectGetMidY(_moveStick.frame) - 1.5 * d,
-                                               3.0 * d, 3.0 * d);
-        [self placeExperimentalDPadGroupWithDefaultFrame:defaultGroupFrame safeArea:safe];
-        [self layoutExperimentalDPadButtons];
-    } else {
-        [self placeControl:[self buttonWithMask:SunPadButtonDpadUp]
-              defaultFrame:CGRectMake(dx + d, dy - d, d, d) identifier:@"D_U"];
-        [self placeControl:[self buttonWithMask:SunPadButtonDpadDown]
-              defaultFrame:CGRectMake(dx + d, dy + d, d, d) identifier:@"D_D"];
-        [self placeControl:[self buttonWithMask:SunPadButtonDpadLeft]
-              defaultFrame:CGRectMake(dx, dy, d, d) identifier:@"D_L"];
-        [self placeControl:[self buttonWithMask:SunPadButtonDpadRight]
-              defaultFrame:CGRectMake(dx + 2.0 * d, dy, d, d) identifier:@"D_R"];
-    }
+    CGRect defaultGroupFrame = CGRectMake(dx, CGRectGetMidY(_moveStick.frame) - 1.5 * d,
+                                           3.0 * d, 3.0 * d);
+    [self placeExperimentalDPadGroupWithDefaultFrame:defaultGroupFrame safeArea:safe];
+    [self layoutExperimentalDPadButtons];
 
     for (SunPadGameButton *button in _buttons) {
         button.layer.cornerRadius =
@@ -1256,15 +1259,10 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 }
 
 - (void)confirmResetLayout {
-    BOOL experimental = [SunPadSettings sharedSettings].experimentalTouchControls;
     __weak SunPadGameOverlay *weakSelf = self;
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:experimental ?
-                                                    @"Reset Experimental Layout?" :
-                                                    @"Reset Touch Control Layout?"
-                                            message:experimental ?
-                                                    @"The grouped D-pad returns to its experimental default. Your legacy layout is not affected." :
-                                                    @"All control positions and sizes return to their defaults."
+        [UIAlertController alertControllerWithTitle:@"Reset Touch Control Layout?"
+                                            message:@"All control positions and sizes, including the grouped D-pad, return to their defaults."
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"Reset" style:UIAlertActionStyleDestructive
@@ -1277,14 +1275,8 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 
 - (void)resetLayout {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    if ([SunPadSettings sharedSettings].experimentalTouchControls) {
-        [defaults removeObjectForKey:SunPadExperimentalDPadOriginKey];
-        [defaults removeObjectForKey:SunPadExperimentalDPadScaleKey];
-        [[SunPadSettings sharedSettings] synchronize];
-        [self applySettings];
-        [self setNeedsLayout];
-        return;
-    }
+    [defaults removeObjectForKey:SunPadExperimentalDPadOriginKey];
+    [defaults removeObjectForKey:SunPadExperimentalDPadScaleKey];
     [defaults removeObjectForKey:@"SunPadControlOrigins"];
     [defaults removeObjectForKey:@"SunPadControlSizeScales"];
     [defaults removeObjectForKey:@"SunPadControlSizeScale"];
@@ -1330,10 +1322,9 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 }
 
 - (BOOL)isEditableControl:(UIView *)control {
-    BOOL experimental = [SunPadSettings sharedSettings].experimentalTouchControls;
     if (control == _experimentalDPadGroup)
-        return experimental;
-    if (experimental && [self isDPadButton:control])
+        return YES;
+    if ([self isDPadButton:control])
         return NO;
     return YES;
 }
@@ -1341,7 +1332,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 - (void)updateControlAppearance {
     BOOL hidden = _touchControlsHidden && !_editingLayout;
     CGFloat alpha = _editingLayout ? 1.0 : [SunPadSettings sharedSettings].controlOpacity;
-    BOOL groupedDPad = [SunPadSettings sharedSettings].experimentalTouchControls;
+    BOOL groupedDPad = YES;
     for (UIView *control in [self gameplayControls]) {
         control.hidden = hidden;
         control.userInteractionEnabled = !hidden;
@@ -1358,7 +1349,7 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
         control.layer.borderWidth = borderWidth;
     }
 
-    BOOL showDPadGroup = groupedDPad && _editingLayout && !hidden;
+    BOOL showDPadGroup = _editingLayout && !hidden;
     _experimentalDPadGroup.hidden = !showDPadGroup;
     _experimentalDPadGroup.userInteractionEnabled = showDPadGroup;
     _experimentalDPadGroup.alpha = showDPadGroup ? 1.0 : 0.0;
@@ -1506,9 +1497,8 @@ static NSString *const SunPadExperimentalDPadScaleKey = @"SunPadExperimentalDPad
 - (void)applyExperimentalTouchControls {
     BOOL enabled = [SunPadSettings sharedSettings].experimentalTouchControls;
     _experimentalRButton.experimentalEnabled = enabled;
-    [_resetLayoutButton setTitle:enabled ? @"Reset Experimental Layout" :
-                                           @"Reset This Device Layout"
-                            forState:UIControlStateNormal];
+    [_resetLayoutButton setTitle:@"Reset This Device Layout"
+                        forState:UIControlStateNormal];
     [self setNeedsLayout];
     [self updateControlAppearance];
 }

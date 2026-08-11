@@ -130,9 +130,9 @@ code-generating loader).
 - LiveContainer is not a supported or verified launch path. One failure report
   exists, but its LiveContainer version, device/OS, nested-module signature,
   launch output, and SunPad log have not been collected.
-- The current touch layout remains the baseline. Grouped D-pad layout editing
-  and analog R touch behavior are implemented behind a persisted default-off
-  experiment; physical iPhone/iPad play acceptance remains open.
+- Grouped D-pad layout editing is now the baseline in both touch modes. Analog
+  R remains behind a persisted default-off experiment; its wider, continuously
+  tracked second iteration needs a fresh physical iPhone/iPad play pass.
 - Physical-controller button remapping is implemented in source for A/B/X/Y/Z
   only, with one-to-one swaps, persistence, and reset. Sticks, D-pad, Start,
   left shoulder, and analog triggers remain fixed. Physical DualSense
@@ -160,8 +160,8 @@ behavior has shipped or passed:
 1. Keep release/install/log instructions current and collect the blocked
    iPhone slowdown and LiveContainer evidence before diagnosing either report.
 2. Polish launch feedback without changing runtime startup architecture.
-3. Group the D-pad only for touch-layout move/resize/reset, then place analog R
-   touch behavior behind a persisted default-off experimental switch.
+3. Keep the D-pad grouped only for touch-layout move/resize/reset, while analog
+   R touch behavior stays behind a persisted default-off experimental switch.
 4. Add narrow physical-controller remapping for A/B/X/Y/Z only, with
    one-to-one conflicts, reset, persistence, and DualSense half-press
    regression coverage.

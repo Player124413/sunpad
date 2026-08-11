@@ -42,7 +42,7 @@ game module.
 | Native app | Universal arm64 iPhone/iPad target plus a local Apple Silicon `SunPad.app` packager |
 | Rendering | Dolphin Metal backend reaches the title sequence and playable Delfino Plaza gameplay |
 | Game setup | Exact GMSE01 USA Rev 0 validation, staged private import, atomic activation, and real removal |
-| Touch | Move stick, C-stick, D-pad, A/B/X/Y/Z, L/R, Start, and a persistent settings menu; analog-R experimentation remains opt-in and default-off |
+| Touch | Move stick, C-stick, grouped D-pad editing, A/B/X/Y/Z, L/R, Start, and a persistent settings menu; analog-R experimentation remains opt-in and default-off |
 | Controllers | Touch and iOS GameController on mobile; keyboard or connected controller on macOS; narrow A/B/X/Y/Z physical-button remapping is implemented in source and awaiting device acceptance |
 | Settings | Live 1×–4× render scale, original 4:3 plus experimental widescreen/fill modes, and touch-layout settings |
 | Audio | Guest-timebase defect fixed; continuous desktop and Simulator audio verified; fresh physical-device audio acceptance remains |
@@ -177,11 +177,15 @@ larger iPads:
 - **Controller handoff:** a connected physical controller can hide the touch
   overlay automatically.
 
-The current touch behavior remains the stable default. **Experimental Touch
-Controls** is persisted but off by default; when enabled, the four D-pad
-directions move and resize as one layout group and R uses horizontal touch
-position for analog pressure with a full-press detent. These changes are
-implemented in source but are not support claims until physical play acceptance.
+The four D-pad directions always move, resize, and reset as one layout group;
+their gameplay hit regions remain four independent directions. **Experimental
+Touch Controls** is persisted but off by default and changes only R. The longer
+R control stays in the standard R button's saved position and works as a
+horizontal pressure slider: touch its left edge for the
+minimum spray pressure, slide right for more pressure, and enter the final
+quarter for a haptic full press. Keep the same finger down while sliding; moving
+past either edge clamps to minimum or maximum pressure, and lifting releases R.
+This analog-R behavior remains experimental until another physical play pass.
 
 The **Controller Button Mapping…** menu is likewise narrow: GameCube A/B/X/Y/Z
 can be assigned one-to-one across the four face buttons and right shoulder,
