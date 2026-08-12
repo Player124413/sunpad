@@ -94,7 +94,7 @@ index ecbfc47..37aaf72 100644
          set(_moderngekko_sdl_target SDL3-static)
      elseif(TARGET SDL3::SDL3-shared)
 diff --git a/src/runtime/dolphin_runtime.cpp b/src/runtime/dolphin_runtime.cpp
-index 1ddc25c..87194e2 100644
+index 1ddc25c..161902c 100644
 --- a/src/runtime/dolphin_runtime.cpp
 +++ b/src/runtime/dolphin_runtime.cpp
 @@ -34,6 +34,10 @@
@@ -142,7 +142,15 @@ index 1ddc25c..87194e2 100644
    Config::SetBase(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
    // Favor uninterrupted playback over the lower-latency desktop default.
    Config::SetBase(Config::MAIN_AUDIO_BUFFER_SIZE, 120);
-@@ -359,6 +371,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -354,16 +366,21 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+   if (impl->config.headless) {
+     impl->config.audio.backend = BACKEND_NULLSOUND;
+   } else if (impl->config.audio.backend.empty() ||
+-             !std::ranges::contains(audio_backends,
+-                                    impl->config.audio.backend)) {
++             std::ranges::find(audio_backends,
++                               impl->config.audio.backend) ==
++                 audio_backends.end()) {
      constexpr std::array preferred_backends = {
  #ifdef MODERNGEKKO_HAVE_IOS
          BACKEND_COREAUDIO,
@@ -152,3 +160,10 @@ index 1ddc25c..87194e2 100644
  #endif
          BACKEND_CUBEB, BACKEND_PULSEAUDIO, BACKEND_ALSA};
      const auto preferred =
+         std::ranges::find_if(preferred_backends, [&](const char *backend) {
+-          return std::ranges::contains(audio_backends, backend);
++          return std::ranges::find(audio_backends, backend) !=
++                 audio_backends.end();
+         });
+     impl->config.audio.backend =
+         preferred != preferred_backends.end() ? *preferred : BACKEND_NULLSOUND;
