@@ -129,7 +129,7 @@ index 1ddc25c..161902c 100644
  #ifdef MODERNGEKKO_HAVE_IOS
    ModernGekkoSetIOSRenderSurface(impl->config.render_surface);
  #endif
-@@ -341,9 +352,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -341,11 +352,19 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
                    ShaderCompilationMode::AsynchronousUberShaders);
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
@@ -142,6 +142,15 @@ index 1ddc25c..161902c 100644
    Config::SetBase(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Software);
    // Favor uninterrupted playback over the lower-latency desktop default.
    Config::SetBase(Config::MAIN_AUDIO_BUFFER_SIZE, 120);
+   Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, true);
++#ifdef MODERNGEKKO_HAVE_ANDROID
++  // Exclusive ubershaders. AsynchronousUberShaders swaps specialized
++  // pipelines in after the loading screen; mobile Vulkan drivers often
++  // abort at that swap ("crash after compiling shaders").
++  Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
++                  ShaderCompilationMode::SynchronousUberShaders);
++#endif
+ #endif
 @@ -354,16 +366,21 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    if (impl->config.headless) {
      impl->config.audio.backend = BACKEND_NULLSOUND;

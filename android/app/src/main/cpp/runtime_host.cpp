@@ -311,6 +311,13 @@ void RuntimeHost::SetModernCStick(bool enabled) {
 void RuntimeHost::ApplyPendingSettings() {
   Config::SetCurrent(Config::GFX_EFB_SCALE, pending_scale_);
   Config::SetCurrent(Config::GFX_MAX_EFB_SCALE, 12);
+  // Keep exclusive ubershaders even if Create() used the desktop default.
+  // Specialized-shader swap after the loading screen is a common Android
+  // Vulkan abort.
+  Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
+                  ShaderCompilationMode::SynchronousUberShaders);
+  Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
+                     ShaderCompilationMode::SynchronousUberShaders);
   ApplyAspectRatioMode(pending_aspect_);
 }
 
