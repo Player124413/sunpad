@@ -558,9 +558,29 @@ class TouchControlsView(context: Context) : View(context) {
             MotionEvent.ACTION_MOVE -> {
                 val drag = editDrag ?: return true
                 val zone = zones.getValue(drag.control)
-                val cx = (event.x - drag.grabDx).coerceIn(zone.radius, width - zone.radius)
-                val cy = (event.y - drag.grabDy).coerceIn(zone.radius, height - zone.radius)
-                zone.cx = cx; zone.cy = cy
+                var cx = (event.x - drag.grabDx).coerceIn(zone.radius, width - zone.radius)
+                var cy = (event.y - drag.grabDy).coerceIn(zone.radius, height - zone.radius)
+                // Never allow the sticks and the D-pad group to overlap:
+                // otherwise a saved layout can make the stick stick to the
+                // arrows during gameplay.
+                val others = when (drag.control) {
+                    Control.MOVE, Control.C ->
+                        listOf(zones.getValue(Control.DPAD_GROUP))
+                    Control.DPAD_GROUP ->
+                        listOf(zones.getValue(Control.MOVE), zones.getValue(Control.C))
+                    else -> emptyList()
+                }
+                val minDist = zone.radius + 24f
+                for (o in others) {
+                    val d = hypot(cx - o.cx, cy - o.cy)
+                    if (d < minDist && d > 0.001f) {
+                        val push = (minDist - d) / d
+                        cx += (cx - o.cx) * push
+                        cy += (cy - o.cy) * push
+                    }
+                }
+                zone.cx = cx.coerceIn(zone.radius, width - zone.radius)
+                zone.cy = cy.coerceIn(zone.radius, height - zone.radius)
                 invalidate()
             }
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {

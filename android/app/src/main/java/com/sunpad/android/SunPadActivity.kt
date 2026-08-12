@@ -207,30 +207,32 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             .show()
     }
 
-    private fun pickImage() {
+    private fun openFilePicker(requestCode: Int) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "*/*"))
         }
-        try {
-            startActivityForResult(intent, REQUEST_IMAGE)
-        } catch (e: Exception) {
-            Toast.makeText(this, "No file picker available: ${e.message}", Toast.LENGTH_LONG).show()
+        // Some ROMs lack a DocumentsUI provider; fall back to the classic
+        // chooser (ACTION_GET_CONTENT) so the file manager always opens.
+        if (intent.resolveActivity(packageManager) != null) {
+            startActivityForResult(intent, requestCode)
+            return
         }
-    }
-
-    private fun pickModule() {
-        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+        val fallback = Intent(Intent.ACTION_GET_CONTENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
         }
-        try {
-            startActivityForResult(intent, REQUEST_MODULE)
-        } catch (e: Exception) {
-            Toast.makeText(this, "No file picker available: ${e.message}", Toast.LENGTH_LONG).show()
+        if (fallback.resolveActivity(packageManager) != null) {
+            startActivityForResult(fallback, requestCode)
+            return
         }
+        Toast.makeText(this, "No file picker is available on this device", Toast.LENGTH_LONG).show()
     }
+
+    private fun pickImage() = openFilePicker(REQUEST_IMAGE)
+
+    private fun pickModule() = openFilePicker(REQUEST_MODULE)
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
