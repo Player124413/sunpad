@@ -322,10 +322,10 @@ class TouchControlsView(context: Context) : View(context) {
         place(Control.R, "R", 0.90f * w, 0.09f * h, 0.0448f * w * g)
         place(Control.START, "Start", 0.50f * w, 0.90f * h, 0.042f * w * g)
 
-        // Menu button sits away from the screen corner: camera cutouts and
-        // rounded corners in landscape make the very corner a dead zone.
+        // Menu button: top-center, far from both the camera cutout corner
+        // and the R/L shoulder buttons, with a generous hit zone.
         zones.getValue(Control.MENU).apply {
-            cx = 0.88f * w; cy = 0.085f * h; radius = 0.05f * w * g
+            cx = 0.5f * w; cy = 0.08f * h; radius = 0.045f * w * g
         }
     }
 
