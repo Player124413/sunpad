@@ -111,6 +111,8 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         gamepad.attach(rootView)
 
         applyPrefsToControls()
+        DiagnosticLog.ensurePublicFolder(this)
+        DiagnosticLog.append(this, "SunPad activity created. native=${SunPadNative.available} ${SunPadNative.loadError ?: ""}")
         showPreviousCrashIfAny()
         if (!SunPadNative.available) {
             showStartError(
@@ -229,25 +231,39 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     private fun showStartError(message: String) {
         if (isFinishing || isDestroyed) return
-        android.util.Log.e("SunPad", "start error: $message")
+        DiagnosticLog.append(this, "start error: $message")
         AlertDialog.Builder(this)
             .setTitle("Could not start the game")
             .setMessage(message)
+            .setNeutralButton("Copy log") { _, _ -> copyLogToClipboard() }
             .setPositiveButton("OK", null)
             .show()
     }
 
     private fun showPreviousCrashIfAny() {
-        val crash = java.io.File(filesDir, "sunpad_crash.log")
-        if (!crash.isFile) return
-        val text = try { crash.readText() } catch (_: Exception) { return }
-        crash.delete()
-        if (text.isBlank()) return
+        val text = DiagnosticLog.read(this)
+        if (text.isBlank() || text == "(no log yet)" || !text.contains("Uncaught"))
+            return
         AlertDialog.Builder(this)
             .setTitle("SunPad closed last time")
             .setMessage(text.take(1500))
+            .setNeutralButton("Copy log") { _, _ -> copyLogToClipboard() }
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    private fun copyLogToClipboard() {
+        DiagnosticLog.ensurePublicFolder(this)
+        val text = DiagnosticLog.copyToClipboard(this)
+        val publicPath = DiagnosticLog.publicFile(this)?.absolutePath
+        Toast.makeText(
+            this,
+            if (publicPath != null)
+                "Log copied. Also saved to:\n$publicPath"
+            else
+                "Log copied (${text.length} chars).",
+            Toast.LENGTH_LONG,
+        ).show()
     }
 
     private fun showSetupDialog() {
@@ -477,6 +493,9 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         items.add("Import module (gGMSE01_recomp.so)…")
         actions.add { pickModule() }
+
+        items.add("Copy diagnostic log")
+        actions.add { copyLogToClipboard() }
 
         items.add("Quit")
         actions.add { finish() }

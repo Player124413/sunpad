@@ -19,8 +19,12 @@ object AudioUtils {
         readIntProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER) ?: 240
 
     private fun readIntProperty(property: String): Int? {
-        val manager = SunPadApp.appContext.getSystemService(Context.AUDIO_SERVICE)
-                as? AudioManager ?: return null
+        val ctx = try {
+            SunPadApp.appContext
+        } catch (_: Exception) {
+            return null
+        }
+        val manager = ctx.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return null
         return manager.getProperty(property)?.toIntOrNull()
     }
 }

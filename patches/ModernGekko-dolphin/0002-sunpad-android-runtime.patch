@@ -27,16 +27,15 @@ index 28fe285..0318216 100644
  #include "Core/Config/ConfigManager.h"
 -#include "jni/AndroidCommon/IDCache.h"
 +
-+// SunPad Android audio: the app registers its JavaVM from the JNI_OnLoad of
-+// its own native library, so this backend can query the native sample rate
-+// and buffer size through the small com.sunpad.android.AudioUtils class.
-+// Dolphin's app-side IDCache/JNI layer is not linked into the SunPad core;
-+// the shared VM global is defined by the SunPad IDCache stub.
-+extern JavaVM* g_sunpad_java_vm;
++// SunPad Android audio: libsunpad caches AudioUtils in JNI_OnLoad (app
++// class loader). FindClass from this audio thread uses the system class
++// loader and cannot see com.sunpad.android.AudioUtils — that left a
++// pending JNI exception and aborted the process after ISO import.
++extern "C" bool SunPadAndroidQueryAudio(int* sample_rate, int* frames_per_buffer);
  
  void OpenSLESStream::BQPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void* context)
  {
-@@ -38,12 +44,43 @@ void OpenSLESStream::PushSamples(SLAndroidSimpleBufferQueueItf bq)
+@@ -38,12 +44,23 @@ void OpenSLESStream::PushSamples(SLAndroidSimpleBufferQueueItf bq)
  
  bool OpenSLESStream::Init()
  {
@@ -46,41 +45,17 @@ index 28fe285..0318216 100644
 -      env->CallStaticIntMethod(audio_utils, IDCache::GetAudioUtilsGetSampleRate());
 -  m_frames_per_buffer =
 -      env->CallStaticIntMethod(audio_utils, IDCache::GetAudioUtilsGetFramesPerBuffer());
-+  // Query the host audio properties through SunPad's AudioUtils class.
-+  // Fall back to conservative defaults when the JavaVM was not registered or
-+  // the class is missing, so the core can still boot (e.g. headless tooling).
++  // Fall back to conservative defaults when the cached AudioUtils class
++  // is unavailable (headless tooling / JNI_OnLoad ran too early).
 +  SLuint32 sample_rate = 48000;
 +  SLuint32 frames_per_buffer = 240;
-+  if (g_sunpad_java_vm != nullptr)
++  int queried_rate = 0;
++  int queried_frames = 0;
++  if (SunPadAndroidQueryAudio(&queried_rate, &queried_frames) &&
++      queried_rate > 0 && queried_frames > 0)
 +  {
-+    JNIEnv* env = nullptr;
-+    bool attached = false;
-+    if (g_sunpad_java_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) !=
-+        JNI_OK)
-+    {
-+      attached =
-+          g_sunpad_java_vm->AttachCurrentThread(&env, nullptr) == JNI_OK;
-+    }
-+    if (env != nullptr)
-+    {
-+      jclass audio_utils = env->FindClass("com/sunpad/android/AudioUtils");
-+      if (audio_utils != nullptr)
-+      {
-+        const jmethodID get_sample_rate =
-+            env->GetStaticMethodID(audio_utils, "getSampleRate", "()I");
-+        const jmethodID get_frames_per_buffer =
-+            env->GetStaticMethodID(audio_utils, "getFramesPerBuffer", "()I");
-+        if (get_sample_rate != nullptr)
-+          sample_rate = static_cast<SLuint32>(
-+              env->CallStaticIntMethod(audio_utils, get_sample_rate));
-+        if (get_frames_per_buffer != nullptr)
-+          frames_per_buffer = static_cast<SLuint32>(
-+              env->CallStaticIntMethod(audio_utils, get_frames_per_buffer));
-+        env->DeleteLocalRef(audio_utils);
-+      }
-+      if (attached)
-+        g_sunpad_java_vm->DetachCurrentThread();
-+    }
++    sample_rate = static_cast<SLuint32>(queried_rate);
++    frames_per_buffer = static_cast<SLuint32>(queried_frames);
 +  }
 +  m_frames_per_buffer = frames_per_buffer;
  

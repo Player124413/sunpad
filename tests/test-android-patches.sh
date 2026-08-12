@@ -32,6 +32,7 @@ grep -q '^diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp' "$DOLPHIN_P
 grep -q '^diff --git a/Source/Core/AudioCommon/OpenSLESStream.cpp' "$DOLPHIN_PATCH" \
   || fail "dolphin patch missing OpenSLESStream.cpp"
 grep -q 'SunPadAndroidSetJavaVM' "$DOLPHIN_PATCH" || fail "dolphin patch missing SunPad Android audio wiring"
+grep -q 'SunPadAndroidQueryAudio' "$DOLPHIN_PATCH" || fail "dolphin patch missing cached AudioUtils query"
 grep -q 'CreateAndroidPlatform' "$DOLPHIN_PATCH" || fail "dolphin patch missing CreateAndroidPlatform"
 
 # When a prepared ref/ tree exists, the 0002 patches must be fully applied

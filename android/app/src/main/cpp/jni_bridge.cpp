@@ -33,8 +33,38 @@ static sunpad::RuntimeHost* g_host = nullptr;
 // Android app does the same).
 static ANativeWindow* g_window = nullptr;
 
-// Implemented by the SunPad Dolphin patch in OpenSLESStream.cpp.
+// Implemented by the SunPad Dolphin patch in IDCacheStub.cpp.
 extern "C" void SunPadAndroidSetJavaVM(JavaVM* vm);
+
+// AudioUtils is cached in JNI_OnLoad (app class loader). FindClass from an
+// attached audio thread uses the system class loader and cannot see
+// com.sunpad.android.AudioUtils — that left a pending JNI exception and
+// aborted the process after ISO import.
+static jclass g_audio_utils = nullptr;
+static jmethodID g_audio_sample_rate = nullptr;
+static jmethodID g_audio_frames = nullptr;
+
+extern "C" bool SunPadAndroidQueryAudio(int* sample_rate, int* frames_per_buffer) {
+  if (g_vm == nullptr || g_audio_utils == nullptr)
+    return false;
+  JNIEnv* env = nullptr;
+  bool attached = false;
+  if (g_vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
+    attached = g_vm->AttachCurrentThread(&env, nullptr) == JNI_OK;
+    if (!attached)
+      return false;
+  }
+  if (env == nullptr)
+    return false;
+  if (g_audio_sample_rate && sample_rate)
+    *sample_rate = env->CallStaticIntMethod(g_audio_utils, g_audio_sample_rate);
+  if (g_audio_frames && frames_per_buffer)
+    *frames_per_buffer = env->CallStaticIntMethod(g_audio_utils, g_audio_frames);
+  const bool ok = !env->ExceptionCheck();
+  if (!ok)
+    env->ExceptionClear();
+  return ok;
+}
 
 namespace {
 
