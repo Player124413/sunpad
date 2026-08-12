@@ -90,6 +90,109 @@ index 28fe285..768863f 100644
  
    INFO_LOG_FMT(AUDIO, "OpenSLES configuration: {} Hz, {} frames per buffer", sample_rate,
                 m_frames_per_buffer);
+diff --git a/Source/Core/Common/AndroidContentStub.cpp b/Source/Core/Common/AndroidContentStub.cpp
+new file mode 100644
+index 0000000..92ef784
+--- /dev/null
++++ b/Source/Core/Common/AndroidContentStub.cpp
+@@ -0,0 +1,83 @@
++// Copyright 2026 SunPad project
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++// Stub implementations of the Android content-URI helpers for SunPad.
++//
++// Upstream Dolphin implements these in its Android app JNI layer
++// (Source/Android/jni/AndroidCommon), which SunPad deliberately does not
++// build: the SunPad app accesses plain files in private storage, never
++// content:// URIs, and provides its own JNI bridge. The core's Common
++// code still references the helpers under #if ANDROID, so linkable no-op
++// implementations keep the core self-contained.
++
++#include <jni.h>
++
++#include <span>
++#include <string>
++#include <string_view>
++#include <vector>
++
++#include "Common/CommonTypes.h"
++#include "jni/AndroidCommon/AndroidCommon.h"
++
++bool IsPathAndroidContent(std::string_view /*uri*/)
++{
++  return false;
++}
++
++std::string OpenModeToAndroid(std::string mode)
++{
++  return mode;
++}
++
++std::string OpenModeToAndroid(std::ios_base::openmode /*mode*/)
++{
++  return "";
++}
++
++int OpenAndroidContent(std::string_view /*uri*/, std::string_view /*mode*/)
++{
++  return -1;
++}
++
++bool DeleteAndroidContent(std::string_view /*uri*/)
++{
++  return false;
++}
++
++jlong GetAndroidContentSizeAndIsDirectory(std::string_view /*uri*/)
++{
++  return -1;
++}
++
++std::string GetAndroidContentDisplayName(std::string_view /*uri*/)
++{
++  return "";
++}
++
++std::vector<std::string> GetAndroidContentChildNames(std::string_view /*uri*/)
++{
++  return {};
++}
++
++std::vector<std::string> DoFileSearchAndroidContent(
++    std::string_view /*directory*/, std::span<const std::string_view> /*extensions*/,
++    bool /*recursive*/)
++{
++  return {};
++}
++
++u32 GetNetworkIpAddress()
++{
++  return 0;
++}
++
++u32 GetNetworkPrefixLength()
++{
++  return 0;
++}
++
++u32 GetNetworkGateway()
++{
++  return 0;
++}
+diff --git a/Source/Core/Common/CMakeLists.txt b/Source/Core/Common/CMakeLists.txt
+index 6a8db9c..9d09abd 100644
+--- a/Source/Core/Common/CMakeLists.txt
++++ b/Source/Core/Common/CMakeLists.txt
+@@ -245,6 +245,9 @@ if(ANDROID)
+   target_sources(common PRIVATE
+     Logging/ConsoleListenerDroid.cpp
+     MemArenaAndroid.cpp
++    # SunPad: no-op Android content-URI helpers (upstream lives in the
++    # Dolphin app JNI layer, which SunPad does not build).
++    AndroidContentStub.cpp
+   )
+ elseif(WIN32)
+   target_sources(common PRIVATE
 diff --git a/Source/Core/Common/GL/GLContext.cpp b/Source/Core/Common/GL/GLContext.cpp
 index 2414a9e..76c11fb 100644
 --- a/Source/Core/Common/GL/GLContext.cpp

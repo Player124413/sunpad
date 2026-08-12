@@ -30,5 +30,9 @@ target_link_libraries(sunpad PRIVATE
     android
     log
     OpenSLES
+    # EGL/GLESv3: the core's GLContext (EGL backend) and the OGL video
+    # backend reference these; the NDK sysroot provides them.
+    EGL
+    GLESv3
     ${SUNPAD_CORE_LIBS}
 )
