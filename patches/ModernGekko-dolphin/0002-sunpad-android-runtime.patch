@@ -92,7 +92,7 @@ index 28fe285..768863f 100644
                 m_frames_per_buffer);
 diff --git a/Source/Core/Common/AndroidContentStub.cpp b/Source/Core/Common/AndroidContentStub.cpp
 new file mode 100644
-index 0000000..92ef784
+index 0000000..9c62326
 --- /dev/null
 +++ b/Source/Core/Common/AndroidContentStub.cpp
 @@ -0,0 +1,83 @@
@@ -165,17 +165,17 @@ index 0000000..92ef784
 +  return {};
 +}
 +
-+u32 GetNetworkIpAddress()
++int GetNetworkIpAddress()
 +{
 +  return 0;
 +}
 +
-+u32 GetNetworkPrefixLength()
++int GetNetworkPrefixLength()
 +{
 +  return 0;
 +}
 +
-+u32 GetNetworkGateway()
++int GetNetworkGateway()
 +{
 +  return 0;
 +}
