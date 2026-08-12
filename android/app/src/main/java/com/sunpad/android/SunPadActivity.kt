@@ -67,7 +67,14 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         controls = TouchControlsView(this)
         controls.listener = object : TouchControlsView.Listener {
-            override fun onMenuTap() = showMenu()
+            override fun onMenuTap() {
+                // Haptic feedback so a tap on the menu button is always
+                // visible (also a diagnostic: vibration == touch reached it).
+                controls.performHapticFeedback(
+                    android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                android.util.Log.i("SunPad", "menu button tapped")
+                showMenu()
+            }
 
             override fun onResizeRequested(controlId: String, currentScale: Float) {
                 showResizeDialog(controlId, currentScale)
