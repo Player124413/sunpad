@@ -254,7 +254,9 @@ Ported from the iOS overlay. From the menu choose **Edit touch layout…**:
 
 - drag any control (move stick, camera stick, A/B/X/Y/Z, L, R, Start) to a
   new position; positions persist as normalized origins
-  (`SunPadControlOrigins` in app preferences, keyed like the iOS app);
+  (`SunPadControlOrigins` in app preferences, keyed like the iOS app) and
+  survive app restart / reboot (they are lost only on Reset, clear-data, or
+  uninstall);
 - the grouped D-pad moves as one group and persists under
   `SunPadExperimentalDPadOriginKey`;
 - tap a control to resize it (per-control scale 0.6–1.75, persisted in

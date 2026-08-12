@@ -23,7 +23,9 @@ import kotlin.math.roundToInt
  * in "SunPadControlOrigins" / "SunPadExperimentalDPadOriginKey") and tapped
  * to resize (per-control scale in "SunPadControlSizeScales" /
  * "SunPadExperimentalDPadScaleKey", 0.6–1.75). The D-pad moves and resizes
- * as a single group. The editor bar offers Reset and Done.
+ * as a single group. The editor bar offers Reset and Done. Positions and
+ * sizes survive process death and app restart (SharedPreferences); they are
+ * lost only if the user resets the layout, clears app data, or uninstalls.
  */
 class TouchControlsView(context: Context) : View(context) {
 
@@ -52,6 +54,9 @@ class TouchControlsView(context: Context) : View(context) {
     var editingLayout: Boolean = false
         set(value) {
             if (field != value) {
+                // Leaving edit mode: keep any in-progress drag so Done / a
+                // configuration change cannot throw the control back.
+                if (!value) persistInProgressEdit()
                 field = value
                 releaseAll()
                 editDrag = null
@@ -154,50 +159,25 @@ class TouchControlsView(context: Context) : View(context) {
 
     // ------------------------------------------------------------------ persistence
 
-    private fun loadOrigins(): MutableMap<String, Pair<Float, Float>> {
-        val out = HashMap<String, Pair<Float, Float>>()
-        prefs.getStringSet(PREF_ORIGINS, emptySet())?.forEach { raw ->
-            val parts = raw.split("=")
-            if (parts.size == 2) {
-                val xy = parts[1].split(",")
-                if (xy.size == 2) {
-                    val x = xy[0].toFloatOrNull() ?: return@forEach
-                    val y = xy[1].toFloatOrNull() ?: return@forEach
-                    out[parts[0]] = x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f)
-                }
-            }
-        }
-        return out
+    private fun loadOrigins(): MutableMap<String, Pair<Float, Float>> =
+        TouchLayoutCodec.decodeOrigins(prefs.getStringSet(PREF_ORIGINS, emptySet()))
+
+    private fun saveAllOrigins() {
+        // Rewrite the whole set from the in-memory map. Incremental
+        // getStringSet/putStringSet edits are easy to lose (SharedPreferences
+        // returns its live set, and a later layout pass would then reload
+        // stale positions).
+        prefs.edit().putStringSet(PREF_ORIGINS, TouchLayoutCodec.encodeOrigins(origins)).apply()
     }
 
-    private fun saveOrigin(id: String, normalized: Pair<Float, Float>) {
-        val set = prefs.getStringSet(PREF_ORIGINS, emptySet())!!.toMutableSet()
-        set.removeAll { it.startsWith("$id=") }
-        set.add("$id=${normalized.first},${normalized.second}")
-        prefs.edit().putStringSet(PREF_ORIGINS, set).apply()
+    private fun loadSizeScales(): MutableMap<String, Float> =
+        TouchLayoutCodec.decodeScales(prefs.getStringSet(PREF_SIZE_SCALES, emptySet()), SIZE_MIN, SIZE_MAX)
+
+    private fun saveAllSizeScales() {
+        prefs.edit().putStringSet(PREF_SIZE_SCALES, TouchLayoutCodec.encodeScales(sizeScales)).apply()
     }
 
-    private fun loadSizeScales(): MutableMap<String, Float> {
-        val out = HashMap<String, Float>()
-        prefs.getStringSet(PREF_SIZE_SCALES, emptySet())?.forEach { raw ->
-            val parts = raw.split("=")
-            if (parts.size == 2) {
-                parts[1].toFloatOrNull()?.let {
-                    out[parts[0]] = it.coerceIn(SIZE_MIN, SIZE_MAX)
-                }
-            }
-        }
-        return out
-    }
-
-    private fun saveSizeScale(id: String, value: Float) {
-        val set = prefs.getStringSet(PREF_SIZE_SCALES, emptySet())!!.toMutableSet()
-        set.removeAll { it.startsWith("$id=") }
-        set.add("$id=${value.coerceIn(SIZE_MIN, SIZE_MAX)}")
-        prefs.edit().putStringSet(PREF_SIZE_SCALES, set).apply()
-    }
-
-    private fun dpadOrigin(): Pair<Float, Float>? {
+    private fun loadDpadOrigin(): Pair<Float, Float>? {
         val raw = prefs.getString(PREF_DPAD_ORIGIN, null) ?: return null
         val xy = raw.split(",")
         if (xy.size != 2) return null
@@ -205,6 +185,9 @@ class TouchControlsView(context: Context) : View(context) {
         val y = xy[1].toFloatOrNull() ?: return null
         return x.coerceIn(0f, 1f) to y.coerceIn(0f, 1f)
     }
+
+    /** In-memory D-pad origin so a layout pass mid-edit cannot snap it back. */
+    private var dpadOriginCache: Pair<Float, Float>? = loadDpadOrigin()
 
     private var dpadScaleCache: Float =
         prefs.getFloat(PREF_DPAD_SCALE, 1f).coerceIn(SIZE_MIN, SIZE_MAX)
@@ -221,7 +204,7 @@ class TouchControlsView(context: Context) : View(context) {
             prefs.edit().putFloat(PREF_DPAD_SCALE, clamped).apply()
         } else {
             sizeScales[controlId] = clamped
-            saveSizeScale(controlId, clamped)
+            saveAllSizeScales()
         }
         layoutDirty = true
         invalidate()
@@ -237,6 +220,7 @@ class TouchControlsView(context: Context) : View(context) {
             .apply()
         origins.clear()
         sizeScales.clear()
+        dpadOriginCache = null
         dpadScaleCache = 1f
         layoutDirty = true
         invalidate()
@@ -244,14 +228,14 @@ class TouchControlsView(context: Context) : View(context) {
 
     // ------------------------------------------------------------------ layout math
 
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        super.onLayout(changed, l, t, r, b)
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
         layoutDirty = true
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-        layoutDirty = true
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        if (changed) layoutDirty = true
     }
 
     private fun controlId(control: Control): String? = when (control) {
@@ -281,34 +265,45 @@ class TouchControlsView(context: Context) : View(context) {
         val w = width.toFloat()
         val h = height.toFloat()
         val g = scale
+        // A measure/layout pass during a drag must not snap the grabbed
+        // control back to its last saved origin — that made buttons look
+        // like they refused to move.
+        val dragging = editDrag?.control
 
-        val moveCenter = centered(ID_MOVE, 0.155f * w, 0.60f * h)
-        zones.getValue(Control.MOVE).apply {
-            cx = moveCenter.first; cy = moveCenter.second
-            radius = 0.105f * w * g * sizeScaleFor(ID_MOVE)
+        if (dragging != Control.MOVE) {
+            val moveCenter = centered(ID_MOVE, 0.155f * w, 0.60f * h)
+            zones.getValue(Control.MOVE).apply {
+                cx = moveCenter.first; cy = moveCenter.second
+                radius = 0.105f * w * g * sizeScaleFor(ID_MOVE)
+            }
         }
-        val cCenter = centered(ID_C, 0.585f * w, 0.30f * h)
-        zones.getValue(Control.C).apply {
-            cx = cCenter.first; cy = cCenter.second
-            radius = 0.08925f * w * g * sizeScaleFor(ID_C)
+        if (dragging != Control.C) {
+            val cCenter = centered(ID_C, 0.585f * w, 0.30f * h)
+            zones.getValue(Control.C).apply {
+                cx = cCenter.first; cy = cCenter.second
+                radius = 0.08925f * w * g * sizeScaleFor(ID_C)
+            }
         }
 
-        val dHalf = 0.060f * w * g * dpadScale()
-        val dpadSaved = dpadOrigin()
-        // D-pad sits right of the move stick (same left cluster but further
-        // along X) so their touch zones never overlap.
-        val groupCenter = if (dpadSaved != null) dpadSaved.first * w to dpadSaved.second * h
-                          else 0.30f * w to 0.84f * h
-        zones.getValue(Control.DPAD_UP).apply { cx = groupCenter.first; cy = groupCenter.second - dHalf; radius = dHalf }
-        zones.getValue(Control.DPAD_DOWN).apply { cx = groupCenter.first; cy = groupCenter.second + dHalf; radius = dHalf }
-        zones.getValue(Control.DPAD_LEFT).apply { cx = groupCenter.first - dHalf; cy = groupCenter.second; radius = dHalf }
-        zones.getValue(Control.DPAD_RIGHT).apply { cx = groupCenter.first + dHalf; cy = groupCenter.second; radius = dHalf }
-        zones.getValue(Control.DPAD_GROUP).apply {
-            cx = groupCenter.first; cy = groupCenter.second
-            radius = 1.5f * dHalf
+        if (dragging != Control.DPAD_GROUP) {
+            val dHalf = 0.060f * w * g * dpadScale()
+            val dpadSaved = dpadOriginCache
+            // D-pad sits right of the move stick (same left cluster but further
+            // along X) so their touch zones never overlap.
+            val groupCenter = if (dpadSaved != null) dpadSaved.first * w to dpadSaved.second * h
+                              else 0.30f * w to 0.84f * h
+            zones.getValue(Control.DPAD_UP).apply { cx = groupCenter.first; cy = groupCenter.second - dHalf; radius = dHalf }
+            zones.getValue(Control.DPAD_DOWN).apply { cx = groupCenter.first; cy = groupCenter.second + dHalf; radius = dHalf }
+            zones.getValue(Control.DPAD_LEFT).apply { cx = groupCenter.first - dHalf; cy = groupCenter.second; radius = dHalf }
+            zones.getValue(Control.DPAD_RIGHT).apply { cx = groupCenter.first + dHalf; cy = groupCenter.second; radius = dHalf }
+            zones.getValue(Control.DPAD_GROUP).apply {
+                cx = groupCenter.first; cy = groupCenter.second
+                radius = 1.5f * dHalf
+            }
         }
 
         fun place(control: Control, id: String, dx: Float, dy: Float, baseRadius: Float) {
+            if (control == dragging) return
             val center = centered(id, dx, dy)
             zones.getValue(control).apply {
                 cx = center.first; cy = center.second
@@ -538,15 +533,15 @@ class TouchControlsView(context: Context) : View(context) {
                     listener?.onMenuTap()
                     return true
                 }
-                if (editorBar.contains(x, y)) {
-                    if (resetButton.contains(x, y)) {
-                        resetLayout()
-                        return true
-                    }
-                    if (doneButton.contains(x, y)) {
-                        editingLayout = false
-                        return true
-                    }
+                // Only the Reset / Done buttons consume the bar. The rest of
+                // the bar used to swallow hits, so D-pad / Start (which sit
+                // on the bottom edge) could not be dragged at all.
+                if (resetButton.contains(x, y)) {
+                    resetLayout()
+                    return true
+                }
+                if (doneButton.contains(x, y)) {
+                    editingLayout = false
                     return true
                 }
                 val control = editableControlAt(x, y) ?: return true
@@ -581,17 +576,20 @@ class TouchControlsView(context: Context) : View(context) {
                 }
                 zone.cx = cx.coerceIn(zone.radius, width - zone.radius)
                 zone.cy = cy.coerceIn(zone.radius, height - zone.radius)
+                if (drag.control == Control.DPAD_GROUP)
+                    syncDpadButtonsToGroup()
                 invalidate()
             }
             MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val drag = editDrag ?: return true
-                editDrag = null
                 val zone = zones.getValue(drag.control)
                 val isGroup = drag.control == Control.DPAD_GROUP
                 val id = controlId(drag.control)
                 val moved = hypot(event.x - drag.startX, event.y - drag.startY)
+                editDrag = null
                 if (moved < 12f) {
-                    // Tap: request resize for the selected control.
+                    // Tap: snap back (in case the finger jiggled) and resize.
+                    layoutDirty = true
                     if (isGroup)
                         listener?.onResizeRequested(ID_DPAD_GROUP, dpadScale())
                     else if (id != null)
@@ -609,11 +607,29 @@ class TouchControlsView(context: Context) : View(context) {
         if (width <= 0 || height <= 0) return
         val normalized = (cx / width).coerceIn(0f, 1f) to (cy / height).coerceIn(0f, 1f)
         if (control == Control.DPAD_GROUP) {
+            dpadOriginCache = normalized
             prefs.edit().putString(PREF_DPAD_ORIGIN, "${normalized.first},${normalized.second}").apply()
         } else {
             val id = controlId(control) ?: return
-            saveOrigin(id, normalized)
+            origins[id] = normalized
+            saveAllOrigins()
         }
+    }
+
+    /** Writes the control currently under the finger, if any. */
+    fun persistInProgressEdit() {
+        val drag = editDrag ?: return
+        val zone = zones.getValue(drag.control)
+        persistOrigin(drag.control, zone.cx, zone.cy)
+    }
+
+    private fun syncDpadButtonsToGroup() {
+        val group = zones.getValue(Control.DPAD_GROUP)
+        val dHalf = group.radius / 1.5f
+        zones.getValue(Control.DPAD_UP).apply { cx = group.cx; cy = group.cy - dHalf; radius = dHalf }
+        zones.getValue(Control.DPAD_DOWN).apply { cx = group.cx; cy = group.cy + dHalf; radius = dHalf }
+        zones.getValue(Control.DPAD_LEFT).apply { cx = group.cx - dHalf; cy = group.cy; radius = dHalf }
+        zones.getValue(Control.DPAD_RIGHT).apply { cx = group.cx + dHalf; cy = group.cy; radius = dHalf }
     }
 
     // ------------------------------------------------------------------ drawing

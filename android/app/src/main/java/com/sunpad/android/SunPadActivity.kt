@@ -107,6 +107,8 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun onPause() {
+        // Flush a mid-drag layout edit so a process death cannot lose it.
+        controls.persistInProgressEdit()
         SunPadNative.nativePause()
         super.onPause()
     }
