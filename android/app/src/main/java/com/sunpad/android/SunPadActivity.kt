@@ -463,6 +463,9 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         items.add("Import game data (GMSE01 ISO/GCM)…")
         actions.add { pickImage() }
 
+        items.add("Import module (gGMSE01_recomp.so)…")
+        actions.add { pickModule() }
+
         items.add("Quit")
         actions.add { finish() }
 
