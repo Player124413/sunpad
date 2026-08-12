@@ -16,7 +16,6 @@ import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.view.InputDevice
 import android.widget.TextView
@@ -296,53 +295,76 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     // ------------------------------------------------------------------ menu
 
     private fun showMenu() {
-        if (isFinishing) return
-        val menu = PopupMenu(this, controls)
-        menu.menu.add(0, MENU_SCALE, 0, "Render scale: ${prefs.getInt("scale", 1)}×")
-        menu.menu.add(0, MENU_ASPECT, 1, "Aspect ratio")
-        menu.menu.add(0, MENU_OPACITY, 2, "Control opacity…")
-        menu.menu.add(0, MENU_SIZE, 3, "Control size…")
-        menu.menu.add(0, MENU_CSTICK, 4, "Modern C-stick (flip horizontal)")
-        menu.menu.add(0, MENU_EDIT_LAYOUT, 5, "Edit touch layout…")
-        menu.menu.add(0, MENU_RESET_LAYOUT, 6, "Reset touch layout…")
-        menu.menu.add(0, MENU_MAPPING, 7, "Controller button mapping…")
-        menu.menu.add(0, MENU_HUD, 8, if (hudVisible) "Hide diagnostics" else "Show diagnostics")
-        menu.menu.add(0, MENU_IMPORT, 9, "Import game data…")
-        menu.menu.add(0, MENU_QUIT, 10, "Quit")
-        val cStickItem = menu.menu.getItem(4)
-        cStickItem.isCheckable = true
-        cStickItem.isChecked = prefs.getBoolean("modernCStick", false)
-        menu.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
-                MENU_SCALE -> cycleRenderScale()
-                MENU_ASPECT -> pickAspect()
-                MENU_OPACITY -> showSeekDialog("Control opacity", 25..90, prefs.getInt("opacity", 55)) {
-                    controls.opacity = it / 100f
-                    prefs.edit().putInt("opacity", it).apply()
-                }
-                MENU_SIZE -> showSeekDialog("Control size", 60..140, prefs.getInt("size", 100)) {
-                    controls.scale = it / 100f
-                    prefs.edit().putInt("size", it).apply()
-                }
-                MENU_CSTICK -> {
-                    val on = !item.isChecked
-                    item.isChecked = on
-                    prefs.edit().putBoolean("modernCStick", on).apply()
-                    SunPadNative.nativeSetModernCStick(on)
-                }
-                MENU_EDIT_LAYOUT -> {
-                    controls.editingLayout = true
-                    Toast.makeText(this, "Drag controls • tap one to resize", Toast.LENGTH_SHORT).show()
-                }
-                MENU_RESET_LAYOUT -> confirmResetLayout()
-                MENU_MAPPING -> showMappingDialog()
-                MENU_HUD -> toggleHud()
-                MENU_IMPORT -> showSetupDialog()
-                MENU_QUIT -> finish()
+        if (isFinishing || isDestroyed) return
+        // An AlertDialog is used instead of a PopupMenu: PopupMenu can fail
+        // to appear over the fullscreen SurfaceView / immersive mode.
+        val items = ArrayList<String>()
+        val actions = ArrayList<() -> Unit>()
+
+        items.add("Render scale: ${prefs.getInt("scale", 1)}×")
+        actions.add { cycleRenderScale(); showMenu() }
+
+        items.add("Aspect ratio")
+        actions.add { pickAspect() }
+
+        items.add("Control opacity…")
+        actions.add {
+            showSeekDialog("Control opacity", 25..90, prefs.getInt("opacity", 55)) {
+                controls.opacity = it / 100f
+                prefs.edit().putInt("opacity", it).apply()
             }
-            true
         }
-        menu.show()
+
+        items.add("Control size…")
+        actions.add {
+            showSeekDialog("Control size", 60..140, prefs.getInt("size", 100)) {
+                controls.scale = it / 100f
+                prefs.edit().putInt("size", it).apply()
+            }
+        }
+
+        items.add(if (prefs.getBoolean("modernCStick", false))
+            "Modern C-stick: ON" else "Modern C-stick: OFF")
+        actions.add {
+            val on = !prefs.getBoolean("modernCStick", false)
+            prefs.edit().putBoolean("modernCStick", on).apply()
+            SunPadNative.nativeSetModernCStick(on)
+            showMenu()
+        }
+
+        items.add("Edit touch layout…")
+        actions.add {
+            controls.editingLayout = true
+            Toast.makeText(this, "Drag controls • tap one to resize", Toast.LENGTH_SHORT).show()
+        }
+
+        items.add("Reset touch layout…")
+        actions.add { confirmResetLayout() }
+
+        items.add("Controller button mapping…")
+        actions.add { showMappingDialog() }
+
+        items.add(if (hudVisible) "Hide diagnostics" else "Show diagnostics")
+        actions.add { toggleHud() }
+
+        items.add("Import game data…")
+        actions.add { showSetupDialog() }
+
+        items.add("Quit")
+        actions.add { finish() }
+
+        try {
+            AlertDialog.Builder(this)
+                .setTitle("SunPad")
+                .setItems(items.toTypedArray()) { _, which ->
+                    if (which in actions.indices) actions[which]()
+                }
+                .setNegativeButton("Close", null)
+                .show()
+        } catch (e: Exception) {
+            android.util.Log.e("SunPad", "menu failed", e)
+            Toast.makeText(this, "Menu error: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun cycleRenderScale() {
