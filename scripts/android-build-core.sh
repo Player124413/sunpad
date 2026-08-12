@@ -215,23 +215,48 @@ fi
 # bzip2: the vendored submodule has no CMake build, and the system libbz2
 # is x86_64-only (cannot link into the arm64 libsunpad.so). Compile the
 # vendored sources with the NDK toolchain into a static arm64 libbz2.a.
+# NDK toolchain helpers for the hand-built static libraries below.
+NDK_PREBUILT="$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin)"
+NDK_CC="$NDK_PREBUILT/aarch64-linux-android26-clang"
+NDK_AR="$NDK_PREBUILT/llvm-ar"
+
+# bzip2: the vendored submodule has no CMake build, and the system libbz2
+# is x86_64-only (cannot link into the arm64 libsunpad.so). Compile the
+# vendored sources with the NDK toolchain into a static arm64 libbz2.a.
 if ! grep -q 'libbz2' <<<"${LIBS[*]}"; then
   BZ2_SRC="$ROOT/android/vendor/bzip2"
   if [[ -d "$BZ2_SRC" ]]; then
     echo "==> Building static bzip2 (arm64) with the NDK toolchain"
-    NDK_PREBUILT="$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin)"
-    BZ2_CC="$NDK_PREBUILT/aarch64-linux-android26-clang"
-    BZ2_AR="$NDK_PREBUILT/llvm-ar"
     BZ2_BUILD="$BUILD/bzip2-build"
     mkdir -p "$BZ2_BUILD"
     for src in blocksort huffman crctable randtable compress decompress bzlib; do
-      "$BZ2_CC" -c -O2 -fPIC -I"$BZ2_SRC" "$BZ2_SRC/$src.c" -o "$BZ2_BUILD/$src.o"
+      "$NDK_CC" -c -O2 -fPIC -I"$BZ2_SRC" "$BZ2_SRC/$src.c" -o "$BZ2_BUILD/$src.o"
     done
-    "$BZ2_AR" rcs "$BZ2_BUILD/libbz2.a" "$BZ2_BUILD"/*.o
+    "$NDK_AR" rcs "$BZ2_BUILD/libbz2.a" "$BZ2_BUILD"/*.o
     LIBS+=("$BZ2_BUILD/libbz2.a")
     echo "built: $BZ2_BUILD/libbz2.a"
   else
     echo "warning: bzip2 sources not found at $BZ2_SRC; BZ2_* symbols may fail the link" >&2
+  fi
+fi
+
+# libcharset: libiconv's locale_charset lives in a separate static archive
+# that the core target graph does not necessarily build. Compile it from
+# the vendored sources (needs the CMake-generated config.h from the build
+# tree) with the NDK toolchain.
+if ! grep -q 'libcharset' <<<"${LIBS[*]}"; then
+  LIBC_SRC="$MG/vendor/dolphin/Externals/libiconv/libcharset"
+  LIBC_CONFIG="$(find "$BUILD" -name config.h -path "*libcharset*" 2>/dev/null | head -1)"
+  if [[ -d "$LIBC_SRC" && -n "$LIBC_CONFIG" ]]; then
+    echo "==> Building static libcharset (arm64) with the NDK toolchain"
+    LIBC_BUILD="$BUILD/libcharset-build"
+    mkdir -p "$LIBC_BUILD"
+    "$NDK_CC" -c -O2 -fPIC       -I"$LIBC_SRC/include" -I"$(dirname "$LIBC_CONFIG")"       "$LIBC_SRC/lib/localcharset.c" -o "$LIBC_BUILD/localcharset.o"
+    "$NDK_AR" rcs "$LIBC_BUILD/libcharset.a" "$LIBC_BUILD/localcharset.o"
+    LIBS+=("$LIBC_BUILD/libcharset.a")
+    echo "built: $LIBC_BUILD/libcharset.a"
+  else
+    echo "warning: libcharset sources or generated config.h not found; locale_charset may fail the link" >&2
   fi
 fi
 
