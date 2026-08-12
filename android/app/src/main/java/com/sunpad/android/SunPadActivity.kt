@@ -336,7 +336,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK || data?.data == null) {
-            showSetupDialog()
+            if (!started) showSetupDialog()
             return
         }
         val uri = data.data!!
@@ -392,15 +392,27 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun importModule(uri: android.net.Uri) {
+        showStatus("Installing module…")
         Thread {
             val error = importer.importModule(uri)
             uiHandler.post {
+                hideStatus()
                 if (error != null) {
-                    Toast.makeText(this, error, Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "Module installed.", Toast.LENGTH_SHORT).show()
+                    showStartError(error)
+                    if (!started) showSetupDialog()
+                    return@post
                 }
-                startGameIfReady()
+                Toast.makeText(this, "Module installed (gGMSE01_recomp.so).", Toast.LENGTH_SHORT).show()
+                if (started) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Module installed")
+                        .setMessage("The new module is used the next time the game starts. Close and reopen SunPad to apply it.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                } else {
+                    startPending = true
+                    startGameIfReady()
+                }
             }
         }.start()
     }
