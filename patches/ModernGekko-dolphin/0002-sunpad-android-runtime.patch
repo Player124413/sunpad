@@ -120,10 +120,10 @@ index 3c9b5fd..478c494 100644
  
 diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
 new file mode 100644
-index 0000000..d1693f4
+index 0000000..54087fb
 --- /dev/null
 +++ b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,76 @@
 +// Copyright 2026 SunPad project
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
@@ -155,8 +155,9 @@ index 0000000..d1693f4
 +  // just stored for GetWindowSystemInfo(). A null surface is never routed
 +  // to the presenter: the host pauses emulation around surface destruction
 +  // and keeps the previous window reference until a replacement arrives.
-+  if (surface != nullptr && VideoCommon::g_presenter)
-+    VideoCommon::g_presenter->ChangeSurface(surface);
++  // g_presenter lives in the global namespace (see VideoCommon/Present.h).
++  if (surface != nullptr && g_presenter)
++    g_presenter->ChangeSurface(surface);
 +}
 +
 +namespace
