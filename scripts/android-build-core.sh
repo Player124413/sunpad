@@ -73,6 +73,13 @@ fi
 echo "==> Building core libraries (-j$JOBS)"
 ninja -C "$BUILD" libmoderngekko.a -j"$JOBS"
 
+# Build the externals the merged archive list links explicitly. They are
+# not necessarily in libmoderngekko.a's dependency graph, so their static
+# archives may not exist yet (libcharset for libiconv's locale_charset,
+# linkernsbypass for adrenotools).
+ninja -C "$BUILD" iconv libcharset linkernsbypass adrenotools -j"$JOBS" 2>/dev/null \
+  || echo "note: some externals targets not buildable in this configuration"
+
 # ---------------------------------------------------------------------------
 # Optional: GMSE01 recompiled module (needs the user's locally generated
 # DolRecomp sources from scripts/prepare-game.sh).
