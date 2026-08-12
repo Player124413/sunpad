@@ -23,7 +23,9 @@ enum class PhysicalButton(val bit: Int, val label: String) {
     companion object {
         val ALL: List<PhysicalButton> = entries.toList()
 
-        const val ALL_BITS: Int =
+        // Not const: bitwise-or of enum properties is not a compile-time
+        // constant expression.
+        val ALL_BITS: Int =
             A.bit or B.bit or X.bit or Y.bit or RIGHT_SHOULDER.bit
 
         fun fromBit(bit: Int): PhysicalButton? = entries.firstOrNull { it.bit == bit }

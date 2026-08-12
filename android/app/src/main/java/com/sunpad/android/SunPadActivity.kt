@@ -78,7 +78,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
 
         hud = TextView(this).apply {
-            textColor = Color.WHITE
+            setTextColor(Color.WHITE)
             textSize = 13f
             setShadowLayer(3f, 1f, 1f, Color.BLACK)
             visibility = View.GONE
@@ -360,9 +360,17 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             progress = current.coerceIn(range)
         }
         val pad = dp(24)
+        // AlertDialog.Builder has no 5-argument setView overload in the
+        // Kotlin binding; wrap the slider with padding instead.
+        val container = FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+            addView(slider, FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT))
+        }
         AlertDialog.Builder(this)
             .setTitle(title)
-            .setView(slider, pad, pad / 2, pad, 0)
+            .setView(container)
             .setPositiveButton("OK", null)
             .show()
         slider.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {

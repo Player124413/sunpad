@@ -173,7 +173,9 @@ class GameDataImporter(private val context: Context) {
 
     companion object {
         const val EXPECTED_SIZE = 1459978240L
-        const val DISC_MAGIC = 0xC2339F3D
+        // 0xC2339F3D does not fit in a positive Int; store it as the Int
+        // bit pattern (the negative two's-complement value).
+        val DISC_MAGIC: Int = 0xC2339F3D.toInt()
         const val GAME_ID = "GMSE01"
     }
 }

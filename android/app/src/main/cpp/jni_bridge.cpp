@@ -153,7 +153,7 @@ void RunExtraction(ExtractContext ctx) {
   DiscIO::ExportDirectory(
       *volume, partition, filesystem->GetRoot(), true, "",
       (root / "files").string(),
-      [&completed, total](const std::string& path) {
+      [&completed, total, &report_progress](const std::string& path) {
         ++completed;
         const double fraction = 0.10 + 0.85 * static_cast<double>(completed.load()) /
                                             static_cast<double>(total);
