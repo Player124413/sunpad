@@ -185,6 +185,22 @@ done
 DISCOVERED_ARCHIVES=(
   libiconv.a libvideosoftware.a libadrenotools.a libbz2.a libbz2_static.a
 )
+# bzip2 may come from the system (libbz2-dev) via BZip2::BZip2 instead of a
+# bundled archive; in that case nothing is discovered and libdiscio already
+# links the system library.
+MISSING_DISCOVERED=()
+for name in "${DISCOVERED_ARCHIVES[@]}"; do
+  lib="$(find "$BUILD" -name "$name" 2>/dev/null | head -1)"
+  if [[ -z "$lib" ]]; then
+    MISSING_DISCOVERED+=("$name")
+  else
+    LIBS+=("$lib")
+    echo "discovered: $lib"
+  fi
+done
+if (( ${#MISSING_DISCOVERED[@]} )); then
+  echo "note: not produced by this build (may be a system library): ${MISSING_DISCOVERED[*]}" >&2
+fi
 for name in "${DISCOVERED_ARCHIVES[@]}"; do
   lib="$(find "$BUILD" -name "$name" 2>/dev/null | head -1)"
   if [[ -z "$lib" ]]; then
