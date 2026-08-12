@@ -354,8 +354,8 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         items.add(if (hudVisible) "Hide diagnostics" else "Show diagnostics")
         actions.add { toggleHud() }
 
-        items.add("Import game data…")
-        actions.add { showSetupDialog() }
+        items.add("Import game data (GMSE01 ISO/GCM)…")
+        actions.add { pickImage() }
 
         items.add("Quit")
         actions.add { finish() }

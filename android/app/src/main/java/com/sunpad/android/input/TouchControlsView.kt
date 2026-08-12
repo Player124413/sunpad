@@ -293,10 +293,12 @@ class TouchControlsView(context: Context) : View(context) {
             radius = 0.08925f * w * g * sizeScaleFor(ID_C)
         }
 
-        val dHalf = 0.065f * w * g * dpadScale()
+        val dHalf = 0.060f * w * g * dpadScale()
         val dpadSaved = dpadOrigin()
+        // D-pad sits right of the move stick (same left cluster but further
+        // along X) so their touch zones never overlap.
         val groupCenter = if (dpadSaved != null) dpadSaved.first * w to dpadSaved.second * h
-                          else 0.155f * w to 0.84f * h
+                          else 0.30f * w to 0.84f * h
         zones.getValue(Control.DPAD_UP).apply { cx = groupCenter.first; cy = groupCenter.second - dHalf; radius = dHalf }
         zones.getValue(Control.DPAD_DOWN).apply { cx = groupCenter.first; cy = groupCenter.second + dHalf; radius = dHalf }
         zones.getValue(Control.DPAD_LEFT).apply { cx = groupCenter.first - dHalf; cy = groupCenter.second; radius = dHalf }
@@ -333,6 +335,13 @@ class TouchControlsView(context: Context) : View(context) {
 
     private fun controlAt(x: Float, y: Float): Control? {
         layoutZones()
+        // Sticks first: if the touch is inside a stick's zone, it is a
+        // stick drag even if it also overlaps the D-pad cluster.
+        for (c in listOf(Control.MOVE, Control.C)) {
+            val z = zones.getValue(c)
+            if (hypot(x - z.cx, y - z.cy) <= z.radius + 12f)
+                return c
+        }
         return zones.entries.firstOrNull { (c, z) ->
             c != Control.MENU && c != Control.DPAD_GROUP &&
                 hypot(x - z.cx, y - z.cy) <= z.radius + 12f
