@@ -185,7 +185,13 @@ class GameDataImporter(private val context: Context) {
                 source.copyTo(out)
             }
         }
-        return if (moduleFile.isFile) null else "Module copy failed."
+        if (!moduleFile.isFile) return "Module copy failed."
+        val error = validateModuleFile(moduleFile)
+        if (error != null) {
+            moduleFile.delete()
+            return error
+        }
+        return null
     }
 
     /** Removes imported game data (module stays; saves stay separate). */

@@ -129,11 +129,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     override fun onPause() {
         // Flush a mid-drag layout edit so a process death cannot lose it.
         controls.persistInProgressEdit()
-<<<<<<< HEAD
-        SunPadNative.nativePause()
-=======
         SunPadNative.pause()
->>>>>>> d48adaf (Stop the post-import crash and show the real start error)
         super.onPause()
     }
 
@@ -275,17 +271,35 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         }
         items.add("Quit")
         actions.add { finish() }
+        val hasIso = importer.hasActiveGame()
+        val hasModule = importer.ensureModule()
+        val missing = buildString {
+            if (!hasIso && !hasModule)
+                append("SunPad needs TWO files. Both are required.\n\n")
+            else if (!hasIso)
+                append("ISO is still missing.\n\n")
+            else if (!hasModule)
+                append("The game module is still missing.\n\n")
+        }
         AlertDialog.Builder(this)
-            .setTitle(if (started) "SunPad" else "SunPad — game data required")
+            .setTitle(
+                when {
+                    started -> "SunPad"
+                    hasIso && hasModule -> "SunPad"
+                    else -> "SunPad — two files required"
+                })
             .setMessage(
                 if (started) ""
-                else "To start playing:\n\n" +
-                     "1) Tap \"Import game data (GMSE01 ISO/GCM)…\" below.\n" +
-                     "2) In the file picker that opens, choose your GMSE01 " +
-                     "ISO image (e.g. in Downloads).\n" +
-                     "3) Wait for Copying… and Extracting… to finish.\n\n" +
-                     "SunPad never downloads game data - you provide your " +
-                     "own legally obtained disc image.")
+                else missing +
+                     "1) ISO / GCM — Super Mario Sunshine USA Rev 0 (GMSE01), " +
+                     "about 1.4 GB. This is the disc image: levels, graphics, audio.\n" +
+                     "   Tap \"Import game data (GMSE01 ISO/GCM)…\" and pick that file.\n\n" +
+                     "2) Module — gGMSE01_recomp.so built for Android arm64. " +
+                     "This is NOT the ISO and NOT an iOS .dylib.\n" +
+                     "   Tap \"Set game module (gGMSE01_recomp.so)…\" if it is not " +
+                     "already bundled in this APK.\n\n" +
+                     "SunPad never downloads either file. You supply your own " +
+                     "legally obtained disc image.")
             .setItems(items.toTypedArray()) { _, which -> actions[which]() }
             // Только явный выбор "Quit" закрывает приложение; случайное
             // нажатие мимо диалога или Back просто закрывает диалог.
