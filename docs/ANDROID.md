@@ -281,6 +281,30 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
 - the mapping persists in `SunPadControllerMappingV1` and applies live to
   the merged input on the next frame (the Pipes device input is unaffected).
 
+## Supported devices / SoCs
+
+- **Architecture**: the APK is `arm64-v8a` only, so any 64-bit ARM Android
+  device (Android 8.0 / API 26+) works: **MediaTek** (Dimensity, Helio G),
+  Qualcomm (Snapdragon), Samsung Exynos, Google Tensor.
+- **Rendering**: Vulkan. MediaTek SoCs use **Mali** GPUs (Dimensity
+  Mali-G57/G68/G77/G610/G615/G720), which ship working Vulkan drivers. The
+  Qualcomm-only custom-driver path (`adrenotools`, for sideloaded Adreno
+  drivers) is gated on `/dev/kgsl-3d0` being present and a custom driver
+  being selected, so it is **never exercised on MediaTek** — the runtime
+  loads the system `libvulkan.so` as usual.
+- **Fallback renderer**: if a device's Vulkan driver is broken or missing,
+  switch `config.graphics.backend` from `"Vulkan"` to `"OGL"` in
+  `android/app/src/main/cpp/runtime_host.cpp` (OpenGL ES via EGL is already
+  linked into the app).
+- **Audio**: OpenSL ES, available on every Android device.
+- **No JIT**: the static-recompilation core does not generate executable
+  host code at runtime, so there are no W^X / SELinux restrictions to fight
+  on any SoC (this is the same stance as the iOS port).
+- **Performance**: Super Mario Sunshine is a demanding GameCube title.
+  Expect playable performance on upper-midrange and flagship SoCs
+  (Dimensity 8000/9000 series and above, Snapdragon 7xx/8xx and above);
+  entry-level Helio/A-series chips will likely be too slow even at 1x.
+
 ## Current boundaries and known gaps
 
 - **No acceptance run**: nothing in `android/` has been compiled or booted on
