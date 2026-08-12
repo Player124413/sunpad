@@ -1,8 +1,10 @@
 cmake_minimum_required(VERSION 3.22)
 project(sunpad_app C CXX)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Explicit -std=c++2b: valid on both NDK clang 17 (NDK r26, which rejects
+# -std=c++23) and clang 18+. The app code is C++20-compatible; the core
+# headers it includes are too.
+add_compile_options(-std=c++2b)
 
 # Provisioned by scripts/android-build-core.sh (gitignored, host-local paths):
 #   SUNPAD_CORE_LIBS          merged ModernGekko + Dolphin core archives
