@@ -180,6 +180,21 @@ for lib in "${OPTIONAL_LIBS[@]}"; do
   fi
 done
 
+# Archives whose exact output name/path varies across externals versions;
+# locate them by filename inside the build tree.
+DISCOVERED_ARCHIVES=(
+  libiconv.a libvideosoftware.a libadrenotools.a libbz2.a libbz2_static.a
+)
+for name in "${DISCOVERED_ARCHIVES[@]}"; do
+  lib="$(find "$BUILD" -name "$name" 2>/dev/null | head -1)"
+  if [[ -z "$lib" ]]; then
+    echo "missing required core library: $name (not produced by the build)" >&2
+    exit 1
+  fi
+  LIBS+=("$lib")
+  echo "discovered: $lib"
+done
+
 {
   echo "# Provisioned by scripts/android-build-core.sh — do not edit."
   echo "# Paths are host-local; this file is gitignored."
