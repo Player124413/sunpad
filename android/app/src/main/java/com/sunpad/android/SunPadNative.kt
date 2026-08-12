@@ -131,6 +131,10 @@ object SunPadNative {
 
     private external fun nativeSetModernCStick(enabled: Boolean)
 
+    private external fun nativeSetCrashLogPath(path: String)
+
+    private external fun nativeSetPreferredBackend(backend: String)
+
     private external fun nativeCurrentFPS(): Double
 
     private external fun nativeCurrentSpeed(): Double

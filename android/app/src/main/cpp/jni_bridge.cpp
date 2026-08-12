@@ -49,6 +49,49 @@ static jclass g_audio_utils = nullptr;
 static jmethodID g_audio_sample_rate = nullptr;
 static jmethodID g_audio_frames = nullptr;
 
+static char g_crash_log_path[512];
+
+extern "C" void SunPadNativeLog(const char* msg) {
+  if (msg == nullptr)
+    return;
+  __android_log_print(ANDROID_LOG_INFO, "SunPad", "%s", msg);
+  if (g_crash_log_path[0] == '\0')
+    return;
+  const int fd = ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+  if (fd < 0)
+    return;
+  ::write(fd, msg, std::strlen(msg));
+  ::write(fd, "\n", 1);
+  ::close(fd);
+}
+
+static void OnNativeCrash(int sig) {
+  char buf[96];
+  std::snprintf(buf, sizeof(buf),
+                "NATIVE CRASH signal=%d (after shaders = first present / OOM)",
+                sig);
+  if (g_crash_log_path[0] != '\0') {
+    const int fd = ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd >= 0) {
+      ::write(fd, buf, std::strlen(buf));
+      ::write(fd, "\n", 1);
+      ::fsync(fd);
+      ::close(fd);
+    }
+  }
+  __android_log_print(ANDROID_LOG_ERROR, "SunPad", "%s", buf);
+  std::signal(sig, SIG_DFL);
+  std::raise(sig);
+}
+
+static void InstallCrashHandlers() {
+  std::signal(SIGSEGV, OnNativeCrash);
+  std::signal(SIGABRT, OnNativeCrash);
+  std::signal(SIGBUS, OnNativeCrash);
+  std::signal(SIGFPE, OnNativeCrash);
+  std::signal(SIGILL, OnNativeCrash);
+}
+
 extern "C" bool SunPadAndroidQueryAudio(int* sample_rate, int* frames_per_buffer) {
   if (g_vm == nullptr || g_audio_utils == nullptr)
     return false;
@@ -362,6 +405,33 @@ Java_com_sunpad_android_SunPadNative_nativeEfbResolution(JNIEnv* env,
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_sunpad_android_SunPadNative_nativeIsRunning(JNIEnv*, jobject) {
   return g_host && g_host->IsRunning() ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_sunpad_android_SunPadNative_nativeSetCrashLogPath(
+    JNIEnv* env, jobject, jstring path) {
+  if (!path) {
+    g_crash_log_path[0] = '\0';
+    return;
+  }
+  const char* chars = env->GetStringUTFChars(path, nullptr);
+  if (chars) {
+    std::snprintf(g_crash_log_path, sizeof(g_crash_log_path), "%s", chars);
+    env->ReleaseStringUTFChars(path, chars);
+    SunPadNativeLog("crash log path set");
+  }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_sunpad_android_SunPadNative_nativeSetPreferredBackend(
+    JNIEnv* env, jobject, jstring backend) {
+  if (!g_host || !backend)
+    return;
+  const char* chars = env->GetStringUTFChars(backend, nullptr);
+  if (chars) {
+    g_host->SetPreferredBackend(chars);
+    env->ReleaseStringUTFChars(backend, chars);
+  }
 }
 
 extern "C" JNIEXPORT void JNICALL
