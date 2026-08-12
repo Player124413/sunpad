@@ -1,3 +1,22 @@
+diff --git a/Source/CMakeLists.txt b/Source/CMakeLists.txt
+index 7871083..989eb69 100644
+--- a/Source/CMakeLists.txt
++++ b/Source/CMakeLists.txt
+@@ -81,7 +81,13 @@ endif()
+ 
+ add_subdirectory(Core)
+ if (ANDROID)
+-  add_subdirectory(Android/jni)
++  # Dolphin's Android app JNI layer (target "main") is not part of SunPad:
++  # it copies Data/Sys via CMAKE_SOURCE_DIR (broken when Dolphin is a
++  # vendored subproject) and pulls in the app-side JNI/IDCache code SunPad
++  # deliberately does not link. SunPad passes SUNPAD_NO_DOLPHIN_ANDROID_JNI.
++  if(NOT SUNPAD_NO_DOLPHIN_ANDROID_JNI)
++    add_subdirectory(Android/jni)
++  endif()
+ endif()
+ 
+ if (ENABLE_TESTS)
 diff --git a/Source/Core/AudioCommon/OpenSLESStream.cpp b/Source/Core/AudioCommon/OpenSLESStream.cpp
 index 28fe285..768863f 100644
 --- a/Source/Core/AudioCommon/OpenSLESStream.cpp

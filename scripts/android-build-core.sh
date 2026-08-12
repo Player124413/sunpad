@@ -42,6 +42,9 @@ CMAKE_COMMON=(
   -DCMAKE_SYSTEM_PROCESSOR=aarch64
   -DANDROID_PLATFORM=android-26
   -DANDROID_STL=c++_shared
+  # SunPad hosts the runtime with its own JNI layer; Dolphin's Android app
+  # JNI target ("main", copies Data/Sys via CMAKE_SOURCE_DIR) is not built.
+  -DSUNPAD_NO_DOLPHIN_ANDROID_JNI=ON
   -DCMAKE_BUILD_TYPE=Release
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
   -DENABLE_QT=OFF -DENABLE_TESTS=OFF
