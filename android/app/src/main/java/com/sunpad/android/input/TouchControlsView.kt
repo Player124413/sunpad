@@ -322,8 +322,10 @@ class TouchControlsView(context: Context) : View(context) {
         place(Control.R, "R", 0.90f * w, 0.09f * h, 0.0448f * w * g)
         place(Control.START, "Start", 0.50f * w, 0.90f * h, 0.042f * w * g)
 
+        // Menu button sits away from the screen corner: camera cutouts and
+        // rounded corners in landscape make the very corner a dead zone.
         zones.getValue(Control.MENU).apply {
-            cx = 0.955f * w; cy = 0.055f * h; radius = 0.042f * w * g
+            cx = 0.88f * w; cy = 0.085f * h; radius = 0.05f * w * g
         }
     }
 
@@ -348,7 +350,7 @@ class TouchControlsView(context: Context) : View(context) {
                 val id = event.getPointerId(idx)
                 val x = event.getX(idx); val y = event.getY(idx)
                 val menu = zones.getValue(Control.MENU)
-                if (hypot(x - menu.cx, y - menu.cy) <= menu.radius + 12f) {
+                if (hypot(x - menu.cx, y - menu.cy) <= menu.radius + 26f) {
                     listener?.onMenuTap()
                     return true
                 }
@@ -522,7 +524,7 @@ class TouchControlsView(context: Context) : View(context) {
             MotionEvent.ACTION_DOWN -> {
                 val x = event.x; val y = event.y
                 val menu = zones.getValue(Control.MENU)
-                if (hypot(x - menu.cx, y - menu.cy) <= menu.radius + 12f) {
+                if (hypot(x - menu.cx, y - menu.cy) <= menu.radius + 26f) {
                     // The three-dot menu stays available while editing.
                     listener?.onMenuTap()
                     return true
