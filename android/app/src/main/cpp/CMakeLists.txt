@@ -35,8 +35,4 @@ target_link_libraries(sunpad PRIVATE
     EGL
     GLESv3
     ${SUNPAD_CORE_LIBS}
-    # bzip2: WIACompression needs BZ2_*; the archive is discovered by
-    # android-build-core.sh when bundled, otherwise the system libbz2
-    # (from libbz2-dev in CI) is used.
-    bz2
 )

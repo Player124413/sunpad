@@ -212,6 +212,29 @@ if (( ${#MISSING_DISCOVERED[@]} )); then
   echo "note: not produced by this build (may be a system library): ${MISSING_DISCOVERED[*]}" >&2
 fi
 
+# bzip2: the vendored submodule has no CMake build, and the system libbz2
+# is x86_64-only (cannot link into the arm64 libsunpad.so). Compile the
+# vendored sources with the NDK toolchain into a static arm64 libbz2.a.
+if ! grep -q 'libbz2' <<<"${LIBS[*]}"; then
+  BZ2_SRC="$ROOT/android/vendor/bzip2"
+  if [[ -d "$BZ2_SRC" ]]; then
+    echo "==> Building static bzip2 (arm64) with the NDK toolchain"
+    NDK_PREBUILT="$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin)"
+    BZ2_CC="$NDK_PREBUILT/aarch64-linux-android26-clang"
+    BZ2_AR="$NDK_PREBUILT/llvm-ar"
+    BZ2_BUILD="$BUILD/bzip2-build"
+    mkdir -p "$BZ2_BUILD"
+    for src in blocksort huffman crctable randtable compress decompress bzlib; do
+      "$BZ2_CC" -c -O2 -fPIC -I"$BZ2_SRC" "$BZ2_SRC/$src.c" -o "$BZ2_BUILD/$src.o"
+    done
+    "$BZ2_AR" rcs "$BZ2_BUILD/libbz2.a" "$BZ2_BUILD"/*.o
+    LIBS+=("$BZ2_BUILD/libbz2.a")
+    echo "built: $BZ2_BUILD/libbz2.a"
+  else
+    echo "warning: bzip2 sources not found at $BZ2_SRC; BZ2_* symbols may fail the link" >&2
+  fi
+fi
+
 {
   echo "# Provisioned by scripts/android-build-core.sh — do not edit."
   echo "# Paths are host-local; this file is gitignored."
