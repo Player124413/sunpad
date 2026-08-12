@@ -184,11 +184,21 @@ done
   echo "# Provisioned by scripts/android-build-core.sh — do not edit."
   echo "# Paths are host-local; this file is gitignored."
   echo "set(SUNPAD_CORE_INCLUDE_DIRS"
+  # fmt (and the other externals' headers) are needed by the Dolphin core
+  # headers the JNI shim includes (Log.h -> fmt/format.h etc.).
   for inc in \
       "$MG/include" \
       "$MG/vendor/dolphin/Source/Core" \
-      "$MG/vendor/dolphin/GXRuntime/include"; do
-    echo "  \"$inc\""
+      "$MG/vendor/dolphin/GXRuntime/include" \
+      "$MG/vendor/dolphin/Externals/fmt/fmt/include" \
+      "$MG/vendor/dolphin/Externals/enet/enet/include" \
+      "$MG/vendor/dolphin/Externals/mbedtls/include" \
+      "$MG/vendor/dolphin/Externals/minizip-ng/minizip-ng" \
+      "$MG/vendor/dolphin/Externals/Vulkan-Headers/include" \
+      "$MG/vendor/dolphin/Externals/VulkanMemoryAllocator/include"; do
+    if [[ -d "$inc" ]]; then
+      echo "  \"$inc\""
+    fi
   done
   echo ")"
   echo "set(SUNPAD_CORE_LIBS"
