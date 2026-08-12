@@ -58,6 +58,7 @@ apply_patch_once() {
     echo "applied: ${patch#$ROOT/}"
   else
     echo "patch does not apply cleanly: $patch" >&2
+    git -C "$checkout" apply --check --verbose "$patch" >&2 || true
     exit 1
   fi
 }

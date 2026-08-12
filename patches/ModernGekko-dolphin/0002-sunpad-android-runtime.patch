@@ -21,7 +21,7 @@ diff --git a/Source/Core/AudioCommon/OpenSLESStream.cpp b/Source/Core/AudioCommo
 index 28fe285..0318216 100644
 --- a/Source/Core/AudioCommon/OpenSLESStream.cpp
 +++ b/Source/Core/AudioCommon/OpenSLESStream.cpp
-@@ -14,7 +14,13 @@
+@@ -14,7 +14,12 @@
  #include "Common/CommonTypes.h"
  #include "Common/Logging/Log.h"
  #include "Core/Config/ConfigManager.h"
@@ -29,13 +29,13 @@ index 28fe285..0318216 100644
 +
 +// SunPad Android audio: libsunpad caches AudioUtils in JNI_OnLoad (app
 +// class loader). FindClass from this audio thread uses the system class
-+// loader and cannot see com.sunpad.android.AudioUtils — that left a
++// loader and cannot see com.sunpad.android.AudioUtils -- that left a
 +// pending JNI exception and aborted the process after ISO import.
 +extern "C" bool SunPadAndroidQueryAudio(int* sample_rate, int* frames_per_buffer);
  
  void OpenSLESStream::BQPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void* context)
  {
-@@ -38,12 +44,23 @@ void OpenSLESStream::PushSamples(SLAndroidSimpleBufferQueueItf bq)
+@@ -38,12 +43,19 @@
  
  bool OpenSLESStream::Init()
  {
