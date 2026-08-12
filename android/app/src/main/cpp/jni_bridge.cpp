@@ -12,10 +12,15 @@
 #include <android/native_window_jni.h>
 
 #include <atomic>
+#include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <fcntl.h>
 #include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unistd.h>
 
 #include "Common/CommonTypes.h"
 #include "DiscIO/DiscExtractor.h"
@@ -202,6 +207,26 @@ void RunExtraction(ExtractContext ctx) {
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   g_vm = vm;
   SunPadAndroidSetJavaVM(vm);
+  InstallCrashHandlers();
+  JNIEnv* env = nullptr;
+  if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK &&
+      env != nullptr) {
+    jclass audio = env->FindClass("com/sunpad/android/AudioUtils");
+    if (audio != nullptr) {
+      g_audio_utils = static_cast<jclass>(env->NewGlobalRef(audio));
+      g_audio_sample_rate =
+          env->GetStaticMethodID(audio, "getSampleRate", "()I");
+      g_audio_frames =
+          env->GetStaticMethodID(audio, "getFramesPerBuffer", "()I");
+      env->DeleteLocalRef(audio);
+      __android_log_print(ANDROID_LOG_INFO, "SunPad",
+                          "AudioUtils cached at JNI_OnLoad");
+    } else {
+      env->ExceptionClear();
+      __android_log_print(ANDROID_LOG_ERROR, "SunPad",
+                          "AudioUtils not found at JNI_OnLoad");
+    }
+  }
   g_host = new sunpad::RuntimeHost();
   return JNI_VERSION_1_6;
 }
@@ -213,6 +238,15 @@ extern "C" JNIEXPORT void JNI_OnUnload(JavaVM* vm, void* reserved) {
     ANativeWindow_release(g_window);
     g_window = nullptr;
   }
+  JNIEnv* env = nullptr;
+  if (g_audio_utils != nullptr &&
+      vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK &&
+      env != nullptr) {
+    env->DeleteGlobalRef(g_audio_utils);
+  }
+  g_audio_utils = nullptr;
+  g_audio_sample_rate = nullptr;
+  g_audio_frames = nullptr;
   g_vm = nullptr;
 }
 

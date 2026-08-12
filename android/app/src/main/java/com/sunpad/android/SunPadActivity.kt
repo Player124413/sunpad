@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.PixelFormat
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -63,6 +64,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         rootView = FrameLayout(this)
         surfaceView = SurfaceView(this)
+        surfaceView.holder.setFormat(PixelFormat.RGBA_8888)
         surfaceView.holder.addCallback(this)
         rootView.addView(surfaceView, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -112,7 +114,14 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         applyPrefsToControls()
         DiagnosticLog.ensurePublicFolder(this)
-        DiagnosticLog.append(this, "SunPad activity created. native=${SunPadNative.available} ${SunPadNative.loadError ?: ""}")
+        DiagnosticLog.publicFile(this)?.absolutePath?.let { SunPadNative.setCrashLogPath(it) }
+        if (prefs.getBoolean("bootInProgress", false)) {
+            prefs.edit().putBoolean("preferOgl", true).putBoolean("bootInProgress", false).commit()
+            DiagnosticLog.append(this, "Last session died during boot; preferring OpenGL ES")
+        }
+        val backend = if (prefs.getBoolean("preferOgl", false)) "OGL" else "Vulkan"
+        SunPadNative.setPreferredBackend(backend)
+        DiagnosticLog.append(this, "SunPad activity created. native=${SunPadNative.available} backend=$backend ${SunPadNative.loadError ?: ""}")
         showPreviousCrashIfAny()
         if (!SunPadNative.available) {
             showStartError(
@@ -157,6 +166,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+        DiagnosticLog.append(this, "surfaceChanged ${w}x${h} format=$format")
         SunPadNative.setSurface(holder.surface)
     }
 
@@ -193,6 +203,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         startPending = false
         started = true
         importer.userDirectory.mkdirs()
+        prefs.edit().putBoolean("bootInProgress", true).commit()
         showStatus("Starting game…")
         Thread {
             val error = try {
@@ -209,6 +220,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             uiHandler.post {
                 if (error != null) {
                     started = false
+                    prefs.edit().putBoolean("bootInProgress", false).apply()
                     hideStatus()
                     showStartError(error)
                     showSetupDialog()
@@ -242,7 +254,9 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     private fun showPreviousCrashIfAny() {
         val text = DiagnosticLog.read(this)
-        if (text.isBlank() || text == "(no log yet)" || !text.contains("Uncaught"))
+        if (text.isBlank() || text == "(no log yet)") return
+        if (!text.contains("Uncaught") && !text.contains("NATIVE CRASH") &&
+            !text.contains("died during boot"))
             return
         AlertDialog.Builder(this)
             .setTitle("SunPad closed last time")
@@ -493,6 +507,21 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         items.add("Import module (gGMSE01_recomp.so)…")
         actions.add { pickModule() }
+
+        items.add(
+            if (prefs.getBoolean("preferOgl", false)) "Renderer: OpenGL ES"
+            else "Renderer: Vulkan")
+        actions.add {
+            val ogl = !prefs.getBoolean("preferOgl", false)
+            prefs.edit().putBoolean("preferOgl", ogl).apply()
+            SunPadNative.setPreferredBackend(if (ogl) "OGL" else "Vulkan")
+            Toast.makeText(
+                this,
+                if (ogl) "OpenGL ES on next start (close and reopen)"
+                else "Vulkan on next start (close and reopen)",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
 
         items.add("Copy diagnostic log")
         actions.add { copyLogToClipboard() }

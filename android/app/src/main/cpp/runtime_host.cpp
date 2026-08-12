@@ -27,6 +27,7 @@
 
 // Implemented by the SunPad Dolphin patch in PlatformAndroid.cpp.
 extern "C" void ModernGekkoSetAndroidRenderSurface(void* surface);
+extern "C" void SunPadNativeLog(const char* msg);
 
 namespace fs = std::filesystem;
 
@@ -139,23 +140,30 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       config.module =
           moderngekko::ModuleSource::DynamicPath(module_path.string());
       config.render_surface = current_surface_;
-      std::fprintf(stderr, "[sunpad] creating runtime backend=%s surface=%p\n",
-                   backend, static_cast<void*>(current_surface_));
+      std::fprintf(stderr, "[sunpad] creating runtime backend=%s surface=%p %dx%d\n",
+                   backend, static_cast<void*>(current_surface_),
+                   current_surface_ ? ANativeWindow_getWidth(current_surface_) : 0,
+                   current_surface_ ? ANativeWindow_getHeight(current_surface_) : 0);
+      SunPadNativeLog("creating runtime");
       return moderngekko::Runtime::Create(std::move(config));
     };
 
-    auto created = try_create("Vulkan");
+    const char* first =
+        preferred_backend_ == "OGL" ? "OGL" : "Vulkan";
+    const char* second = preferred_backend_ == "OGL" ? "Vulkan" : "OGL";
+    std::fprintf(stderr, "[sunpad] preferred backend=%s\n", first);
+    auto created = try_create(first);
     if (!created) {
-      const std::string vulkan_error = created.error ? created.error->message
-                                                     : "unknown Vulkan error";
-      std::fprintf(stderr, "[sunpad] Vulkan create failed: %s; trying OGL\n",
-                   vulkan_error.c_str());
-      created = try_create("OGL");
+      const std::string first_error = created.error ? created.error->message
+                                                    : "unknown error";
+      std::fprintf(stderr, "[sunpad] %s create failed: %s; trying %s\n",
+                   first, first_error.c_str(), second);
+      created = try_create(second);
       if (!created) {
-        const std::string ogl_error = created.error ? created.error->message
-                                                    : "unknown OpenGL ES error";
-        error_message = "Vulkan failed (" + vulkan_error +
-                        "); OpenGL ES also failed (" + ogl_error + ")";
+        const std::string second_error = created.error ? created.error->message
+                                                       : "unknown error";
+        error_message = std::string(first) + " failed (" + first_error +
+                        "); " + second + " also failed (" + second_error + ")";
       }
     }
     if (!created) {
@@ -188,10 +196,16 @@ void RuntimeHost::RunGame(const fs::path& game_root,
 
     ApplyPendingSettings();
 
-    // Open the input FIFO for writing (blocks until the runtime reads it).
-    OpenPipe(user_directory);
-
+    // Open the pipe in parallel: the runtime only creates the reader inside
+    // Run(), so waiting here first used to stall boot for up to 60s and then
+    // leave input disconnected.
+    SunPadNativeLog("runtime created; entering Run() (shaders / first present next)");
+    std::fprintf(stderr, "[sunpad] entering Run()\n");
+    std::thread pipe_thread([this, user_directory] { OpenPipe(user_directory); });
     auto result = created.runtime->Run();
+    if (pipe_thread.joinable())
+      pipe_thread.join();
+    std::fprintf(stderr, "[sunpad] Run() returned\n");
     {
       std::scoped_lock lock(runtime_mutex_);
       runtime_ = nullptr;
@@ -306,6 +320,11 @@ void RuntimeHost::SetAspectRatioMode(AspectRatioMode mode) {
 
 void RuntimeHost::SetModernCStick(bool enabled) {
   modern_cstick_ = enabled;
+}
+
+void RuntimeHost::SetPreferredBackend(std::string backend) {
+  if (backend == "OGL" || backend == "Vulkan")
+    preferred_backend_ = std::move(backend);
 }
 
 void RuntimeHost::ApplyPendingSettings() {

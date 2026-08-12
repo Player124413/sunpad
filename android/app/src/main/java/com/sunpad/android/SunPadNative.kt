@@ -70,6 +70,10 @@ object SunPadNative {
 
     fun setModernCStick(enabled: Boolean) = ifAvailable { nativeSetModernCStick(enabled) }
 
+    fun setCrashLogPath(path: String) = ifAvailable { nativeSetCrashLogPath(path) }
+
+    fun setPreferredBackend(backend: String) = ifAvailable { nativeSetPreferredBackend(backend) }
+
     fun currentFPS(): Double = if (available) nativeCurrentFPS() else 0.0
 
     fun currentSpeed(): Double = if (available) nativeCurrentSpeed() else 0.0
