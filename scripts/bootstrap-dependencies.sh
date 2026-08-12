@@ -118,6 +118,13 @@ git -C "$MG" submodule update --init vendor/dolphin
 # by the CMake flags, so the extra checkouts are harmless.
 git -C "$MG/vendor/dolphin" submodule update --init --recursive
 
+# libadrenotools (Qualcomm custom-driver support) has its own nested
+# submodule lib/linkernsbypass; without it the archive builds with missing
+# symbols. Ensure it is checked out even when the recursive pass above
+# skipped it.
+git -C "$MG/vendor/dolphin/Externals/libadrenotools" \
+  submodule update --init --recursive 2>/dev/null || true
+
 actual_dolphin=$(git -C "$MG/vendor/dolphin" rev-parse HEAD)
 if [[ "$actual_dolphin" != "$DOLPHIN_REV" ]]; then
   echo "unexpected ModernGekko vendor/dolphin revision: $actual_dolphin" >&2

@@ -184,6 +184,9 @@ done
 # locate them by filename inside the build tree.
 DISCOVERED_ARCHIVES=(
   libiconv.a libvideosoftware.a libadrenotools.a libbz2.a libbz2_static.a
+  # libcharset is built as part of the vendored libiconv; linkernsbypass is
+  # the nested submodule of libadrenotools. Both are required by the link.
+  libcharset.a liblinkernsbypass.a
 )
 # bzip2 may come from the system (libbz2-dev) via BZip2::BZip2 instead of a
 # bundled archive; in that case nothing is discovered and libdiscio already
