@@ -188,11 +188,16 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             .setTitle(if (started) "SunPad" else "SunPad — game data required")
             .setMessage(
                 if (started) ""
-                else "SunPad never bundles or downloads game data. Import your " +
-                     "own Super Mario Sunshine USA (GMSE01) disc image and a " +
-                     "locally generated game module to start.")
+                else "To start playing:\n\n" +
+                     "1) Tap \"Import game data (GMSE01 ISO/GCM)…\" below.\n" +
+                     "2) In the file picker that opens, choose your GMSE01 " +
+                     "ISO image (e.g. in Downloads).\n" +
+                     "3) Wait for Copying… and Extracting… to finish.\n\n" +
+                     "SunPad never downloads game data - you provide your " +
+                     "own legally obtained disc image.")
             .setItems(items.toTypedArray()) { _, which -> actions[which]() }
-            .setOnCancelListener { if (!started) finish() }
+            // Только явный выбор "Quit" закрывает приложение; случайное
+            // нажатие мимо диалога или Back просто закрывает диалог.
             .show()
     }
 
@@ -202,7 +207,11 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "*/*"))
         }
-        startActivityForResult(intent, REQUEST_IMAGE)
+        try {
+            startActivityForResult(intent, REQUEST_IMAGE)
+        } catch (e: Exception) {
+            Toast.makeText(this, "No file picker available: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun pickModule() {
@@ -210,7 +219,11 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
         }
-        startActivityForResult(intent, REQUEST_MODULE)
+        try {
+            startActivityForResult(intent, REQUEST_MODULE)
+        } catch (e: Exception) {
+            Toast.makeText(this, "No file picker available: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -401,14 +414,19 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             if (isFinishing || isDestroyed) return
-            publishInput()
-            if (hudVisible && frameTimeNanos - lastHudUpdate > 500_000_000L) {
-                lastHudUpdate = frameTimeNanos
-                hud.text = String.format(
-                    Locale.US, "%.1f FPS  %.2f×  %s",
-                    SunPadNative.nativeCurrentFPS(),
-                    SunPadNative.nativeCurrentSpeed(),
-                    SunPadNative.nativeEfbResolution())
+            try {
+                publishInput()
+                if (hudVisible && frameTimeNanos - lastHudUpdate > 500_000_000L) {
+                    lastHudUpdate = frameTimeNanos
+                    hud.text = String.format(
+                        Locale.US, "%.1f FPS  %.2f×  %s",
+                        SunPadNative.nativeCurrentFPS(),
+                        SunPadNative.nativeCurrentSpeed(),
+                        SunPadNative.nativeEfbResolution())
+                }
+            } catch (e: Exception) {
+                // Не ронять приложение из-за ошибки одного кадра.
+                android.util.Log.e("SunPad", "frame error", e)
             }
             Choreographer.getInstance().postFrameCallback(this)
         }
