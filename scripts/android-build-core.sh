@@ -201,15 +201,6 @@ done
 if (( ${#MISSING_DISCOVERED[@]} )); then
   echo "note: not produced by this build (may be a system library): ${MISSING_DISCOVERED[*]}" >&2
 fi
-for name in "${DISCOVERED_ARCHIVES[@]}"; do
-  lib="$(find "$BUILD" -name "$name" 2>/dev/null | head -1)"
-  if [[ -z "$lib" ]]; then
-    echo "missing required core library: $name (not produced by the build)" >&2
-    exit 1
-  fi
-  LIBS+=("$lib")
-  echo "discovered: $lib"
-done
 
 {
   echo "# Provisioned by scripts/android-build-core.sh — do not edit."
