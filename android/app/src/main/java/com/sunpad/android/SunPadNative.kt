@@ -9,8 +9,21 @@ import android.view.Surface
  */
 object SunPadNative {
 
+    val available: Boolean
+    val loadError: String?
+
     init {
-        System.loadLibrary("sunpad")
+        var ok = false
+        var error: String? = null
+        try {
+            System.loadLibrary("sunpad")
+            ok = true
+        } catch (t: Throwable) {
+            error = t.message ?: t.javaClass.simpleName
+            android.util.Log.e("SunPad", "libsunpad.so failed to load", t)
+        }
+        available = ok
+        loadError = error
     }
 
     /** Progress/completion callback for on-device disc extraction (invoked
@@ -21,55 +34,108 @@ object SunPadNative {
     }
 
     /**
+     * Boots the game on a native background thread. Blocks until the runtime
+     * has been created (or has failed) so the app can show the error instead
+     * of appearing to crash.
+     * @return null on success, otherwise a human-readable error message.
+     */
+    fun start(
+        gameRoot: String,
+        discImage: String?,
+        modulePath: String,
+        userDirectory: String,
+    ): String? {
+        if (!available) return loadError ?: "Native library is not loaded."
+        return try {
+            nativeStart(gameRoot, discImage, modulePath, userDirectory)
+        } catch (t: Throwable) {
+            android.util.Log.e("SunPad", "nativeStart threw", t)
+            t.message ?: "nativeStart failed"
+        }
+    }
+
+    fun stop() = ifAvailable { nativeStop() }
+
+    fun pause() = ifAvailable { nativePause() }
+
+    fun resume() = ifAvailable { nativeResume() }
+
+    fun setSurface(surface: Surface?) = ifAvailable { nativeSetSurface(surface) }
+
+    fun publishInput(state: GameInputState) = ifAvailable { nativePublishInput(state) }
+
+    fun setRenderScale(scale: Int) = ifAvailable { nativeSetRenderScale(scale) }
+
+    fun setAspectRatioMode(mode: Int) = ifAvailable { nativeSetAspectRatioMode(mode) }
+
+    fun setModernCStick(enabled: Boolean) = ifAvailable { nativeSetModernCStick(enabled) }
+
+    fun currentFPS(): Double = if (available) nativeCurrentFPS() else 0.0
+
+    fun currentSpeed(): Double = if (available) nativeCurrentSpeed() else 0.0
+
+    fun efbResolution(): String = if (available) nativeEfbResolution() else ""
+
+    fun isRunning(): Boolean = available && nativeIsRunning()
+
+    fun extractImage(
+        imagePath: String,
+        destination: String,
+        listener: ExtractProgressListener,
+    ) {
+        if (!available) {
+            listener.onFinished(false, loadError ?: "Native library is not loaded.")
+            return
+        }
+        nativeExtractImage(imagePath, destination, listener)
+    }
+
+    private inline fun ifAvailable(block: () -> Unit) {
+        if (available) {
+            try {
+                block()
+            } catch (t: Throwable) {
+                android.util.Log.e("SunPad", "native call failed", t)
+            }
+        }
+    }
+
+    /**
      * Boots the game on a native background thread and returns immediately.
      * @return null on success, otherwise a human-readable error message.
      */
-    external fun nativeStart(
+    private external fun nativeStart(
         gameRoot: String,
         discImage: String?,
         modulePath: String,
         userDirectory: String,
     ): String?
 
-    /** Requests a graceful runtime shutdown and joins the game thread. */
-    external fun nativeStop()
+    private external fun nativeStop()
 
-    /** Pauses emulation (app backgrounded / surface destroyed). */
-    external fun nativePause()
+    private external fun nativePause()
 
-    /** Resumes emulation (app foregrounded / surface recreated). */
-    external fun nativeResume()
+    private external fun nativeResume()
 
-    /** Hands the current Surface to the Vulkan backend via ANativeWindow.
-     *  Pass null when the surface is destroyed. */
-    external fun nativeSetSurface(surface: Surface?)
+    private external fun nativeSetSurface(surface: Surface?)
 
-    /** Publishes one normalized input snapshot to the Pipes device. */
-    external fun nativePublishInput(state: GameInputState)
+    private external fun nativePublishInput(state: GameInputState)
 
-    /** 1x–4x internal (EFB) render scale. */
-    external fun nativeSetRenderScale(scale: Int)
+    private external fun nativeSetRenderScale(scale: Int)
 
-    /** 0 = original 4:3, 1 = widescreen, 2 = fill screen. */
-    external fun nativeSetAspectRatioMode(mode: Int)
+    private external fun nativeSetAspectRatioMode(mode: Int)
 
-    external fun nativeSetModernCStick(enabled: Boolean)
+    private external fun nativeSetModernCStick(enabled: Boolean)
 
-    external fun nativeCurrentFPS(): Double
+    private external fun nativeCurrentFPS(): Double
 
-    external fun nativeCurrentSpeed(): Double
+    private external fun nativeCurrentSpeed(): Double
 
-    external fun nativeEfbResolution(): String
+    private external fun nativeEfbResolution(): String
 
-    external fun nativeIsRunning(): Boolean
+    private external fun nativeIsRunning(): Boolean
 
-    /**
-     * Extracts a validated raw ISO/GCM with the core's DiscIO into
-     * [destination] (game files under files/, system data at the root).
-     * Blocks until extraction completes; call from a background thread.
-     * [listener] receives progress and the final result.
-     */
-    external fun nativeExtractImage(
+    private external fun nativeExtractImage(
         imagePath: String,
         destination: String,
         listener: ExtractProgressListener,

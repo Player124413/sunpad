@@ -35,8 +35,9 @@ class RuntimeHost {
   RuntimeHost(const RuntimeHost&) = delete;
   RuntimeHost& operator=(const RuntimeHost&) = delete;
 
-  // Boots the game on a background thread and returns immediately. The render
-  // surface must have been provided beforehand through SetSurface. Returns an
+  // Boots the game on a background thread and blocks until Runtime::Create
+  // finishes (success or failure) so the app can show the error instead of
+  // looking like a crash. The render surface must already be set. Returns an
   // empty string on success or a human-readable error message.
   std::string Start(const std::filesystem::path& game_root,
                     const std::filesystem::path& disc_image,
@@ -67,7 +68,8 @@ class RuntimeHost {
   void RunGame(const std::filesystem::path& game_root,
                const std::filesystem::path& disc_image,
                const std::filesystem::path& module_path,
-               const std::filesystem::path& user_directory);
+               const std::filesystem::path& user_directory,
+               const std::function<void(const std::string&)>& on_created);
   void ApplyAspectRatioMode(AspectRatioMode mode);
   void ApplyPendingSettings();
   void OpenPipe(const std::filesystem::path& user_directory);

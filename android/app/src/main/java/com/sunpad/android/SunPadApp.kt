@@ -1,10 +1,7 @@
 package com.sunpad.android
 
 import android.app.Application
-import android.app.AlertDialog
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import java.io.File
 
 /** Process-level context holder so the native audio bridge can reach
@@ -18,8 +15,9 @@ class SunPadApp : Application() {
 
     /**
      * Catches uncaught exceptions: writes the stack trace to
-     * sunpad_crash.log in app storage and shows the message in a dialog so
-     * the user can report it instead of just seeing the app close.
+     * sunpad_crash.log so the next launch can show it. Application-context
+     * dialogs are not shown here (they crash with BadTokenException and
+     * then the process still dies).
      */
     private fun installCrashHandler() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
@@ -31,16 +29,6 @@ class SunPadApp : Application() {
                     File(filesDir, "sunpad_crash.log").writeText(
                         "Thread: ${thread.name}\n$stack")
                 } catch (_: Exception) {
-                }
-                Handler(Looper.getMainLooper()).post {
-                    try {
-                        AlertDialog.Builder(appContext)
-                            .setTitle("SunPad error")
-                            .setMessage(stack.take(1500))
-                            .setPositiveButton("OK", null)
-                            .show()
-                    } catch (_: Exception) {
-                    }
                 }
             } finally {
                 defaultHandler?.uncaughtException(thread, throwable)

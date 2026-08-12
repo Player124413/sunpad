@@ -44,9 +44,11 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     private var surfaceReady = false
     private var started = false
+    private var startPending = false
     private var hudVisible = false
     private var lastHudUpdate = 0L
     private val uiHandler = Handler(Looper.getMainLooper())
+    private lateinit var statusView: TextView
 
     private val prefs by lazy { getSharedPreferences("sunpad", MODE_PRIVATE) }
 
@@ -93,30 +95,52 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT,
             Gravity.TOP or Gravity.START).apply { topMargin = dp(24); leftMargin = dp(8) })
 
+        statusView = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            setShadowLayer(4f, 1f, 1f, Color.BLACK)
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+        }
+        rootView.addView(statusView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER))
+
         setContentView(rootView)
         gamepad.attach(rootView)
 
         applyPrefsToControls()
+        showPreviousCrashIfAny()
+        if (!SunPadNative.available) {
+            showStartError(
+                "Native library failed to load.\n\n${SunPadNative.loadError ?: ""}\n\n" +
+                    "This APK only contains arm64 code. It will not run on an x86 emulator.")
+        }
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
 
     override fun onResume() {
         super.onResume()
         setImmersive()
-        SunPadNative.nativeResume()
+        SunPadNative.resume()
     }
 
     override fun onPause() {
         // Flush a mid-drag layout edit so a process death cannot lose it.
         controls.persistInProgressEdit()
+<<<<<<< HEAD
         SunPadNative.nativePause()
+=======
+        SunPadNative.pause()
+>>>>>>> d48adaf (Stop the post-import crash and show the real start error)
         super.onPause()
     }
 
     override fun onDestroy() {
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         gamepad.detach(rootView)
-        SunPadNative.nativeStop()
+        SunPadNative.stop()
         super.onDestroy()
     }
 
@@ -124,51 +148,110 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         surfaceReady = true
-        SunPadNative.nativeSetSurface(holder.surface)
-        if (!started) {
+        SunPadNative.setSurface(holder.surface)
+        if (!started || startPending) {
             startGameIfReady()
         } else {
             // Surface recreated (rotation / resume): the swapchain is rebuilt
             // through the presenter, so unpause the runtime.
-            SunPadNative.nativeResume()
+            SunPadNative.resume()
         }
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
-        SunPadNative.nativeSetSurface(holder.surface)
+        SunPadNative.setSurface(holder.surface)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         surfaceReady = false
-        SunPadNative.nativeSetSurface(null)
-        SunPadNative.nativePause()
+        SunPadNative.pause()
         controls.releaseAll()
     }
 
     // ------------------------------------------------------------------ game start
 
     private fun startGameIfReady() {
-        if (started || !surfaceReady) return
+        if (started) return
         if (!importer.hasActiveGame() || !importer.ensureModule()) {
+            startPending = false
             showSetupDialog()
             return
         }
+        if (!surfaceReady) {
+            startPending = true
+            showStatus("Waiting for the screen…")
+            return
+        }
+        if (!SunPadNative.available) {
+            showStartError(SunPadNative.loadError ?: "Native library is not loaded.")
+            return
+        }
+        val moduleError = importer.validateModuleFile(importer.moduleFile)
+        if (moduleError != null) {
+            showStartError(moduleError)
+            showSetupDialog()
+            return
+        }
+        startPending = false
         started = true
+        importer.userDirectory.mkdirs()
+        showStatus("Starting game…")
         Thread {
-            val error = SunPadNative.nativeStart(
-                importer.gameRoot.absolutePath,
-                importer.discImagePath,
-                importer.modulePath,
-                importer.userDirectoryPath,
-            )
-            if (error != null) {
-                started = false
-                uiHandler.post {
-                    Toast.makeText(this, "Start failed: $error", Toast.LENGTH_LONG).show()
+            val error = try {
+                SunPadNative.start(
+                    importer.gameRoot.absolutePath,
+                    importer.discImagePath,
+                    importer.modulePath,
+                    importer.userDirectoryPath,
+                )
+            } catch (t: Throwable) {
+                android.util.Log.e("SunPad", "start threw", t)
+                t.message ?: t.javaClass.simpleName
+            }
+            uiHandler.post {
+                if (error != null) {
+                    started = false
+                    hideStatus()
+                    showStartError(error)
                     showSetupDialog()
+                } else {
+                    hideStatus()
                 }
             }
         }.start()
+    }
+
+    private fun showStatus(message: String) {
+        if (isFinishing || isDestroyed) return
+        statusView.text = message
+        statusView.visibility = View.VISIBLE
+    }
+
+    private fun hideStatus() {
+        statusView.visibility = View.GONE
+    }
+
+    private fun showStartError(message: String) {
+        if (isFinishing || isDestroyed) return
+        android.util.Log.e("SunPad", "start error: $message")
+        AlertDialog.Builder(this)
+            .setTitle("Could not start the game")
+            .setMessage(message)
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun showPreviousCrashIfAny() {
+        val crash = java.io.File(filesDir, "sunpad_crash.log")
+        if (!crash.isFile) return
+        val text = try { crash.readText() } catch (_: Exception) { return }
+        crash.delete()
+        if (text.isBlank()) return
+        AlertDialog.Builder(this)
+            .setTitle("SunPad closed last time")
+            .setMessage(text.take(1500))
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     private fun showSetupDialog() {
@@ -283,7 +366,12 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
                     Toast.makeText(this, extractError, Toast.LENGTH_LONG).show()
                 } else {
                     Toast.makeText(this, "Game data ready.", Toast.LENGTH_SHORT).show()
+                    showStatus("Game data ready. Starting…")
                 }
+                // The file picker destroys the SurfaceView. Wait for
+                // surfaceCreated if needed instead of starting into a null
+                // window (that used to crash right after a successful import).
+                startPending = true
                 startGameIfReady()
             }
         }.start()
@@ -339,7 +427,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         actions.add {
             val on = !prefs.getBoolean("modernCStick", false)
             prefs.edit().putBoolean("modernCStick", on).apply()
-            SunPadNative.nativeSetModernCStick(on)
+            SunPadNative.setModernCStick(on)
             showMenu()
         }
 
@@ -381,7 +469,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private fun cycleRenderScale() {
         val next = (prefs.getInt("scale", 1) % 4) + 1
         prefs.edit().putInt("scale", next).apply()
-        SunPadNative.nativeSetRenderScale(next)
+        SunPadNative.setRenderScale(next)
     }
 
     private fun pickAspect() {
@@ -391,7 +479,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             .setTitle("Aspect ratio")
             .setSingleChoiceItems(modes, current) { _, which ->
                 prefs.edit().putInt("aspect", which).apply()
-                SunPadNative.nativeSetAspectRatioMode(which)
+                SunPadNative.setAspectRatioMode(which)
             }
             .setNegativeButton("Close", null)
             .show()
@@ -437,9 +525,9 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private fun applyPrefsToControls() {
         controls.opacity = prefs.getInt("opacity", 55) / 100f
         controls.scale = prefs.getInt("size", 100) / 100f
-        SunPadNative.nativeSetModernCStick(prefs.getBoolean("modernCStick", false))
-        SunPadNative.nativeSetRenderScale(prefs.getInt("scale", 1))
-        SunPadNative.nativeSetAspectRatioMode(prefs.getInt("aspect", 0))
+        SunPadNative.setModernCStick(prefs.getBoolean("modernCStick", false))
+        SunPadNative.setRenderScale(prefs.getInt("scale", 1))
+        SunPadNative.setAspectRatioMode(prefs.getInt("aspect", 0))
     }
 
     // ------------------------------------------------------------------ input loop
@@ -453,9 +541,9 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
                     lastHudUpdate = frameTimeNanos
                     hud.text = String.format(
                         Locale.US, "%.1f FPS  %.2f×  %s",
-                        SunPadNative.nativeCurrentFPS(),
-                        SunPadNative.nativeCurrentSpeed(),
-                        SunPadNative.nativeEfbResolution())
+                        SunPadNative.currentFPS(),
+                        SunPadNative.currentSpeed(),
+                        SunPadNative.efbResolution())
                 }
             } catch (e: Exception) {
                 // Не ронять приложение из-за ошибки одного кадра.
@@ -470,7 +558,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         controls.snapshot(touchState)
         merged.copyFrom(touchState)
         gamepad.merge(merged)
-        SunPadNative.nativePublishInput(merged)
+        SunPadNative.publishInput(merged)
     }
 
 

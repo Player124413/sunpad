@@ -193,6 +193,8 @@ extern "C" JNIEXPORT jstring JNICALL
 Java_com_sunpad_android_SunPadNative_nativeStart(
     JNIEnv* env, jobject, jstring game_root, jstring disc_image,
     jstring module_path, jstring user_directory) {
+  if (!g_host)
+    return env->NewStringUTF("Native runtime is not initialized.");
   const auto to_path = [env](jstring js) {
     if (!js) return std::filesystem::path();
     const char* chars = env->GetStringUTFChars(js, nullptr);
@@ -233,10 +235,12 @@ Java_com_sunpad_android_SunPadNative_nativeSetSurface(JNIEnv* env, jobject,
     if (g_window != nullptr)
       ANativeWindow_release(g_window);
     g_window = window;
+    g_host->SetSurface(window);
+    return;
   }
   // A null surface only pauses emulation (the Activity does that); the old
-  // window reference is kept until a replacement arrives.
-  g_host->SetSurface(window);
+  // window reference is kept until a replacement arrives so Start() never
+  // sees a nullptr ANativeWindow (that aborted Vulkan after ISO import).
 }
 
 extern "C" JNIEXPORT void JNICALL

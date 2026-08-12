@@ -3,12 +3,21 @@
 
     <!-- No runtime permissions: game data is imported through the Storage
          Access Framework and stays in app-private storage. -->
+    <uses-feature
+        android:name="android.hardware.vulkan.level"
+        android:required="false" />
+    <uses-feature
+        android:glEsVersion="0x00030000"
+        android:required="true" />
+
     <application
         android:name=".SunPadApp"
         android:label="@string/app_name"
         android:icon="@drawable/ic_sunpad"
         android:allowBackup="false"
         android:hardwareAccelerated="true"
+        android:largeHeap="true"
+        android:extractNativeLibs="true"
         android:theme="@style/Theme.SunPad">
 
         <activity

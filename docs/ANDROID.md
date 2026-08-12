@@ -185,7 +185,12 @@ module generation) — the build log will say precisely what is missing.
    system document picker. SunPad copies it privately, validates the exact
    size, GameCube magic, `GMSE01` code and disc 0 / revision 0, extracts it
    on-device with the core's DiscIO, and atomically activates it.
-4. The game boots when both are present.
+4. The game boots when both are present. After import the app waits for the
+   render surface (the file picker destroys it) and shows a start error
+   instead of aborting if Vulkan/module creation fails. The module file is
+   checked as an ELF arm64 `.so` before `dlopen`; an ISO or iOS dylib is
+   rejected with a dialog. Reopen the app after a crash to see the last
+   `sunpad_crash.log` excerpt.
 
 ## Runtime deltas (patches 0002)
 

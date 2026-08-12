@@ -31,7 +31,7 @@ class GameDataImporter(private val context: Context) {
     fun hasActiveGame(): Boolean =
         activeImage.isFile && File(activeRoot, "files").isDirectory
 
-    fun hasModule(): Boolean = moduleFile.isFile
+    fun hasModule(): Boolean = moduleFile.isFile && validateModuleFile(moduleFile) == null
 
     /**
      * Ensures the game module is available in private storage. If the module
@@ -40,17 +40,41 @@ class GameDataImporter(private val context: Context) {
      * user-provided module copied earlier is used.
      */
     fun ensureModule(): Boolean {
-        if (moduleFile.isFile) return true
+        if (hasModule()) return true
+        if (moduleFile.isFile) {
+            // A previous import wrote a file that is not a valid Android .so
+            // (ISO, iOS dylib, desktop module). Drop it so the setup dialog
+            // asks again instead of crashing inside dlopen.
+            android.util.Log.w("SunPad", "rejecting invalid module: ${validateModuleFile(moduleFile)}")
+            moduleFile.delete()
+        }
         return try {
             context.assets.open("modules/gGMSE01_recomp.so").use { input ->
                 moduleDir.mkdirs()
                 FileOutputStream(moduleFile).use { out -> input.copyTo(out) }
             }
-            moduleFile.isFile
+            hasModule()
         } catch (_: java.io.IOException) {
             false
         }
     }
+
+    /** @return a human-readable error, or null when [file] is an arm64 .so. */
+    fun validateModuleFile(file: File): String? {
+        if (!file.isFile || file.length() < 64L)
+            return "The module file is missing or too small."
+        val header = ByteArray(20)
+        RandomAccessFile(file, "r").use { raf ->
+            if (raf.read(header) < header.size)
+                return "The module file could not be read."
+        }
+        return ModuleValidator.validateHeader(header)
+    }
+
+    /** Bytes that should be free before a full ISO copy + extract. */
+    fun requiredFreeBytes(): Long = EXPECTED_SIZE * 2 + 256L * 1024L * 1024L
+
+    fun hasEnoughSpace(): Boolean = context.filesDir.usableSpace >= requiredFreeBytes()
 
     /** Returns a validation error string, or null when the image is valid. */
     fun validateImageFile(file: File): String? {
@@ -81,6 +105,8 @@ class GameDataImporter(private val context: Context) {
      * @return error string or null on success.
      */
     fun copyAndValidate(uri: Uri, progress: (Float) -> Unit): String? {
+        if (!hasEnoughSpace())
+            return "Not enough free space. SunPad needs about 3.2 GB to copy and extract the disc."
         stagingDir.mkdirs()
         val staging = File(stagingDir, "GMSE01.iso")
         val size = querySize(uri)
@@ -115,17 +141,22 @@ class GameDataImporter(private val context: Context) {
         stagedRoot.deleteRecursively()
 
         var error: String? = null
-        SunPadNative.nativeExtractImage(
-            stagedImage.absolutePath, stagedRoot.absolutePath,
-            object : SunPadNative.ExtractProgressListener {
-                override fun onProgress(status: String, fraction: Double) {
-                    progress(status, fraction)
-                }
+        try {
+            SunPadNative.extractImage(
+                stagedImage.absolutePath, stagedRoot.absolutePath,
+                object : SunPadNative.ExtractProgressListener {
+                    override fun onProgress(status: String, fraction: Double) {
+                        progress(status, fraction)
+                    }
 
-                override fun onFinished(success: Boolean, message: String?) {
-                    if (!success) error = message ?: "Extraction failed."
-                }
-            })
+                    override fun onFinished(success: Boolean, message: String?) {
+                        if (!success) error = message ?: "Extraction failed."
+                    }
+                })
+        } catch (t: Throwable) {
+            android.util.Log.e("SunPad", "extract threw", t)
+            return t.message ?: "Extraction crashed."
+        }
 
         if (error != null) return error
         if (!File(stagedRoot, "files").isDirectory)
