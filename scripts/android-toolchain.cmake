@@ -9,10 +9,13 @@
 #   3. CMake variable ANDROID_NDK_ROOT  (-DANDROID_NDK_ROOT=<path>)
 #   4. environment variable ANDROID_NDK_ROOT
 # Environment variables must be read explicitly via $ENV{}: CMake does not
-# import the process environment into CMake variables automatically, so an
-# `export ANDROID_NDK_HOME=...` in the shell is invisible to `if(DEFINED
-# ANDROID_NDK_HOME)`. The NDK's own android.toolchain.cmake does the heavy
-# lifting once the root is resolved.
+# import the process environment into CMake variables automatically.
+#
+# The ABI is forced to arm64-v8a through every channel (ANDROID_ABI and
+# CMAKE_ANDROID_ARCH_ABI as CACHE variables, plus CMAKE_SYSTEM_PROCESSOR)
+# BEFORE including the NDK's android.toolchain.cmake: without it, the NDK
+# defaults to armeabi-v7a and the core aborts with "unsupported platform:
+# 'armv7-a' with 4-byte pointers".
 if(NOT DEFINED ANDROID_NDK_HOME OR ANDROID_NDK_HOME STREQUAL "")
   if(DEFINED ENV{ANDROID_NDK_HOME} AND NOT "$ENV{ANDROID_NDK_HOME}" STREQUAL "")
     set(ANDROID_NDK_HOME "$ENV{ANDROID_NDK_HOME}" CACHE PATH "Android NDK root")
@@ -28,10 +31,13 @@ if(NOT DEFINED ANDROID_NDK_HOME OR ANDROID_NDK_HOME STREQUAL "")
     "(export it in the shell or pass -DANDROID_NDK_HOME=<path>)")
 endif()
 
-set(CMAKE_SYSTEM_NAME Android)
-set(CMAKE_SYSTEM_VERSION 26)               # matches the app minSdk
-set(CMAKE_ANDROID_ARCH_ABI arm64-v8a)
-set(CMAKE_ANDROID_NDK "${ANDROID_NDK_HOME}")
-set(CMAKE_ANDROID_STL_TYPE c++_shared)
+set(ANDROID_ABI "arm64-v8a" CACHE STRING "Android ABI")
+set(CMAKE_ANDROID_ARCH_ABI "arm64-v8a" CACHE STRING "Android ABI")
+set(ANDROID_PLATFORM "android-26" CACHE STRING "Android platform version")
+set(CMAKE_SYSTEM_NAME "Android" CACHE STRING "System name")
+set(CMAKE_SYSTEM_VERSION "26" CACHE STRING "System version")
+set(CMAKE_SYSTEM_PROCESSOR "aarch64" CACHE STRING "Processor")
+set(CMAKE_ANDROID_NDK "${ANDROID_NDK_HOME}" CACHE PATH "Android NDK root")
+set(CMAKE_ANDROID_STL_TYPE "c++_shared" CACHE STRING "STL type")
 
 include("${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake")

@@ -35,6 +35,13 @@ fi
 
 CMAKE_COMMON=(
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN"
+  # Force the 64-bit ABI through the -D channel as well (belt and braces:
+  # the NDK toolchain defaults to armeabi-v7a, which Dolphin rejects).
+  -DANDROID_ABI=arm64-v8a
+  -DCMAKE_ANDROID_ARCH_ABI=arm64-v8a
+  -DCMAKE_SYSTEM_PROCESSOR=aarch64
+  -DANDROID_PLATFORM=android-26
+  -DANDROID_STL=c++_shared
   -DCMAKE_BUILD_TYPE=Release
   -DCMAKE_POSITION_INDEPENDENT_CODE=ON
   -DENABLE_QT=OFF -DENABLE_TESTS=OFF
@@ -51,6 +58,14 @@ CMAKE_COMMON=(
 
 echo "==> Configuring ModernGekko core for Android arm64-v8a"
 cmake -S "$MG" -B "$BUILD" -G Ninja "${CMAKE_COMMON[@]}"
+
+# Guard against the NDK toolchain silently picking the 32-bit ABI.
+if ! grep -qE "CMAKE_SYSTEM_PROCESSOR:.*aarch64" "$BUILD/CMakeCache.txt"; then
+  echo "configure produced a non-arm64 toolchain; aborting" >&2
+  grep -E "CMAKE_(ANDROID_ARCH_ABI|SYSTEM_PROCESSOR|ANDROID_ABI)" \
+    "$BUILD/CMakeCache.txt" >&2 || true
+  exit 1
+fi
 
 echo "==> Building core libraries (-j$JOBS)"
 ninja -C "$BUILD" libmoderngekko.a -j"$JOBS"
