@@ -69,7 +69,7 @@ object DiagnosticLog {
         } catch (_: Exception) { "" }
         val public = try {
             val f = publicFile(context)
-            if (f.isFile) f.readText() else ""
+            if (f != null && f.isFile) f.readText() else ""
         } catch (_: Exception) { "" }
         return when {
             private.isNotBlank() -> private
