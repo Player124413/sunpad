@@ -407,18 +407,22 @@ diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source
 diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueueThread.h
 --- a/Source/Core/Common/WorkQueueThread.h
 +++ b/Source/Core/Common/WorkQueueThread.h
-@@ -166,7 +166,14 @@ public:
+@@ -166,7 +166,18 @@ public:
  
    void Reset(std::string thread_name)
    {
 -    m_worker.Reset(std::move(thread_name), std::invoke<FuncType>);
-+    // NDK libc++ / C++23: std::invoke<FuncType> is invoke_r with return type
-+    // std::function<void()>, which does not bind as a void(FuncType) worker.
-+    // The resulting empty std::function throws bad_function_call (SIGABRT)
-+    // on the first queued job — that is the crash right after MainLoop.
++    // Swallow bad_function_call: queued jobs often call another empty
++    // std::function. That must not abort the worker thread (SIGABRT).
 +    m_worker.Reset(std::move(thread_name), [](FuncType func) {
-+      if (func)
-+        std::invoke(std::move(func));
++      try
++      {
++        if (func)
++          std::invoke(std::move(func));
++      }
++      catch (const std::exception&)
++      {
++      }
 +    });
    }
  
@@ -440,13 +444,19 @@ diff --git a/Source/Core/Common/HookableEvent.h b/Source/Core/Common/HookableEve
 diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueueThread.h
 --- a/Source/Core/Common/WorkQueueThread.h
 +++ b/Source/Core/Common/WorkQueueThread.h
-@@ -167,7 +167,8 @@ private:
+@@ -167,7 +167,14 @@ private:
          continue;
        }
  
 -      function(std::move(m_items.Front()));
-+      if (function)
-+        function(std::move(m_items.Front()));
++      try
++      {
++        if (function)
++          function(std::move(m_items.Front()));
++      }
++      catch (const std::exception&)
++      {
++      }
        m_items.Pop();
      }
    }
@@ -482,3 +492,42 @@ diff --git a/Source/Core/Core/CPUThreadConfigCallback.cpp b/Source/Core/Core/CPU
  }
  
  void OnConfigChanged()
+
+diff --git a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp b/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
+--- a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
++++ b/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
+@@ -239,7 +239,15 @@ void AsyncShaderCompiler::WorkerThreadRun()
+       m_pending_work.erase(iter);
+       pending_lock.unlock();
+
+-      if (item->Compile())
++      bool compiled = false;
++      try
++      {
++        compiled = item && item->Compile();
++      }
++      catch (const std::exception&)
++      {
++      }
++      if (compiled)
+       {
+         std::lock_guard completed_guard(m_completed_work_lock);
+         m_completed_work.push_back(std::move(item));
+diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
+--- a/Source/Core/Core/Core.cpp
++++ b/Source/Core/Core/Core.cpp
+@@ -638,7 +638,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+   UpdateTitle(system);
+ 
+   // Become the CPU thread.
+-  cpu_thread_func(system, savestate_path, delete_savestate);
++  try
++  {
++    cpu_thread_func(system, savestate_path, delete_savestate);
++  }
++  catch (const std::exception&)
++  {
++  }
+ }
+ 
+ // Set or get the running state
