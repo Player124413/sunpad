@@ -198,7 +198,7 @@ index 1ddc25c..1894bd7 100644
 +  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
 +  Config::SetBase(Config::GFX_HACK_COPY_EFB_SCALED, false);
 +  Config::SetBase(Config::GFX_FAST_DEPTH_CALC, false);
-+  Config::SetBase(Config::GFX_HACK_IMMEDIATE_XFB, true);
++  Config::SetBase(Config::GFX_HACK_IMMEDIATE_XFB, false);
 +  Config::SetBase(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
 +  Config::SetBase(Config::GFX_VSYNC, false);
 +  Config::SetBase(Config::GFX_MSAA, 1u);
@@ -216,9 +216,9 @@ index 1ddc25c..1894bd7 100644
 +                  AnisotropicFilteringMode::Force1x);
 +  Config::SetBase(Config::MAIN_DSP_HLE, true);
 +  Config::SetBase(Config::MAIN_SYNC_GPU, false);
-+  Config::SetBase(Config::MAIN_RUSH_FRAME_PRESENTATION, true);
++  Config::SetBase(Config::MAIN_RUSH_FRAME_PRESENTATION, false);
 +  Config::SetBase(Config::MAIN_LOAD_GAME_INTO_MEMORY, false);
-+  Config::SetBase(Config::MAIN_PRECISION_FRAME_TIMING, false);
++  Config::SetBase(Config::MAIN_PRECISION_FRAME_TIMING, true);
 +#endif
  #endif
    const std::vector<std::string> audio_backends =

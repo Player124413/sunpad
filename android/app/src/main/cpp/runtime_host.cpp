@@ -1,6 +1,10 @@
 // Copyright 2026 SunPad project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include "runtime_host.hpp"
 
 #include <errno.h>
@@ -8,6 +12,11 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#ifdef ANDROID
+#include <dirent.h>
+#include <sched.h>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -22,6 +31,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 
 #ifdef ANDROID
 #include <sys/system_properties.h>
@@ -180,7 +190,7 @@ bool Contains(const std::string& blob, const char* needle) {
 }
 
 // Cheap phones (Helio G, Unisoc, old Snapdragon 4xx/6xx, 3–4 GB RAM)
-// need VI skip / a slightly slower guest clock. Midrange like SD 6 Gen 1
+// get a 90% guest clock so they stay playable. Midrange like SD 6 Gen 1
 // (Adreno 710, ~2.2 GHz, 6+ GB) stays at full GameCube speed.
 // MediaTek is special: CPU clocks look fine, Mali is the bottleneck, and
 // Vulkan on Mali often black-screens. Helio / low Dimensity count as weak.
@@ -272,52 +282,125 @@ const AndroidDeviceProfile& CachedDevice() {
   return p;
 }
 
-// 0 = 0.5× present (EFB stays native 1× so SMS goo/EFB stay correct).
-std::atomic<int> g_ui_scale{1};
+#ifdef ANDROID
+cpu_set_t g_big_cpus;
+bool g_big_ready = false;
+int g_big_count = 0;
+
+void DiscoverBigCores() {
+  CPU_ZERO(&g_big_cpus);
+  long khz[16] = {};
+  int n = 0;
+  long max_khz = 0;
+  for (int i = 0; i < 16; ++i) {
+    char path[96];
+    std::snprintf(path, sizeof(path),
+                  "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+    FILE* f = std::fopen(path, "r");
+    if (!f)
+      break;
+    if (std::fscanf(f, "%ld", &khz[i]) == 1) {
+      if (khz[i] > max_khz)
+        max_khz = khz[i];
+      n = i + 1;
+    }
+    std::fclose(f);
+  }
+  int pinned = 0;
+  for (int i = 0; i < n; ++i) {
+    if (max_khz <= 0 || khz[i] * 100 >= max_khz * 85) {
+      CPU_SET(i, &g_big_cpus);
+      ++pinned;
+    }
+  }
+  if (pinned == 0) {
+    const int fallback = n > 0 ? n : 8;
+    for (int i = 0; i < fallback; ++i)
+      CPU_SET(i, &g_big_cpus);
+    pinned = fallback;
+  }
+  g_big_count = pinned;
+  g_big_ready = true;
+}
+
+void PinCurrentToBigCores() {
+  if (!g_big_ready)
+    DiscoverBigCores();
+  if (::sched_setaffinity(0, sizeof(cpu_set_t), &g_big_cpus) == 0) {
+    char buf[72];
+    std::snprintf(buf, sizeof(buf), "pinned host thread to %d big cores",
+                  g_big_count);
+    SunPadNativeLog(buf);
+  }
+}
+
+bool NameLooksLikeEmu(const char* name) {
+  return std::strstr(name, "CPU") != nullptr ||
+         std::strstr(name, "GPU") != nullptr ||
+         std::strstr(name, "DSP") != nullptr ||
+         std::strstr(name, "Emu") != nullptr ||
+         std::strstr(name, "Audio") != nullptr ||
+         std::strstr(name, "OpenSL") != nullptr ||
+         std::strstr(name, "Video") != nullptr;
+}
+
+void BoostNamedEmuThreads() {
+  if (!g_big_ready)
+    DiscoverBigCores();
+  DIR* d = ::opendir("/proc/self/task");
+  if (!d)
+    return;
+  int boosted = 0;
+  while (dirent* e = ::readdir(d)) {
+    if (e->d_name[0] == '.')
+      continue;
+    char comm_path[64];
+    std::snprintf(comm_path, sizeof(comm_path), "/proc/self/task/%s/comm",
+                  e->d_name);
+    FILE* f = std::fopen(comm_path, "r");
+    if (!f)
+      continue;
+    char name[32] = {};
+    if (std::fgets(name, sizeof(name), f) == nullptr) {
+      std::fclose(f);
+      continue;
+    }
+    std::fclose(f);
+    if (!NameLooksLikeEmu(name))
+      continue;
+    const int tid = std::atoi(e->d_name);
+    if (tid <= 0)
+      continue;
+    ::sched_setaffinity(tid, sizeof(cpu_set_t), &g_big_cpus);
+    ::setpriority(PRIO_PROCESS, tid, -16);
+    ++boosted;
+  }
+  ::closedir(d);
+  static int last_boosted = -1;
+  if (boosted > 0 && boosted != last_boosted) {
+    last_boosted = boosted;
+    char buf[72];
+    std::snprintf(buf, sizeof(buf), "boosted %d emu threads onto big cores",
+                  boosted);
+    SunPadNativeLog(buf);
+  }
+}
+#endif
 
 void BoostHostThreads() {
   // Best-effort: Android may reject a negative nice. Failure is ignored.
-  ::setpriority(PRIO_PROCESS, 0, -8);
+  ::setpriority(PRIO_PROCESS, 0, -16);
+#ifdef ANDROID
+  PinCurrentToBigCores();
+#endif
 }
 
 void FitPresentBuffer(ANativeWindow* surface) {
   if (surface == nullptr)
     return;
-  const auto& dev = CachedDevice();
-  const int nw = ANativeWindow_getWidth(surface);
-  const int nh = ANativeWindow_getHeight(surface);
-  if (nw <= 1 || nh <= 1) {
-    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
-    return;
-  }
-  // 0.5×: present at ~640 so a 120 Hz 2.6K panel is not fill-rate bound.
-  // Honor X9b is 2652x1220 @ 120 Hz. Blitting 1x EFB (640x528) onto that
-  // every frame costs more than the GameCube scene. 1280 is plenty at 1×.
-  const int long_side = std::max(nw, nh);
-  const int ui = g_ui_scale.load();
-  const bool half = ui == 0;
-  const bool need_cap = half || dev.gpu_weak || long_side > 1600;
-  if (!need_cap) {
-    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
-    return;
-  }
-  const int cap = half ? 640 :
-      ((dev.weak && ((dev.mem_mb > 0 && dev.mem_mb < 3000) ||
-                     (dev.max_mhz > 0 && dev.max_mhz < 1800))) ?
-           960 :
-           1280);
-  if (long_side <= cap) {
-    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
-    return;
-  }
-  const float scale = static_cast<float>(cap) / static_cast<float>(long_side);
-  int w = std::max(2, static_cast<int>(nw * scale)) & ~1;
-  int h = std::max(2, static_cast<int>(nh * scale)) & ~1;
-  ANativeWindow_setBuffersGeometry(surface, w, h, WINDOW_FORMAT_RGBA_8888);
-  char buf[96];
-  std::snprintf(buf, sizeof(buf), "weak GPU present %dx%d (panel %dx%d)", w, h,
-                nw, nh);
-  SunPadNativeLog(buf);
+  // Official Dolphin presents at the SurfaceView size. The old 0.5× / 1280
+  // ANativeWindow resize made Adreno hitch and looked worse than Dolphin.
+  ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
 }
 
 template <typename T>
@@ -586,6 +669,15 @@ void RuntimeHost::RunGame(const fs::path& game_root,
 
     ApplyPendingSettings();
 
+#ifdef ANDROID
+    std::thread([this] {
+      for (int i = 0; i < 10 && !stop_requested_.load(); ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(350));
+        BoostNamedEmuThreads();
+      }
+    }).detach();
+#endif
+
     // Open the pipe in parallel: the runtime only creates the reader inside
     // Run(), so waiting here first used to stall boot for up to 60s and then
     // leave input disconnected.
@@ -700,15 +792,11 @@ void RuntimeHost::PublishInput(const InputState& input) {
 }
 
 void RuntimeHost::SetRenderScale(int scale) {
-  // 0 = 0.5× present. Dolphin EFB scale cannot go below 1 (0 is "auto").
-  const int clamped = scale < 0 ? 0 : (scale > 4 ? 4 : scale);
+  const int clamped = scale < 1 ? 1 : (scale > 4 ? 4 : scale);
   pending_scale_ = clamped;
-  g_ui_scale.store(clamped);
-  if (current_surface_ != nullptr)
-    FitPresentBuffer(current_surface_);
   if (!running_.load())
     return;
-  Config::SetCurrent(Config::GFX_EFB_SCALE, clamped < 1 ? 1 : clamped);
+  Config::SetCurrent(Config::GFX_EFB_SCALE, clamped);
 }
 
 void RuntimeHost::SetAspectRatioMode(AspectRatioMode mode) {
@@ -760,18 +848,15 @@ void RuntimeHost::EnableDolphinLogs() {
 
 void RuntimeHost::ApplyPendingSettings() {
   const auto& dev = CachedDevice();
-  g_ui_scale.store(pending_scale_);
-  SetCfg(Config::GFX_EFB_SCALE, pending_scale_ < 1 ? 1 : pending_scale_);
+  const int scale = pending_scale_ < 1 ? 1 : pending_scale_;
+  SetCfg(Config::GFX_EFB_SCALE, scale);
   SetCfg(Config::GFX_MAX_EFB_SCALE, 12);
-  // Adreno cannot link Dolphin ubershaders. Keep specialized + one
-  // compiler thread. Dual-core (CPU vs GPU threads) is safe and is what
-  // official Dolphin Android uses — single-core was a crash workaround
-  // that left the game at a crawl.
-  // Uber shaders hide compile stalls. Adreno cannot link Dolphin ubers
-  // (black screen / 50+ link failures), so Honor X9b stays on specialized
-  // async-skip. Other GPUs get async uber like official Dolphin.
+  // Adreno cannot link Dolphin ubershaders (black screen / 50+ link
+  // failures). Official Dolphin default is Synchronous specialized —
+  // AsynchronousSkipRendering is what dropped frames on Honor X9b.
+  // Other GPUs get async uber so new areas do not hitch.
   SetCfg(Config::GFX_SHADER_COMPILATION_MODE,
-         dev.adreno ? ShaderCompilationMode::AsynchronousSkipRendering
+         dev.adreno ? ShaderCompilationMode::Synchronous
                     : ShaderCompilationMode::AsynchronousUberShaders);
   SetCfg(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
   const int shader_threads = (!dev.weak && !dev.mali && dev.cores > 4) ? 2 : 1;
@@ -799,8 +884,10 @@ void RuntimeHost::ApplyPendingSettings() {
   // hitches from flash I/O — official Dolphin's "load to RAM".
   const bool ram_load = dev.mem_mb >= 5500;
   SetCfg(Config::MAIN_LOAD_GAME_INTO_MEMORY, ram_load);
+  // Official Dolphin locked 30: wait for VI, do not present early.
+  // Rush + Immediate XFB on a 120 Hz panel looks like stutter even at 30.
   SetCfg(Config::MAIN_PRECISION_FRAME_TIMING, true);
-  SetCfg(Config::MAIN_RUSH_FRAME_PRESENTATION, true);
+  SetCfg(Config::MAIN_RUSH_FRAME_PRESENTATION, false);
   SetCfg(Config::MAIN_AUDIO_FILL_GAPS, true);
   SetCfg(Config::MAIN_AUDIO_BUFFER_SIZE, (dev.weak || dev.gpu_weak) ? 160 : 120);
   SetCfg(Config::GFX_VSYNC, false);
@@ -829,8 +916,8 @@ void RuntimeHost::ApplyPendingSettings() {
   // Super Mario Sunshine (Data/Sys/GameSettings/GMS.ini): CPU must read
   // the EFB and copies must land in RAM, or goop / water / FLUDD break.
   // GPU texture decode fights arbitrary-mip graffiti. Fast depth flickers
-  // on GLES. Scaled EFB copies smear the goo. Immediate XFB + skip
-  // duplicate frames cut latency without changing the image.
+  // on GLES. Scaled EFB copies smear the goo. Immediate XFB is off in
+  // official Dolphin — it desyncs presents from VI and looks like hitch.
   SetCfg(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
   SetCfg(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
   SetCfg(Config::GFX_HACK_DEFER_EFB_COPIES, true);
@@ -842,11 +929,11 @@ void RuntimeHost::ApplyPendingSettings() {
   // Fast depth flickers on Mali GLES. Adreno (Honor X9b) matches official
   // Dolphin with it on — a free chunk of GPU time.
   SetCfg(Config::GFX_FAST_DEPTH_CALC, !dev.mali);
-  SetCfg(Config::GFX_HACK_IMMEDIATE_XFB, true);
+  SetCfg(Config::GFX_HACK_IMMEDIATE_XFB, false);
   SetCfg(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
 
   // Weak 64-bit SoCs cannot hold 100% guest speed. 90% GC clock keeps
-  // Delfino playable; VI Skip (always on) already drops late frames.
+  // Delfino playable without dropping frames.
   if (dev.weak) {
     SetCfg(Config::MAIN_OVERCLOCK_ENABLE, true);
     SetCfg(Config::MAIN_OVERCLOCK, 0.90f);

@@ -121,6 +121,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         setContentView(rootView)
         gamepad.attach(rootView)
+        lockThirtyFpsPresent()
 
         applyPrefsToControls()
         DiagnosticLog.ensurePublicFolder(this)
@@ -153,6 +154,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     override fun onResume() {
         super.onResume()
         setImmersive()
+        lockThirtyFpsPresent()
         SunPadNative.resume()
     }
 
@@ -174,6 +176,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     override fun surfaceCreated(holder: SurfaceHolder) {
         surfaceReady = true
+        lockThirtyFpsPresent()
         SunPadNative.setSurface(holder.surface)
         if (!started || startPending) {
             startGameIfReady()
@@ -507,7 +510,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         val items = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
 
-        items.add("Render scale: ${scaleLabel(prefs.getInt("scale", 0))}")
+        items.add("Render scale: ${scaleLabel(storedScale())}")
         actions.add { cycleRenderScale(); showMenu() }
 
         items.add("Aspect ratio")
@@ -612,13 +615,19 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         }
     }
 
-    private fun scaleLabel(scale: Int): String =
-        if (scale <= 0) "0.5×" else "${scale}×"
+    private fun storedScale(): Int {
+        val raw = prefs.getInt("scale", 1)
+        val scale = if (raw < 1) 1 else raw.coerceAtMost(4)
+        if (scale != raw)
+            prefs.edit().putInt("scale", scale).apply()
+        return scale
+    }
+
+    private fun scaleLabel(scale: Int): String = "${scale}×"
 
     private fun cycleRenderScale() {
-        // 0.5× → 1× → 2× → 3× → 4× → 0.5×
-        val cur = prefs.getInt("scale", 0).coerceIn(0, 4)
-        val next = if (cur >= 4) 0 else cur + 1
+        val cur = storedScale()
+        val next = if (cur >= 4) 1 else cur + 1
         prefs.edit().putInt("scale", next).apply()
         SunPadNative.setRenderScale(next)
     }
@@ -677,7 +686,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         controls.opacity = prefs.getInt("opacity", 55) / 100f
         controls.scale = prefs.getInt("size", 100) / 100f
         SunPadNative.setModernCStick(prefs.getBoolean("modernCStick", false))
-        SunPadNative.setRenderScale(prefs.getInt("scale", 0))
+        SunPadNative.setRenderScale(storedScale())
         SunPadNative.setAspectRatioMode(prefs.getInt("aspect", 0))
         SunPadNative.setDualCore(prefs.getBoolean("dualCore", true))
     }
@@ -819,6 +828,36 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    // Honor X9b is 120 Hz. Compositing a 30 FPS GameCube frame 120 times a
+    // second heats the SoC and looks like hitch. Prefer a 60 Hz mode and
+    // tell SurfaceFlinger this surface is a fixed 30 FPS source.
+    private fun lockThirtyFpsPresent() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val d = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                    display else @Suppress("DEPRECATION") windowManager.defaultDisplay
+                val modes = d?.supportedModes.orEmpty()
+                val target = modes
+                    .filter { it.refreshRate in 50f..61f }
+                    .minByOrNull { kotlin.math.abs(it.refreshRate - 60f) }
+                if (target != null) {
+                    val lp = window.attributes
+                    lp.preferredDisplayModeId = target.modeId
+                    lp.preferredRefreshRate = target.refreshRate
+                    window.attributes = lp
+                }
+            } catch (_: Throwable) {
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                surfaceView.holder.surface?.setFrameRate(
+                    30f, android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE)
+            } catch (_: Throwable) {
+            }
+        }
+    }
 
     private fun setImmersive() {
         window.decorView.windowInsetsController?.let { controller ->

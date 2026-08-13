@@ -27,6 +27,9 @@ grep -q '^diff --git a/src/runtime/dolphin_runtime.cpp' "$MG_PATCH" || fail "MG 
 grep -q 'MODERNGEKKO_HAVE_ANDROID' "$MG_PATCH" || fail "MG patch missing Android guard"
 grep -q 'MAIN_CPU_THREAD, true' "$MG_PATCH" || fail "MG patch missing Android dual-core"
 grep -q 'GFX_HACK_VI_SKIP, false' "$MG_PATCH" || fail "MG patch missing Android VI skip off"
+grep -q 'MAIN_RUSH_FRAME_PRESENTATION, false' "$MG_PATCH" || fail "MG patch missing Android rush-present off"
+grep -q 'MAIN_PRECISION_FRAME_TIMING, true' "$MG_PATCH" || fail "MG patch missing Android precision frame timing"
+grep -q 'GFX_HACK_IMMEDIATE_XFB, false' "$MG_PATCH" || fail "MG patch missing Android immediate XFB off"
 grep -q 'VertexLoaderType::Native' "$MG_PATCH" || fail "MG patch missing Android native vertex loader"
 grep -q 'AsynchronousUberShaders' "$MG_PATCH" || fail "MG patch missing Android uber shaders"
 

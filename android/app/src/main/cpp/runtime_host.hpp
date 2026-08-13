@@ -95,7 +95,7 @@ class RuntimeHost {
   bool modern_cstick_ = false;
   std::string preferred_backend_{"OGL"};
   bool prefer_dual_core_ = true;
-  int pending_scale_ = 0;  // 0 = 0.5× present, default for 120 Hz phones
+  int pending_scale_ = 1;  // 1× EFB, same as official Dolphin
   AspectRatioMode pending_aspect_ = AspectRatioMode::Original;
   ANativeWindow* current_surface_ = nullptr;
   std::function<void(const std::string&)> on_error_;
