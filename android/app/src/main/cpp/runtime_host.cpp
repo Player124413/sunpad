@@ -501,7 +501,7 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       return;
     }
 
-    const auto try_create = [&](const char* backend) {
+    const auto try_create = [&](const char* backend, bool sixty) {
       moderngekko::RuntimeConfig config;
       config.game_root = game_root.string();
       if (!disc_image.empty())
@@ -510,14 +510,17 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       config.graphics.backend = backend;
       config.headless = false;
       config.show_fps_in_title = false;
+      config.enable_gmse01_60fps = sixty;
       config.module =
           moderngekko::ModuleSource::DynamicPath(module_path.string());
       config.render_surface = current_surface_;
-      std::fprintf(stderr, "[sunpad] creating runtime backend=%s surface=%p %dx%d\n",
-                   backend, static_cast<void*>(current_surface_),
+      std::fprintf(stderr,
+                   "[sunpad] creating runtime backend=%s 60fps=%d surface=%p %dx%d\n",
+                   backend, sixty ? 1 : 0, static_cast<void*>(current_surface_),
                    current_surface_ ? ANativeWindow_getWidth(current_surface_) : 0,
                    current_surface_ ? ANativeWindow_getHeight(current_surface_) : 0);
-      SunPadNativeLog("creating runtime");
+      SunPadNativeLog(sixty ? "creating runtime (60 FPS gecko)"
+                            : "creating runtime (30 FPS)");
       return moderngekko::Runtime::Create(std::move(config));
     };
 
@@ -532,13 +535,21 @@ void RuntimeHost::RunGame(const fs::path& game_root,
                  first, force_gles ? 1 : 0, dev.tag);
     if (force_gles)
       SunPadNativeLog("MediaTek/Mali: forcing OpenGL ES");
-    auto created = try_create(first);
+    bool sixty = prefer_60fps_;
+    auto created = try_create(first, sixty);
+    if (!created && sixty) {
+      SunPadNativeLog("60 FPS gecko failed; retrying original 30 FPS");
+      sixty = false;
+      created = try_create(first, false);
+    }
     if (!created) {
       const std::string first_error = created.error ? created.error->message
                                                     : "unknown error";
       std::fprintf(stderr, "[sunpad] %s create failed: %s; trying %s\n",
                    first, first_error.c_str(), second);
-      created = try_create(second);
+      created = try_create(second, sixty);
+      if (!created && prefer_60fps_)
+        created = try_create(second, false);
       if (!created) {
         const std::string second_error = created.error ? created.error->message
                                                        : "unknown error";
@@ -716,6 +727,10 @@ void RuntimeHost::SetPreferredBackend(std::string backend) {
     preferred_backend_ = std::move(backend);
 }
 
+void RuntimeHost::SetExperimental60Fps(bool enabled) {
+  prefer_60fps_ = enabled;
+}
+
 void RuntimeHost::EnableDolphinLogs() {
   auto* mgr = Common::Log::LogManager::GetInstance();
   if (mgr == nullptr) {
@@ -751,11 +766,15 @@ void RuntimeHost::ApplyPendingSettings() {
   // compiler thread. Dual-core (CPU vs GPU threads) is safe and is what
   // official Dolphin Android uses — single-core was a crash workaround
   // that left the game at a crawl.
+  // Synchronous specialized shaders freeze the whole frame (menus and
+  // plaza). Adreno cannot use ubershaders, so compile specialized in the
+  // background and skip the draw until the pipeline is ready.
   SetCfg(Config::GFX_SHADER_COMPILATION_MODE,
-         ShaderCompilationMode::Synchronous);
-  SetCfg(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
-  SetCfg(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
-  SetCfg(Config::GFX_SHADER_COMPILER_THREADS, 1);
+         ShaderCompilationMode::AsynchronousSkipRendering);
+  SetCfg(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
+  const int shader_threads = (!dev.weak && !dev.mali && dev.cores > 4) ? 2 : 1;
+  SetCfg(Config::GFX_SHADER_PRECOMPILER_THREADS, shader_threads);
+  SetCfg(Config::GFX_SHADER_COMPILER_THREADS, shader_threads);
   SetCfg(Config::GFX_BACKEND_MULTITHREADING, false);
   SetCfg(Config::GFX_PREFER_GLES, true);
   SetCfg(Config::GFX_SHADER_CACHE, true);
@@ -829,11 +848,12 @@ void RuntimeHost::ApplyPendingSettings() {
 
   char buf[256];
   std::snprintf(buf, sizeof(buf),
-                "graphics: dual-core GLES native-vtx JIT SMS EFB-to-RAM "
-                "fast-depth=%d soc=%s cores=%d ram=%ldMB max=%ldMHz weak=%d "
-                "gpu_weak=%d",
-                dev.mali ? 0 : 1, dev.tag, dev.cores, dev.mem_mb, dev.max_mhz,
-                dev.weak ? 1 : 0, dev.gpu_weak ? 1 : 0);
+                "graphics: dual-core GLES native-vtx JIT async-skip "
+                "SMS EFB-to-RAM 60fps=%d fast-depth=%d soc=%s cores=%d "
+                "ram=%ldMB max=%ldMHz weak=%d gpu_weak=%d",
+                prefer_60fps_ ? 1 : 0, dev.mali ? 0 : 1, dev.tag, dev.cores,
+                dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0,
+                dev.gpu_weak ? 1 : 0);
   SunPadNativeLog(buf);
 
   // After boot, stop appending every Dolphin line to the crash log.
