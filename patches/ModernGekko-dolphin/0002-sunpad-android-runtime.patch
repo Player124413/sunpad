@@ -463,7 +463,7 @@ index 44f9997..55ee9df 100644
  
  void OnConfigChanged()
 diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
-index e58579e..3418441 100644
+index e58579e..20f3c79 100644
 --- a/Source/Core/Core/Core.cpp
 +++ b/Source/Core/Core/Core.cpp
 @@ -5,11 +5,13 @@
@@ -480,7 +480,16 @@ index e58579e..3418441 100644
  #include <utility>
  #include <variant>
  
-@@ -293,7 +295,9 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
+@@ -92,6 +94,8 @@
+ #include "VideoCommon/VideoBackendBase.h"
+ #include "VideoCommon/VideoEvents.h"
+ 
++extern "C" void SunPadNativeLog(const char* msg);
++
+ namespace Core
+ {
+ static bool s_wants_determinism;
+@@ -293,7 +297,9 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
      Common::SetCurrentThreadName("CPU-GPU thread");
  
    // This needs to be delayed until after the video backend is ready.
@@ -490,7 +499,7 @@ index e58579e..3418441 100644
  
    // Clear performance data collected from previous threads.
    system.GetPerfMetrics().Reset();
-@@ -476,6 +480,7 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
+@@ -476,6 +482,7 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
  static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
                        WindowSystemInfo wsi)
  {
@@ -498,7 +507,7 @@ index e58579e..3418441 100644
    NotifyStateChanged(State::Starting);
    Common::ScopeGuard flag_guard{[] {
      {
-@@ -485,6 +490,7 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -485,6 +492,7 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
  
      NotifyStateChanged(State::Uninitialized);
  
@@ -506,7 +515,7 @@ index e58579e..3418441 100644
      INFO_LOG_FMT(CONSOLE, "Stop\t\t---- Shutdown complete ----");
    }};
  
-@@ -565,12 +571,15 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -565,12 +573,15 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
  
    // In single-core mode: This holds a video backend shutdown function.
    // In dual-core mode: This holds a GPU thread stopping function (which does the backend shutdown).
@@ -522,7 +531,7 @@ index e58579e..3418441 100644
  
    if (cpu_info.HTT)
      Config::SetBaseOrCurrent(Config::MAIN_DSP_THREAD, cpu_info.num_cores > 4);
-@@ -603,8 +612,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -603,8 +614,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
    {
      ASSERT(IsCPUThread());
      CPUThreadGuard guard(system);
@@ -536,7 +545,7 @@ index e58579e..3418441 100644
    }
  
    // Initialise Wii filesystem contents.
-@@ -638,7 +652,23 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -638,7 +654,23 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
    UpdateTitle(system);
  
    // Become the CPU thread.
