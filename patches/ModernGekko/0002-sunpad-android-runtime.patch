@@ -186,7 +186,7 @@ index 1ddc25c..1894bd7 100644
 +  Config::SetBase(Config::GFX_BACKEND_MULTITHREADING, false);
 +  Config::SetBase(Config::GFX_PREFER_GLES, true);
 +  Config::SetBase(Config::MAIN_CPU_THREAD, true);
-+  Config::SetBase(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
++  Config::SetBase(Config::MAIN_SYNC_ON_SKIP_IDLE, true);
 +  Config::SetBase(Config::MAIN_FAST_DISC_SPEED, true);
 +  // GMS.ini: Sunshine needs CPU EFB reads and EFB copies in RAM.
 +  Config::SetBase(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
@@ -205,7 +205,7 @@ index 1ddc25c..1894bd7 100644
 +  Config::SetBase(Config::GFX_SSAA, false);
 +  Config::SetBase(Config::GFX_ENABLE_PIXEL_LIGHTING, false);
 +  Config::SetBase(Config::GFX_SHADER_CACHE, true);
-+  Config::SetBase(Config::GFX_HACK_VI_SKIP, true);
++  Config::SetBase(Config::GFX_HACK_VI_SKIP, false);
 +  Config::SetBase(Config::GFX_HACK_FAST_TEXTURE_SAMPLING, true);
 +  Config::SetBase(Config::GFX_HACK_EFB_DEFER_INVALIDATION, true);
 +  Config::SetBase(Config::GFX_HACK_EARLY_XFB_OUTPUT, true);

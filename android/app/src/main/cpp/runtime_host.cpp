@@ -337,16 +337,11 @@ void PrepareAndroidUserTree(const fs::path& user_directory) {
   fs::create_directories(user_directory / "Load", ec);
   fs::create_directories(user_directory / "Shaders", ec);
 
-  // Stale uber-shader cache from earlier APKs crashes the Adreno compiler
-  // on load. Wipe once when upgrading to specialized-on-demand.
+  // Never wipe Cache/: official Dolphin stays smooth because specialized
+  // pipelines persist. A wipe forces every plaza/menu shader to compile
+  // again and looks like a freeze.
   const fs::path cache_dir = user_directory / "Cache";
-  const fs::path cache_marker = cache_dir / ".sunpad_shader_v2";
-  if (!fs::exists(cache_marker)) {
-    fs::remove_all(cache_dir, ec);
-    fs::create_directories(cache_dir, ec);
-    std::ofstream(cache_marker.string()) << "specialized-v2\n";
-    SunPadNativeLog("wiped stale shader cache");
-  }
+  fs::create_directories(cache_dir, ec);
 
   // Android FileUtil ASSERT-aborts the process if this is never set
   // ("Sys directory has not been set") — that is SIGABRT after shaders.
@@ -790,7 +785,9 @@ void RuntimeHost::ApplyPendingSettings() {
   SetCfg(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Native);
   SetCfg(Config::MAIN_FASTMEM, true);
   SetCfg(Config::MAIN_CPU_THREAD, prefer_dual_core_);
-  SetCfg(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
+  // Official Dolphin default. Dual-core + skip-idle unsynced is a common
+  // hitch on SMS; matching Dolphin Android here.
+  SetCfg(Config::MAIN_SYNC_ON_SKIP_IDLE, true);
   SetCfg(Config::MAIN_FAST_DISC_SPEED, true);
   SetCfg(Config::MAIN_SKIP_IPL, true);
   SetCfg(Config::MAIN_DSP_HLE, true);
@@ -798,8 +795,11 @@ void RuntimeHost::ApplyPendingSettings() {
   SetCfg(Config::MAIN_SYNC_GPU, false);
   SetCfg(Config::MAIN_MMU, false);
   SetCfg(Config::MAIN_ACCURATE_CPU_CACHE, false);
-  SetCfg(Config::MAIN_LOAD_GAME_INTO_MEMORY, false);
-  SetCfg(Config::MAIN_PRECISION_FRAME_TIMING, false);
+  // Honor X9b has 8–12 GB. Loading the 1.4 GB ISO stops level/menu
+  // hitches from flash I/O — official Dolphin's "load to RAM".
+  const bool ram_load = dev.mem_mb >= 5500;
+  SetCfg(Config::MAIN_LOAD_GAME_INTO_MEMORY, ram_load);
+  SetCfg(Config::MAIN_PRECISION_FRAME_TIMING, true);
   SetCfg(Config::MAIN_RUSH_FRAME_PRESENTATION, true);
   SetCfg(Config::MAIN_AUDIO_FILL_GAPS, true);
   SetCfg(Config::MAIN_AUDIO_BUFFER_SIZE, (dev.weak || dev.gpu_weak) ? 160 : 120);
@@ -821,7 +821,9 @@ void RuntimeHost::ApplyPendingSettings() {
   SetCfg(Config::GFX_HACK_EFB_DEFER_INVALIDATION, true);
   SetCfg(Config::GFX_HACK_EARLY_XFB_OUTPUT, true);
   SetCfg(Config::GFX_HACK_VERTEX_ROUNDING, false);
-  SetCfg(Config::GFX_HACK_VI_SKIP, true);
+  // Official Dolphin default is off. VI skip drops frames on purpose —
+  // that is the "просадка" vs a locked 30 FPS in Dolphin Android.
+  SetCfg(Config::GFX_HACK_VI_SKIP, false);
   SetCfg(Config::GFX_SAFE_TEXTURE_CACHE_COLOR_SAMPLES, 128);
 
   // Super Mario Sunshine (Data/Sys/GameSettings/GMS.ini): CPU must read
@@ -855,12 +857,11 @@ void RuntimeHost::ApplyPendingSettings() {
 
   char buf[256];
   std::snprintf(buf, sizeof(buf),
-                "graphics: dual-core=%d GLES native-vtx JIT 30fps "
-                "uber=%d fast-depth=%d soc=%s cores=%d ram=%ldMB "
-                "max=%ldMHz weak=%d gpu_weak=%d",
-                prefer_dual_core_ ? 1 : 0, dev.adreno ? 0 : 1,
-                dev.mali ? 0 : 1, dev.tag, dev.cores, dev.mem_mb,
-                dev.max_mhz, dev.weak ? 1 : 0, dev.gpu_weak ? 1 : 0);
+                "graphics: dual-core=%d GLES 30fps ram-iso=%d vi-skip=0 "
+                "uber=%d soc=%s cores=%d ram=%ldMB weak=%d",
+                prefer_dual_core_ ? 1 : 0, ram_load ? 1 : 0,
+                dev.adreno ? 0 : 1, dev.tag, dev.cores, dev.mem_mb,
+                dev.weak ? 1 : 0);
   SunPadNativeLog(buf);
 
   // After boot, stop appending every Dolphin line to the crash log.

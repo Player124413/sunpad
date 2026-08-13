@@ -507,7 +507,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         val items = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
 
-        items.add("Render scale: ${scaleLabel(prefs.getInt("scale", 1))}")
+        items.add("Render scale: ${scaleLabel(prefs.getInt("scale", 0))}")
         actions.add { cycleRenderScale(); showMenu() }
 
         items.add("Aspect ratio")
@@ -617,7 +617,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
     private fun cycleRenderScale() {
         // 0.5× → 1× → 2× → 3× → 4× → 0.5×
-        val cur = prefs.getInt("scale", 1).coerceIn(0, 4)
+        val cur = prefs.getInt("scale", 0).coerceIn(0, 4)
         val next = if (cur >= 4) 0 else cur + 1
         prefs.edit().putInt("scale", next).apply()
         SunPadNative.setRenderScale(next)
@@ -677,7 +677,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         controls.opacity = prefs.getInt("opacity", 55) / 100f
         controls.scale = prefs.getInt("size", 100) / 100f
         SunPadNative.setModernCStick(prefs.getBoolean("modernCStick", false))
-        SunPadNative.setRenderScale(prefs.getInt("scale", 1))
+        SunPadNative.setRenderScale(prefs.getInt("scale", 0))
         SunPadNative.setAspectRatioMode(prefs.getInt("aspect", 0))
         SunPadNative.setDualCore(prefs.getBoolean("dualCore", true))
     }

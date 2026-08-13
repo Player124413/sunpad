@@ -26,7 +26,7 @@ grep -q '^diff --git a/CMakeLists.txt' "$MG_PATCH" || fail "MG patch missing CMa
 grep -q '^diff --git a/src/runtime/dolphin_runtime.cpp' "$MG_PATCH" || fail "MG patch missing dolphin_runtime.cpp"
 grep -q 'MODERNGEKKO_HAVE_ANDROID' "$MG_PATCH" || fail "MG patch missing Android guard"
 grep -q 'MAIN_CPU_THREAD, true' "$MG_PATCH" || fail "MG patch missing Android dual-core"
-grep -q 'GFX_HACK_VI_SKIP, true' "$MG_PATCH" || fail "MG patch missing Android VI skip"
+grep -q 'GFX_HACK_VI_SKIP, false' "$MG_PATCH" || fail "MG patch missing Android VI skip off"
 grep -q 'VertexLoaderType::Native' "$MG_PATCH" || fail "MG patch missing Android native vertex loader"
 grep -q 'AsynchronousUberShaders' "$MG_PATCH" || fail "MG patch missing Android uber shaders"
 
