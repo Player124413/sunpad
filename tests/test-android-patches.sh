@@ -37,6 +37,7 @@ grep -q 'CreateAndroidPlatform' "$DOLPHIN_PATCH" || fail "dolphin patch missing 
 grep -q 'JitArm64' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android JitArm64 exclusion"
 grep -q 'WorkQueueThread.h' "$DOLPHIN_PATCH" || fail "dolphin patch missing AsyncWorkThread bad_function_call fix"
 grep -q 'callback.second' "$DOLPHIN_PATCH" || fail "dolphin patch missing empty config-callback guard"
+grep -q 'NO_EXCEPTIONS' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android exceptions enable"
 
 # When a prepared ref/ tree exists, the 0002 patches must be fully applied
 # (reverse-apply must succeed).
