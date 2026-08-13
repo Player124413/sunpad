@@ -35,6 +35,7 @@ grep -q 'SunPadAndroidSetJavaVM' "$DOLPHIN_PATCH" || fail "dolphin patch missing
 grep -q 'SunPadAndroidQueryAudio' "$DOLPHIN_PATCH" || fail "dolphin patch missing cached AudioUtils query"
 grep -q 'CreateAndroidPlatform' "$DOLPHIN_PATCH" || fail "dolphin patch missing CreateAndroidPlatform"
 grep -q 'JitArm64' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android JitArm64 exclusion"
+grep -q 'WorkQueueThread.h' "$DOLPHIN_PATCH" || fail "dolphin patch missing AsyncWorkThread bad_function_call fix"
 
 # When a prepared ref/ tree exists, the 0002 patches must be fully applied
 # (reverse-apply must succeed).
