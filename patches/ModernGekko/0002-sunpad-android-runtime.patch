@@ -179,7 +179,7 @@ index 1ddc25c..1894bd7 100644
 +  // Adreno cannot link ubershaders. Dual-core (CPU vs GPU) is the
 +  // official Dolphin Android default and is what makes the game playable.
 +  Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
-+                  ShaderCompilationMode::AsynchronousSkipRendering);
++                  ShaderCompilationMode::AsynchronousUberShaders);
 +  Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
 +  Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
 +  Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, 1);

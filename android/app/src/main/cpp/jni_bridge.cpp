@@ -513,13 +513,6 @@ Java_com_sunpad_android_SunPadNative_nativeSetCrashLogPath(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_sunpad_android_SunPadNative_nativeSetExperimental60Fps(
-    JNIEnv*, jobject, jboolean enabled) {
-  if (g_host)
-    g_host->SetExperimental60Fps(enabled == JNI_TRUE);
-}
-
-extern "C" JNIEXPORT void JNICALL
 Java_com_sunpad_android_SunPadNative_nativeSetDualCore(
     JNIEnv*, jobject, jboolean enabled) {
   if (g_host)

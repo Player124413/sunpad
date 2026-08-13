@@ -128,6 +128,7 @@ struct AndroidDeviceProfile {
   int mt_model = 0;
   bool mediatek = false;
   bool mali = false;
+  bool adreno = false;
   bool weak = false;
   bool gpu_weak = false;
   char tag[48] = "generic";
@@ -229,6 +230,9 @@ AndroidDeviceProfile DetectAndroidDevice() {
            ::access("/sys/class/misc/mali0", F_OK) == 0 ||
            ::access("/sys/module/mali_kbase", F_OK) == 0 ||
            ::access("/dev/mali0", F_OK) == 0;
+  p.adreno = Contains(blob, "adreno") || Contains(blob, "kgsl") ||
+             ::access("/dev/kgsl-3d0", F_OK) == 0 ||
+             ::access("/sys/class/kgsl", F_OK) == 0;
   p.mt_model = ParseMtModel(blob);
 
   const bool helio =
@@ -251,6 +255,8 @@ AndroidDeviceProfile DetectAndroidDevice() {
   if (p.mediatek && p.mt_model > 0)
     std::snprintf(p.tag, sizeof(p.tag), "mtk-mt%d%s", p.mt_model,
                   p.mali ? "-mali" : "");
+  else if (p.adreno)
+    std::snprintf(p.tag, sizeof(p.tag), "adreno");
   else if (p.mali)
     std::snprintf(p.tag, sizeof(p.tag), "mali");
   else if (p.mediatek)
@@ -501,7 +507,7 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       return;
     }
 
-    const auto try_create = [&](const char* backend, bool sixty) {
+    const auto try_create = [&](const char* backend) {
       moderngekko::RuntimeConfig config;
       config.game_root = game_root.string();
       if (!disc_image.empty())
@@ -510,17 +516,15 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       config.graphics.backend = backend;
       config.headless = false;
       config.show_fps_in_title = false;
-      config.enable_gmse01_60fps = sixty;
+      config.enable_gmse01_60fps = false;
       config.module =
           moderngekko::ModuleSource::DynamicPath(module_path.string());
       config.render_surface = current_surface_;
-      std::fprintf(stderr,
-                   "[sunpad] creating runtime backend=%s 60fps=%d surface=%p %dx%d\n",
-                   backend, sixty ? 1 : 0, static_cast<void*>(current_surface_),
+      std::fprintf(stderr, "[sunpad] creating runtime backend=%s surface=%p %dx%d\n",
+                   backend, static_cast<void*>(current_surface_),
                    current_surface_ ? ANativeWindow_getWidth(current_surface_) : 0,
                    current_surface_ ? ANativeWindow_getHeight(current_surface_) : 0);
-      SunPadNativeLog(sixty ? "creating runtime (60 FPS gecko)"
-                            : "creating runtime (30 FPS)");
+      SunPadNativeLog("creating runtime (30 FPS)");
       return moderngekko::Runtime::Create(std::move(config));
     };
 
@@ -535,21 +539,13 @@ void RuntimeHost::RunGame(const fs::path& game_root,
                  first, force_gles ? 1 : 0, dev.tag);
     if (force_gles)
       SunPadNativeLog("MediaTek/Mali: forcing OpenGL ES");
-    bool sixty = prefer_60fps_;
-    auto created = try_create(first, sixty);
-    if (!created && sixty) {
-      SunPadNativeLog("60 FPS gecko failed; retrying original 30 FPS");
-      sixty = false;
-      created = try_create(first, false);
-    }
+    auto created = try_create(first);
     if (!created) {
       const std::string first_error = created.error ? created.error->message
                                                     : "unknown error";
       std::fprintf(stderr, "[sunpad] %s create failed: %s; trying %s\n",
                    first, first_error.c_str(), second);
-      created = try_create(second, sixty);
-      if (!created && prefer_60fps_)
-        created = try_create(second, false);
+      created = try_create(second);
       if (!created) {
         const std::string second_error = created.error ? created.error->message
                                                        : "unknown error";
@@ -727,10 +723,6 @@ void RuntimeHost::SetPreferredBackend(std::string backend) {
     preferred_backend_ = std::move(backend);
 }
 
-void RuntimeHost::SetExperimental60Fps(bool enabled) {
-  prefer_60fps_ = enabled;
-}
-
 void RuntimeHost::SetDualCore(bool enabled) {
   prefer_dual_core_ = enabled;
 }
@@ -770,11 +762,12 @@ void RuntimeHost::ApplyPendingSettings() {
   // compiler thread. Dual-core (CPU vs GPU threads) is safe and is what
   // official Dolphin Android uses — single-core was a crash workaround
   // that left the game at a crawl.
-  // Synchronous specialized shaders freeze the whole frame (menus and
-  // plaza). Adreno cannot use ubershaders, so compile specialized in the
-  // background and skip the draw until the pipeline is ready.
+  // Uber shaders hide compile stalls. Adreno cannot link Dolphin ubers
+  // (black screen / 50+ link failures), so Honor X9b stays on specialized
+  // async-skip. Other GPUs get async uber like official Dolphin.
   SetCfg(Config::GFX_SHADER_COMPILATION_MODE,
-         ShaderCompilationMode::AsynchronousSkipRendering);
+         dev.adreno ? ShaderCompilationMode::AsynchronousSkipRendering
+                    : ShaderCompilationMode::AsynchronousUberShaders);
   SetCfg(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
   const int shader_threads = (!dev.weak && !dev.mali && dev.cores > 4) ? 2 : 1;
   SetCfg(Config::GFX_SHADER_PRECOMPILER_THREADS, shader_threads);
@@ -852,13 +845,12 @@ void RuntimeHost::ApplyPendingSettings() {
 
   char buf[256];
   std::snprintf(buf, sizeof(buf),
-                "graphics: dual-core=%d GLES native-vtx JIT async-skip "
-                "SMS EFB-to-RAM 60fps=%d fast-depth=%d soc=%s cores=%d "
-                "ram=%ldMB max=%ldMHz weak=%d gpu_weak=%d",
-                prefer_dual_core_ ? 1 : 0, prefer_60fps_ ? 1 : 0,
-                dev.mali ? 0 : 1, dev.tag, dev.cores,
-                dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0,
-                dev.gpu_weak ? 1 : 0);
+                "graphics: dual-core=%d GLES native-vtx JIT 30fps "
+                "uber=%d fast-depth=%d soc=%s cores=%d ram=%ldMB "
+                "max=%ldMHz weak=%d gpu_weak=%d",
+                prefer_dual_core_ ? 1 : 0, dev.adreno ? 0 : 1,
+                dev.mali ? 0 : 1, dev.tag, dev.cores, dev.mem_mb,
+                dev.max_mhz, dev.weak ? 1 : 0, dev.gpu_weak ? 1 : 0);
   SunPadNativeLog(buf);
 
   // After boot, stop appending every Dolphin line to the crash log.

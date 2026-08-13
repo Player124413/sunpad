@@ -28,7 +28,7 @@ grep -q 'MODERNGEKKO_HAVE_ANDROID' "$MG_PATCH" || fail "MG patch missing Android
 grep -q 'MAIN_CPU_THREAD, true' "$MG_PATCH" || fail "MG patch missing Android dual-core"
 grep -q 'GFX_HACK_VI_SKIP, true' "$MG_PATCH" || fail "MG patch missing Android VI skip"
 grep -q 'VertexLoaderType::Native' "$MG_PATCH" || fail "MG patch missing Android native vertex loader"
-grep -q 'AsynchronousSkipRendering' "$MG_PATCH" || fail "MG patch missing Android async-skip shaders"
+grep -q 'AsynchronousUberShaders' "$MG_PATCH" || fail "MG patch missing Android uber shaders"
 
 # The Dolphin 0002 patch must add the Android platform and decouple OpenSL ES.
 grep -q '^diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp' "$DOLPHIN_PATCH" \

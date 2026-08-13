@@ -539,24 +539,6 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         }
 
         items.add(
-            if (prefs.getBoolean("experimental60fps", true))
-                "60 FPS: ON (restart to apply)"
-            else
-                "60 FPS: OFF (restart to apply)")
-        actions.add {
-            val on = !prefs.getBoolean("experimental60fps", true)
-            prefs.edit().putBoolean("experimental60fps", on).apply()
-            SunPadNative.setExperimental60Fps(on)
-            Toast.makeText(
-                this,
-                if (on) "60 FPS on next start (close and reopen)"
-                else "30 FPS on next start (close and reopen)",
-                Toast.LENGTH_LONG,
-            ).show()
-            showMenu()
-        }
-
-        items.add(
             if (prefs.getBoolean("dualCore", true))
                 "Dual-core: ON (restart to apply)"
             else
@@ -692,7 +674,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         SunPadNative.setModernCStick(prefs.getBoolean("modernCStick", false))
         SunPadNative.setRenderScale(prefs.getInt("scale", 1))
         SunPadNative.setAspectRatioMode(prefs.getInt("aspect", 0))
-        SunPadNative.setExperimental60Fps(prefs.getBoolean("experimental60fps", true))
+        SunPadNative.setDualCore(prefs.getBoolean("dualCore", true))
     }
 
     // ------------------------------------------------------------------ input loop
