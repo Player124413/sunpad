@@ -42,6 +42,7 @@ grep -q 'HAVE_EGL=1 (NDK libEGL)' "$DOLPHIN_PATCH" || fail "dolphin patch missin
 grep -q 'EmuThread: starting' "$DOLPHIN_PATCH" || fail "dolphin patch missing EmuThread stage logs"
 grep -q 'GetSysDirectory now' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android Sys path recache"
 grep -q 'Headless' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android OGL headless probe"
+grep -q 's_get_val_func' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android analytics callback guard"
 
 # When a prepared ref/ tree exists, the 0002 patches must be fully applied
 # (reverse-apply must succeed).

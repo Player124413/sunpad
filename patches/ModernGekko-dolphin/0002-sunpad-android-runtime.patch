@@ -463,15 +463,34 @@ index 44f9997..55ee9df 100644
  
  void OnConfigChanged()
 diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
-index e58579e..1c2e7cc 100644
+index e58579e..3418441 100644
 --- a/Source/Core/Core/Core.cpp
 +++ b/Source/Core/Core/Core.cpp
-@@ -473,9 +473,12 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
- // Initialize and create emulation thread
- // Call browser: Init():s_emu_thread().
- // See the BootManager.cpp file description for a complete call schedule.
-+extern "C" void SunPadNativeLog(const char* msg);
-+
+@@ -5,11 +5,13 @@
+ 
+ #include <algorithm>
+ #include <atomic>
++#include <cstdio>
+ #include <functional>
+ #include <future>
+ #include <mutex>
+ #include <optional>
+ #include <queue>
++#include <typeinfo>
+ #include <utility>
+ #include <variant>
+ 
+@@ -293,7 +295,9 @@ static void CpuThread(Core::System& system, const std::optional<std::string>& sa
+     Common::SetCurrentThreadName("CPU-GPU thread");
+ 
+   // This needs to be delayed until after the video backend is ready.
++  SunPadNativeLog("CpuThread: ReportGameStart");
+   DolphinAnalytics::Instance().ReportGameStart();
++  SunPadNativeLog("CpuThread: ReportGameStart done");
+ 
+   // Clear performance data collected from previous threads.
+   system.GetPerfMetrics().Reset();
+@@ -476,6 +480,7 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
  static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
                        WindowSystemInfo wsi)
  {
@@ -479,7 +498,7 @@ index e58579e..1c2e7cc 100644
    NotifyStateChanged(State::Starting);
    Common::ScopeGuard flag_guard{[] {
      {
-@@ -485,6 +488,7 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -485,6 +490,7 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
  
      NotifyStateChanged(State::Uninitialized);
  
@@ -487,7 +506,7 @@ index e58579e..1c2e7cc 100644
      INFO_LOG_FMT(CONSOLE, "Stop\t\t---- Shutdown complete ----");
    }};
  
-@@ -565,12 +569,15 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -565,12 +571,15 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
  
    // In single-core mode: This holds a video backend shutdown function.
    // In dual-core mode: This holds a GPU thread stopping function (which does the backend shutdown).
@@ -503,7 +522,7 @@ index e58579e..1c2e7cc 100644
  
    if (cpu_info.HTT)
      Config::SetBaseOrCurrent(Config::MAIN_DSP_THREAD, cpu_info.num_cores > 4);
-@@ -603,8 +610,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -603,8 +612,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
    {
      ASSERT(IsCPUThread());
      CPUThreadGuard guard(system);
@@ -517,7 +536,7 @@ index e58579e..1c2e7cc 100644
    }
  
    // Initialise Wii filesystem contents.
-@@ -638,7 +650,20 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -638,7 +652,23 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
    UpdateTitle(system);
  
    // Become the CPU thread.
@@ -530,7 +549,10 @@ index e58579e..1c2e7cc 100644
 +  }
 +  catch (const std::exception& ex)
 +  {
-+    SunPadNativeLog((std::string("EmuThread: CPU exception: ") + ex.what()).c_str());
++    char buf[256];
++    std::snprintf(buf, sizeof(buf), "EmuThread: CPU exception: %s (%s)", ex.what(),
++                  typeid(ex).name());
++    SunPadNativeLog(buf);
 +  }
 +  catch (...)
 +  {
@@ -539,6 +561,30 @@ index e58579e..1c2e7cc 100644
  }
  
  // Set or get the running state
+diff --git a/Source/Core/Core/DolphinAnalytics.cpp b/Source/Core/Core/DolphinAnalytics.cpp
+index b41725e..93db9f1 100644
+--- a/Source/Core/Core/DolphinAnalytics.cpp
++++ b/Source/Core/Core/DolphinAnalytics.cpp
+@@ -296,9 +296,16 @@ void DolphinAnalytics::MakeBaseBuilder()
+   builder.AddData("win-ver-build", static_cast<u32>(winver.dwBuildNumber));
+ #elif defined(ANDROID)
+   builder.AddData("os-type", "android");
+-  builder.AddData("android-manufacturer", s_get_val_func("DEVICE_MANUFACTURER"));
+-  builder.AddData("android-model", s_get_val_func("DEVICE_MODEL"));
+-  builder.AddData("android-version", s_get_val_func("DEVICE_OS"));
++  // Official Dolphin JNI sets this. SunPad (and any host that skips that
++  // call) must not invoke an empty std::function — NDK libc++ throws
++  // bad_function_call with what() == "std::exception" and kills EmuThread
++  // at ReportGameStart, before a single guest instruction.
++  const auto android_val = [](const char* key) -> std::string {
++    return s_get_val_func ? s_get_val_func(key) : std::string{};
++  };
++  builder.AddData("android-manufacturer", android_val("DEVICE_MANUFACTURER"));
++  builder.AddData("android-model", android_val("DEVICE_MODEL"));
++  builder.AddData("android-version", android_val("DEVICE_OS"));
+ #elif defined(__APPLE__)
+   builder.AddData("os-type", "osx");
+ 
 diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
 index 743bd5c..4dac801 100644
 --- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp

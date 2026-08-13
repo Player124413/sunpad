@@ -21,6 +21,7 @@
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
+#include "Core/DolphinAnalytics.h"
 #include "Core/System.h"
 #include "Common/Logging/Log.h"
 #include "Common/Logging/LogManager.h"
@@ -83,7 +84,7 @@ void EarlyInit() {
       SunPadNativeLog("exception: unknown");
     }
   });
-  SunPadNativeLog("early init: panic logged, fallback JIT disabled");
+  SunPadNativeLog("early init: panic logged, fallback JIT disabled, analytics stub set");
 }
 
 }  // namespace sunpad
