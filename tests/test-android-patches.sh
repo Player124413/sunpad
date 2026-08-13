@@ -25,6 +25,7 @@ done
 grep -q '^diff --git a/CMakeLists.txt' "$MG_PATCH" || fail "MG patch missing CMakeLists.txt"
 grep -q '^diff --git a/src/runtime/dolphin_runtime.cpp' "$MG_PATCH" || fail "MG patch missing dolphin_runtime.cpp"
 grep -q 'MODERNGEKKO_HAVE_ANDROID' "$MG_PATCH" || fail "MG patch missing Android guard"
+grep -q 'MAIN_CPU_THREAD, true' "$MG_PATCH" || fail "MG patch missing Android dual-core"
 
 # The Dolphin 0002 patch must add the Android platform and decouple OpenSL ES.
 grep -q '^diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp' "$DOLPHIN_PATCH" \

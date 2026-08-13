@@ -337,7 +337,10 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
   removal flow (only imported game data is removed), matching iOS behavior.
 - **OpenGL ES is the default** (Adreno 710 and similar cannot link Dolphin
   ubershaders on either backend). **••• → Renderer** still switches
-  Vulkan / OpenGL ES for the next launch.
+  Vulkan / OpenGL ES for the next launch. Dual-core is on (CPU and GPU
+  on separate threads). Super Mario Sunshine uses Dolphin’s GMS.ini EFB
+  rules: CPU EFB reads, EFB copies to RAM, arbitrary-mip graffiti, no
+  GLES fast-depth (that flickers textures).
 - **60 FPS experiment**: the `enable_gmse01_60fps` runtime flag exists on all
   platforms; the Android menu does not expose it yet.
 

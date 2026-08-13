@@ -527,13 +527,14 @@ void RuntimeHost::EnableDolphinLogs() {
 void RuntimeHost::ApplyPendingSettings() {
   Config::SetCurrent(Config::GFX_EFB_SCALE, pending_scale_);
   Config::SetCurrent(Config::GFX_MAX_EFB_SCALE, 12);
-  // Adreno 710 cannot link Dolphin ubershaders and aborts if several
-  // compiler threads hit the Qualcomm shader compiler at once.
+  // Adreno cannot link Dolphin ubershaders. Keep specialized + one
+  // compiler thread. Dual-core (CPU vs GPU threads) is safe and is what
+  // official Dolphin Android uses — single-core was a crash workaround
+  // that left the game at a crawl.
   Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
                   ShaderCompilationMode::Synchronous);
   Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
                      ShaderCompilationMode::Synchronous);
-  // Adreno OGL aborts during "compile shaders before starting".
   Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
   Config::SetCurrent(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
   Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
@@ -542,13 +543,44 @@ void RuntimeHost::ApplyPendingSettings() {
   Config::SetCurrent(Config::GFX_SHADER_COMPILER_THREADS, 1);
   Config::SetBase(Config::GFX_BACKEND_MULTITHREADING, false);
   Config::SetCurrent(Config::GFX_BACKEND_MULTITHREADING, false);
-  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
-  Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
   Config::SetBase(Config::GFX_PREFER_GLES, true);
   Config::SetCurrent(Config::GFX_PREFER_GLES, true);
-  Config::SetBase(Config::MAIN_CPU_THREAD, false);
-  Config::SetCurrent(Config::MAIN_CPU_THREAD, false);
-  SunPadNativeLog("graphics: specialized, no precompile, 1 thread, GLES");
+  Config::SetBase(Config::MAIN_CPU_THREAD, true);
+  Config::SetCurrent(Config::MAIN_CPU_THREAD, true);
+  Config::SetBase(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
+  Config::SetCurrent(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
+  Config::SetBase(Config::MAIN_FAST_DISC_SPEED, true);
+  Config::SetCurrent(Config::MAIN_FAST_DISC_SPEED, true);
+
+  // Super Mario Sunshine (Data/Sys/GameSettings/GMS.ini): CPU must read
+  // the EFB and copies must land in RAM, or goop / water / FLUDD break.
+  // GPU texture decode fights arbitrary-mip graffiti. Fast depth flickers
+  // on GLES. Scaled EFB copies smear the goo. Immediate XFB + skip
+  // duplicate frames cut latency without changing the image.
+  Config::SetBase(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
+  Config::SetCurrent(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
+  Config::SetBase(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
+  Config::SetCurrent(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
+  Config::SetBase(Config::GFX_HACK_DEFER_EFB_COPIES, true);
+  Config::SetCurrent(Config::GFX_HACK_DEFER_EFB_COPIES, true);
+  Config::SetBase(Config::GFX_HACK_MISSING_COLOR_VALUE, 0u);
+  Config::SetCurrent(Config::GFX_HACK_MISSING_COLOR_VALUE, 0u);
+  Config::SetBase(Config::GFX_PERF_QUERIES_ENABLE, true);
+  Config::SetCurrent(Config::GFX_PERF_QUERIES_ENABLE, true);
+  Config::SetBase(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
+  Config::SetCurrent(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
+  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
+  Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
+  Config::SetBase(Config::GFX_HACK_COPY_EFB_SCALED, false);
+  Config::SetCurrent(Config::GFX_HACK_COPY_EFB_SCALED, false);
+  Config::SetBase(Config::GFX_FAST_DEPTH_CALC, false);
+  Config::SetCurrent(Config::GFX_FAST_DEPTH_CALC, false);
+  Config::SetBase(Config::GFX_HACK_IMMEDIATE_XFB, true);
+  Config::SetCurrent(Config::GFX_HACK_IMMEDIATE_XFB, true);
+  Config::SetBase(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
+  Config::SetCurrent(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
+  SunPadNativeLog(
+      "graphics: dual-core, specialized GLES, SMS EFB-to-RAM, no fast-depth");
   ApplyAspectRatioMode(pending_aspect_);
 }
 

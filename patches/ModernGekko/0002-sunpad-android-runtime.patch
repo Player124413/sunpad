@@ -160,7 +160,7 @@ index 1ddc25c..1894bd7 100644
  #ifdef MODERNGEKKO_HAVE_IOS
    ModernGekkoSetIOSRenderSurface(impl->config.render_surface);
  #endif
-@@ -341,29 +360,49 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -341,29 +360,61 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
                    ShaderCompilationMode::AsynchronousUberShaders);
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
@@ -175,18 +175,30 @@ index 1ddc25c..1894bd7 100644
    Config::SetBase(Config::MAIN_AUDIO_BUFFER_SIZE, 120);
    Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, true);
 +#ifdef MODERNGEKKO_HAVE_ANDROID
-+  // Adreno cannot link Dolphin ubershaders (empty "Failed to link shaders"
-+  // log, then SIGABRT). Parallel precompile (-1 threads) also aborts the
-+  // Qualcomm compiler. Specialized shaders, one compiler thread, GLES.
++  // Adreno cannot link ubershaders. Dual-core (CPU vs GPU) is the
++  // official Dolphin Android default and is what makes the game playable.
 +  Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
 +                  ShaderCompilationMode::Synchronous);
 +  Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
 +  Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
 +  Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, 1);
 +  Config::SetBase(Config::GFX_BACKEND_MULTITHREADING, false);
-+  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
 +  Config::SetBase(Config::GFX_PREFER_GLES, true);
-+  Config::SetBase(Config::MAIN_CPU_THREAD, false);
++  Config::SetBase(Config::MAIN_CPU_THREAD, true);
++  Config::SetBase(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
++  Config::SetBase(Config::MAIN_FAST_DISC_SPEED, true);
++  // GMS.ini: Sunshine needs CPU EFB reads and EFB copies in RAM.
++  Config::SetBase(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
++  Config::SetBase(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
++  Config::SetBase(Config::GFX_HACK_DEFER_EFB_COPIES, true);
++  Config::SetBase(Config::GFX_HACK_MISSING_COLOR_VALUE, 0u);
++  Config::SetBase(Config::GFX_PERF_QUERIES_ENABLE, true);
++  Config::SetBase(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
++  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
++  Config::SetBase(Config::GFX_HACK_COPY_EFB_SCALED, false);
++  Config::SetBase(Config::GFX_FAST_DEPTH_CALC, false);
++  Config::SetBase(Config::GFX_HACK_IMMEDIATE_XFB, true);
++  Config::SetBase(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
 +#endif
  #endif
    const std::vector<std::string> audio_backends =
