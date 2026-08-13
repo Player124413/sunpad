@@ -34,6 +34,7 @@
 #ifdef ANDROID
 namespace File {
 void SetSysDirectory(const std::string& path);
+const std::string& GetSysDirectory();
 }
 #endif
 
@@ -114,6 +115,8 @@ void PrepareAndroidUserTree(const fs::path& user_directory) {
   if (!sys_set) {
 #ifdef ANDROID
     File::SetSysDirectory((user_directory / "Sys").string());
+    SunPadNativeLog(
+        ("GetSysDirectory() => " + File::GetSysDirectory()).c_str());
 #endif
     sys_set = true;
     SunPadNativeLog(
@@ -299,7 +302,10 @@ void RuntimeHost::RunGame(const fs::path& game_root,
     auto result = created.runtime->Run();
     if (pipe_thread.joinable())
       pipe_thread.join();
-    std::fprintf(stderr, "[sunpad] Run() returned\n");
+    const std::string run_msg = result.error
+        ? ("Run() returned error: " + result.error->message)
+        : "Run() returned (emulation stopped)";
+    SunPadNativeLog(run_msg.c_str());
     {
       std::scoped_lock lock(runtime_mutex_);
       runtime_ = nullptr;

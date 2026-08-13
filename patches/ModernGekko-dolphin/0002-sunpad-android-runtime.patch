@@ -545,3 +545,37 @@ diff --git a/CMakeLists.txt b/CMakeLists.txt
 +  endif()
  
    check_and_add_flag(VISIBILITY_INLINES_HIDDEN -fvisibility-inlines-hidden)
+
+diff --git a/Source/Core/Common/FileUtil.cpp b/Source/Core/Common/FileUtil.cpp
+--- a/Source/Core/Common/FileUtil.cpp
++++ b/Source/Core/Common/FileUtil.cpp
+@@ -775,12 +775,12 @@ static std::string CreateSysDirectoryPath()
+ #endif
+ 
+ #if defined(__APPLE__)
+   const std::string sys_directory = GetBundleDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
+-#elif defined(_WIN32) || defined(LINUX_LOCAL_DEV)
+-  const std::string sys_directory = GetExeDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
+ #elif defined ANDROID
+   const std::string sys_directory = s_android_sys_directory + DIR_SEP;
+   ASSERT_MSG(COMMON, !s_android_sys_directory.empty(), "Sys directory has not been set");
++#elif defined(_WIN32) || defined(LINUX_LOCAL_DEV)
++  const std::string sys_directory = GetExeDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
+ #else
+   const std::string sys_directory = SYSDATA_DIR DIR_SEP;
+ #endif
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -589,6 +589,8 @@ endif()
+ if(UNIX)
+   message(STATUS "Using named pipes as controller inputs")
+   add_definitions(-DUSE_PIPES=1)
+-  message(STATUS "Watching game memory for changes")
+-  add_definitions(-DUSE_MEMORYWATCHER=1)
++  if(NOT ANDROID)
++    message(STATUS "Watching game memory for changes")
++    add_definitions(-DUSE_MEMORYWATCHER=1)
++  endif()
+ endif()
+

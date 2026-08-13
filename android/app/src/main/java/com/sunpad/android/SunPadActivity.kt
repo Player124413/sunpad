@@ -238,6 +238,18 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
                     showSetupDialog()
                 } else {
                     hideStatus()
+                    uiHandler.postDelayed({
+                        if (isFinishing || isDestroyed) return@postDelayed
+                        if (SunPadNative.isRunning()) {
+                            prefs.edit().putBoolean("bootInProgress", false).apply()
+                        } else if (started) {
+                            started = false
+                            prefs.edit().putBoolean("bootInProgress", false).apply()
+                            showStartError(
+                                "The game stopped right after start. " +
+                                    "Use ••• → Copy diagnostic log and send it.")
+                        }
+                    }, 2500)
                 }
             }
         }.start()
