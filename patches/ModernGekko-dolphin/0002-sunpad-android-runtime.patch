@@ -531,3 +531,17 @@ diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
  }
  
  // Set or get the running state
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -315,5 +315,8 @@ else()
+   # gcc uses some optimizations which might break stuff without this flag
+   check_and_add_flag(NO_STRICT_ALIASING -fno-strict-aliasing)
+-  check_and_add_flag(NO_EXCEPTIONS -fno-exceptions)
++  # libc++ still throws bad_function_call; Android workers must be able to catch it.
++  if(NOT ANDROID)
++    check_and_add_flag(NO_EXCEPTIONS -fno-exceptions)
++  endif()
+ 
+   check_and_add_flag(VISIBILITY_INLINES_HIDDEN -fvisibility-inlines-hidden)
