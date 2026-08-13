@@ -211,9 +211,10 @@ module generation) — the build log will say precisely what is missing.
   - hands `RuntimeConfig.render_surface` to `ModernGekkoSetAndroidRenderSurface`;
   - prefers `BACKEND_OPENSLES` for audio on Android;
   - applies the mobile hardening the iOS port uses: software vertex loader
-    (no executable-code generation), exclusive ubershaders on Android
-    (so specialized pipelines are not swapped in after the loading
-    screen), and the larger audio buffer / fill-gaps settings.
+    (no executable-code generation), **specialized** shaders with a single
+    compiler thread (Adreno cannot link Dolphin ubershaders), GLES preferred,
+    and the larger audio buffer / fill-gaps settings. Default renderer is
+    OpenGL ES.
 
 ### Vendored Dolphin (`patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch`)
 
@@ -332,9 +333,9 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
   `.github/workflows/android-build.yml` to build APKs from Actions.
 - **Saves**: Dolphin save files under the user directory are preserved by the
   removal flow (only imported game data is removed), matching iOS behavior.
-- **OpenGL ES fallback**: **••• → Renderer** switches Vulkan / OpenGL ES
-  for the next launch. After an unclean boot the next start prefers OGL
-  automatically.
+- **OpenGL ES is the default** (Adreno 710 and similar cannot link Dolphin
+  ubershaders on either backend). **••• → Renderer** still switches
+  Vulkan / OpenGL ES for the next launch.
 - **60 FPS experiment**: the `enable_gmse01_60fps` runtime flag exists on all
   platforms; the Android menu does not expose it yet.
 

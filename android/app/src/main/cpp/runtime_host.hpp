@@ -89,7 +89,7 @@ class RuntimeHost {
   int pipe_fd_ = -1;
   uint16_t last_buttons_ = 0;
   bool modern_cstick_ = false;
-  std::string preferred_backend_{"Vulkan"};
+  std::string preferred_backend_{"OGL"};
   int pending_scale_ = 1;
   AspectRatioMode pending_aspect_ = AspectRatioMode::Original;
   ANativeWindow* current_surface_ = nullptr;

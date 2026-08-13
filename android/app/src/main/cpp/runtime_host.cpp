@@ -401,13 +401,23 @@ void RuntimeHost::SetPreferredBackend(std::string backend) {
 void RuntimeHost::ApplyPendingSettings() {
   Config::SetCurrent(Config::GFX_EFB_SCALE, pending_scale_);
   Config::SetCurrent(Config::GFX_MAX_EFB_SCALE, 12);
-  // Keep exclusive ubershaders even if Create() used the desktop default.
-  // Specialized-shader swap after the loading screen is a common Android
-  // Vulkan abort.
+  // Adreno 710 cannot link Dolphin ubershaders and aborts if several
+  // compiler threads hit the Qualcomm shader compiler at once.
   Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
-                  ShaderCompilationMode::SynchronousUberShaders);
+                  ShaderCompilationMode::Synchronous);
   Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
-                     ShaderCompilationMode::SynchronousUberShaders);
+                     ShaderCompilationMode::Synchronous);
+  Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
+  Config::SetCurrent(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
+  Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, 1);
+  Config::SetCurrent(Config::GFX_SHADER_COMPILER_THREADS, 1);
+  Config::SetBase(Config::GFX_BACKEND_MULTITHREADING, false);
+  Config::SetCurrent(Config::GFX_BACKEND_MULTITHREADING, false);
+  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
+  Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
+  Config::SetBase(Config::GFX_PREFER_GLES, true);
+  Config::SetCurrent(Config::GFX_PREFER_GLES, true);
+  SunPadNativeLog("graphics: specialized shaders, 1 compiler thread, prefer GLES");
   ApplyAspectRatioMode(pending_aspect_);
 }
 

@@ -46,6 +46,8 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private var surfaceReady = false
     private var started = false
     private var startPending = false
+    private var lastSurfaceW = 0
+    private var lastSurfaceH = 0
     private var hudVisible = false
     private var lastHudUpdate = 0L
     private val uiHandler = Handler(Looper.getMainLooper())
@@ -119,7 +121,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             prefs.edit().putBoolean("preferOgl", true).putBoolean("bootInProgress", false).commit()
             DiagnosticLog.append(this, "Last session died during boot; preferring OpenGL ES")
         }
-        val backend = if (prefs.getBoolean("preferOgl", false)) "OGL" else "Vulkan"
+        val backend = if (prefs.getBoolean("preferOgl", true)) "OGL" else "Vulkan"
         SunPadNative.setPreferredBackend(backend)
         DiagnosticLog.append(this, "SunPad activity created. native=${SunPadNative.available} backend=$backend ${SunPadNative.loadError ?: ""}")
         showPreviousCrashIfAny()
@@ -166,6 +168,15 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+        // The nav bar / cutout toggles width by ~100–130 px (2522↔2395).
+        // Rebuilding the swapchain on every oscillation aborts Adreno.
+        if (started && lastSurfaceW > 0 && lastSurfaceH == h &&
+            kotlin.math.abs(w - lastSurfaceW) < 160) {
+            DiagnosticLog.append(this, "surfaceChanged ${w}x${h} ignored (nav-bar jitter)")
+            return
+        }
+        lastSurfaceW = w
+        lastSurfaceH = h
         DiagnosticLog.append(this, "surfaceChanged ${w}x${h} format=$format")
         SunPadNative.setSurface(holder.surface)
     }
@@ -510,10 +521,10 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         actions.add { pickModule() }
 
         items.add(
-            if (prefs.getBoolean("preferOgl", false)) "Renderer: OpenGL ES"
+            if (prefs.getBoolean("preferOgl", true)) "Renderer: OpenGL ES"
             else "Renderer: Vulkan")
         actions.add {
-            val ogl = !prefs.getBoolean("preferOgl", false)
+            val ogl = !prefs.getBoolean("preferOgl", true)
             prefs.edit().putBoolean("preferOgl", ogl).apply()
             SunPadNative.setPreferredBackend(if (ogl) "OGL" else "Vulkan")
             Toast.makeText(
