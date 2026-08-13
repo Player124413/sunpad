@@ -5,9 +5,11 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -18,6 +20,7 @@
 #include <mutex>
 #include <optional>
 
+#include "Common/Config/Config.h"
 #include "Core/Config/GraphicsSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
@@ -45,6 +48,7 @@ const std::string& GetSysDirectory();
 // Implemented by the SunPad Dolphin patch in PlatformAndroid.cpp.
 extern "C" void ModernGekkoSetAndroidRenderSurface(void* surface);
 extern "C" void SunPadNativeLog(const char* msg);
+extern "C" void SunPadSetLogQuiet(bool quiet);
 
 namespace fs = std::filesystem;
 
@@ -101,6 +105,103 @@ void EarlyInit() {
 }  // namespace sunpad
 
 namespace {
+
+struct AndroidDeviceProfile {
+  int cores = 1;
+  long mem_mb = 0;
+  long max_mhz = 0;
+  bool weak = false;
+};
+
+// Cheap phones (Helio G, Unisoc, old Snapdragon 4xx/6xx, 3–4 GB RAM)
+// need VI skip / a slightly slower guest clock. Midrange like SD 6 Gen 1
+// (Adreno 710, ~2.2 GHz, 6+ GB) stays at full GameCube speed.
+AndroidDeviceProfile DetectAndroidDevice() {
+  AndroidDeviceProfile p;
+  const long n = ::sysconf(_SC_NPROCESSORS_CONF);
+  p.cores = n > 0 ? static_cast<int>(n) : 1;
+
+  if (FILE* f = std::fopen("/proc/meminfo", "r")) {
+    char line[160];
+    while (std::fgets(line, sizeof(line), f)) {
+      long kb = 0;
+      if (std::sscanf(line, "MemTotal: %ld kB", &kb) == 1 ||
+          std::sscanf(line, "MemTotal: %ld", &kb) == 1) {
+        p.mem_mb = kb / 1024;
+        break;
+      }
+    }
+    std::fclose(f);
+  }
+
+  for (int i = 0; i < p.cores && i < 8; ++i) {
+    char path[96];
+    std::snprintf(path, sizeof(path),
+                  "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+    if (FILE* f = std::fopen(path, "r")) {
+      long khz = 0;
+      if (std::fscanf(f, "%ld", &khz) == 1 && khz / 1000 > p.max_mhz)
+        p.max_mhz = khz / 1000;
+      std::fclose(f);
+    }
+  }
+
+  p.weak = (p.mem_mb > 0 && p.mem_mb < 3500) || p.cores <= 4 ||
+           (p.max_mhz > 0 && p.max_mhz < 2050);
+  return p;
+}
+
+const AndroidDeviceProfile& CachedDevice() {
+  static const AndroidDeviceProfile p = DetectAndroidDevice();
+  return p;
+}
+
+void BoostHostThreads() {
+  // Best-effort: Android may reject a negative nice. Failure is ignored.
+  ::setpriority(PRIO_PROCESS, 0, -8);
+}
+
+void FitPresentBuffer(ANativeWindow* surface) {
+  if (surface == nullptr)
+    return;
+  const auto& dev = CachedDevice();
+  if (!dev.weak) {
+    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
+    return;
+  }
+  const int nw = ANativeWindow_getWidth(surface);
+  const int nh = ANativeWindow_getHeight(surface);
+  if (nw <= 1 || nh <= 1) {
+    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
+    return;
+  }
+  // Weak GPUs spend a lot of time upscaling 640x528 to a 2400px panel.
+  // Present at 1280 (or 960 on very small SoCs); the compositor scales.
+  const int cap =
+      (dev.mem_mb > 0 && dev.mem_mb < 3000) ||
+              (dev.max_mhz > 0 && dev.max_mhz < 1800) ?
+          960 :
+          1280;
+  const int long_side = std::max(nw, nh);
+  if (long_side <= cap) {
+    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
+    return;
+  }
+  const float scale = static_cast<float>(cap) / static_cast<float>(long_side);
+  int w = std::max(2, static_cast<int>(nw * scale)) & ~1;
+  int h = std::max(2, static_cast<int>(nh * scale)) & ~1;
+  ANativeWindow_setBuffersGeometry(surface, w, h, WINDOW_FORMAT_RGBA_8888);
+  char buf[96];
+  std::snprintf(buf, sizeof(buf), "weak GPU present %dx%d (panel %dx%d)", w, h,
+                nw, nh);
+  SunPadNativeLog(buf);
+}
+
+template <typename T>
+void SetCfg(const Config::Info<T>& info, const T& value) {
+  Config::SetBase(info, value);
+  Config::SetCurrent(info, value);
+}
 
 void PrepareAndroidUserTree(const fs::path& user_directory) {
   sunpad::EarlyInit();
@@ -281,6 +382,7 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       on_created(error);
   };
   try {
+    BoostHostThreads();
     if (current_surface_ == nullptr) {
       error_message = "The screen was lost before the game could start.";
       starting_.store(false);
@@ -448,7 +550,7 @@ void RuntimeHost::SetSurface(ANativeWindow* surface) {
   // after import".
   if (surface != nullptr) {
     current_surface_ = surface;
-    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
+    FitPresentBuffer(surface);
   }
   ModernGekkoSetAndroidRenderSurface(surface != nullptr ? surface
                                                         : current_surface_);
@@ -504,12 +606,12 @@ void RuntimeHost::EnableDolphinLogs() {
     return;
   }
   using LT = Common::Log::LogType;
-  const LT types[] = {LT::BOOT,     LT::VIDEO,    LT::CORE,    LT::POWERPC,
-                      LT::COMMON,   LT::AUDIO,    LT::CONSOLE, LT::HOST_GPU,
-                      LT::OSHLE,    LT::MEMMAP,   LT::VIDEOINTERFACE};
+  // POWERPC / HOST_GPU / MEMMAP spam a file write every guest burst and
+  // murder weak 64-bit SoCs. Keep boot + fatal video/core only.
+  const LT types[] = {LT::BOOT, LT::VIDEO, LT::CORE, LT::CONSOLE};
   for (const LT type : types)
     mgr->SetEnable(type, true);
-  mgr->SetConfigLogLevel(Common::Log::LogLevel::LNOTICE);
+  mgr->SetConfigLogLevel(Common::Log::LogLevel::LWARNING);
 
   class SunPadLogListener final : public Common::Log::LogListener {
    public:
@@ -521,66 +623,100 @@ void RuntimeHost::EnableDolphinLogs() {
                         std::make_unique<SunPadLogListener>());
   mgr->EnableListener(Common::Log::LogListener::LOG_WINDOW_LISTENER, true);
   mgr->EnableListener(Common::Log::LogListener::CONSOLE_LISTENER, true);
-  SunPadNativeLog("dolphin logs: BOOT/VIDEO/CORE/POWERPC → diagnostic log");
+  SunPadNativeLog("dolphin logs: BOOT/VIDEO/CORE (quiet after boot)");
 }
 
 void RuntimeHost::ApplyPendingSettings() {
-  Config::SetCurrent(Config::GFX_EFB_SCALE, pending_scale_);
-  Config::SetCurrent(Config::GFX_MAX_EFB_SCALE, 12);
+  const auto& dev = CachedDevice();
+  SetCfg(Config::GFX_EFB_SCALE, pending_scale_);
+  SetCfg(Config::GFX_MAX_EFB_SCALE, 12);
   // Adreno cannot link Dolphin ubershaders. Keep specialized + one
   // compiler thread. Dual-core (CPU vs GPU threads) is safe and is what
   // official Dolphin Android uses — single-core was a crash workaround
   // that left the game at a crawl.
-  Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
-                  ShaderCompilationMode::Synchronous);
-  Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
-                     ShaderCompilationMode::Synchronous);
-  Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
-  Config::SetCurrent(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
-  Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
-  Config::SetCurrent(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
-  Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, 1);
-  Config::SetCurrent(Config::GFX_SHADER_COMPILER_THREADS, 1);
-  Config::SetBase(Config::GFX_BACKEND_MULTITHREADING, false);
-  Config::SetCurrent(Config::GFX_BACKEND_MULTITHREADING, false);
-  Config::SetBase(Config::GFX_PREFER_GLES, true);
-  Config::SetCurrent(Config::GFX_PREFER_GLES, true);
-  Config::SetBase(Config::MAIN_CPU_THREAD, true);
-  Config::SetCurrent(Config::MAIN_CPU_THREAD, true);
-  Config::SetBase(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
-  Config::SetCurrent(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
-  Config::SetBase(Config::MAIN_FAST_DISC_SPEED, true);
-  Config::SetCurrent(Config::MAIN_FAST_DISC_SPEED, true);
+  SetCfg(Config::GFX_SHADER_COMPILATION_MODE,
+         ShaderCompilationMode::Synchronous);
+  SetCfg(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
+  SetCfg(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
+  SetCfg(Config::GFX_SHADER_COMPILER_THREADS, 1);
+  SetCfg(Config::GFX_BACKEND_MULTITHREADING, false);
+  SetCfg(Config::GFX_PREFER_GLES, true);
+  SetCfg(Config::GFX_SHADER_CACHE, true);
+  SetCfg(Config::MAIN_CPU_THREAD, true);
+  SetCfg(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
+  SetCfg(Config::MAIN_FAST_DISC_SPEED, true);
+  SetCfg(Config::MAIN_SKIP_IPL, true);
+  SetCfg(Config::MAIN_DSP_HLE, true);
+  SetCfg(Config::MAIN_DSP_THREAD, dev.cores > 4);
+  SetCfg(Config::MAIN_SYNC_GPU, false);
+  SetCfg(Config::MAIN_MMU, false);
+  SetCfg(Config::MAIN_ACCURATE_CPU_CACHE, false);
+  SetCfg(Config::MAIN_LOAD_GAME_INTO_MEMORY, false);
+  SetCfg(Config::MAIN_PRECISION_FRAME_TIMING, false);
+  SetCfg(Config::MAIN_RUSH_FRAME_PRESENTATION, true);
+  SetCfg(Config::MAIN_AUDIO_FILL_GAPS, true);
+  SetCfg(Config::MAIN_AUDIO_BUFFER_SIZE, dev.weak ? 160 : 120);
+  SetCfg(Config::GFX_VSYNC, false);
+  SetCfg(Config::GFX_MSAA, 1u);
+  SetCfg(Config::GFX_SSAA, false);
+  SetCfg(Config::GFX_ENABLE_PIXEL_LIGHTING, false);
+  SetCfg(Config::GFX_CPU_CULL, false);
+  SetCfg(Config::GFX_HIRES_TEXTURES, false);
+  SetCfg(Config::GFX_CACHE_HIRES_TEXTURES, false);
+  SetCfg(Config::GFX_DUMP_TEXTURES, false);
+  SetCfg(Config::GFX_ENABLE_WIREFRAME, false);
+  SetCfg(Config::GFX_DISABLE_FOG, false);
+  SetCfg(Config::GFX_ENHANCE_FORCE_TEXTURE_FILTERING,
+         TextureFilteringMode::Default);
+  SetCfg(Config::GFX_ENHANCE_MAX_ANISOTROPY, AnisotropicFilteringMode::Force1x);
+  SetCfg(Config::GFX_ENHANCE_DISABLE_COPY_FILTER, true);
+  SetCfg(Config::GFX_HACK_FAST_TEXTURE_SAMPLING, true);
+  SetCfg(Config::GFX_HACK_EFB_DEFER_INVALIDATION, true);
+  SetCfg(Config::GFX_HACK_EARLY_XFB_OUTPUT, true);
+  SetCfg(Config::GFX_HACK_VERTEX_ROUNDING, false);
+  SetCfg(Config::GFX_HACK_VI_SKIP, true);
+  SetCfg(Config::GFX_SAFE_TEXTURE_CACHE_COLOR_SAMPLES, 128);
 
   // Super Mario Sunshine (Data/Sys/GameSettings/GMS.ini): CPU must read
   // the EFB and copies must land in RAM, or goop / water / FLUDD break.
   // GPU texture decode fights arbitrary-mip graffiti. Fast depth flickers
   // on GLES. Scaled EFB copies smear the goo. Immediate XFB + skip
   // duplicate frames cut latency without changing the image.
-  Config::SetBase(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
-  Config::SetCurrent(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
-  Config::SetBase(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
-  Config::SetCurrent(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
-  Config::SetBase(Config::GFX_HACK_DEFER_EFB_COPIES, true);
-  Config::SetCurrent(Config::GFX_HACK_DEFER_EFB_COPIES, true);
-  Config::SetBase(Config::GFX_HACK_MISSING_COLOR_VALUE, 0u);
-  Config::SetCurrent(Config::GFX_HACK_MISSING_COLOR_VALUE, 0u);
-  Config::SetBase(Config::GFX_PERF_QUERIES_ENABLE, true);
-  Config::SetCurrent(Config::GFX_PERF_QUERIES_ENABLE, true);
-  Config::SetBase(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
-  Config::SetCurrent(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
-  Config::SetBase(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
-  Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
-  Config::SetBase(Config::GFX_HACK_COPY_EFB_SCALED, false);
-  Config::SetCurrent(Config::GFX_HACK_COPY_EFB_SCALED, false);
-  Config::SetBase(Config::GFX_FAST_DEPTH_CALC, false);
-  Config::SetCurrent(Config::GFX_FAST_DEPTH_CALC, false);
-  Config::SetBase(Config::GFX_HACK_IMMEDIATE_XFB, true);
-  Config::SetCurrent(Config::GFX_HACK_IMMEDIATE_XFB, true);
-  Config::SetBase(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
-  Config::SetCurrent(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
-  SunPadNativeLog(
-      "graphics: dual-core, specialized GLES, SMS EFB-to-RAM, no fast-depth");
+  SetCfg(Config::GFX_HACK_EFB_ACCESS_ENABLE, true);
+  SetCfg(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
+  SetCfg(Config::GFX_HACK_DEFER_EFB_COPIES, true);
+  SetCfg(Config::GFX_HACK_MISSING_COLOR_VALUE, 0u);
+  SetCfg(Config::GFX_PERF_QUERIES_ENABLE, true);
+  SetCfg(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
+  SetCfg(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
+  SetCfg(Config::GFX_HACK_COPY_EFB_SCALED, false);
+  SetCfg(Config::GFX_FAST_DEPTH_CALC, false);
+  SetCfg(Config::GFX_HACK_IMMEDIATE_XFB, true);
+  SetCfg(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
+
+  // Weak 64-bit SoCs cannot hold 100% guest speed. 90% GC clock keeps
+  // Delfino playable; VI Skip (always on) already drops late frames.
+  if (dev.weak) {
+    SetCfg(Config::MAIN_OVERCLOCK_ENABLE, true);
+    SetCfg(Config::MAIN_OVERCLOCK, 0.90f);
+  } else {
+    SetCfg(Config::MAIN_OVERCLOCK_ENABLE, false);
+    SetCfg(Config::MAIN_OVERCLOCK, 1.0f);
+  }
+
+  char buf[192];
+  std::snprintf(buf, sizeof(buf),
+                "graphics: dual-core GLES SMS EFB-to-RAM vi-skip "
+                "cores=%d ram=%ldMB max=%ldMHz weak=%d",
+                dev.cores, dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0);
+  SunPadNativeLog(buf);
+
+  // After boot, stop appending every Dolphin line to the crash log.
+  std::thread([] {
+    std::this_thread::sleep_for(std::chrono::seconds(8));
+    SunPadSetLogQuiet(true);
+  }).detach();
+
   ApplyAspectRatioMode(pending_aspect_);
 }
 

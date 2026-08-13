@@ -160,7 +160,7 @@ index 1ddc25c..1894bd7 100644
  #ifdef MODERNGEKKO_HAVE_IOS
    ModernGekkoSetIOSRenderSurface(impl->config.render_surface);
  #endif
-@@ -341,29 +360,61 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -341,29 +360,80 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
                    ShaderCompilationMode::AsynchronousUberShaders);
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
@@ -199,6 +199,25 @@ index 1ddc25c..1894bd7 100644
 +  Config::SetBase(Config::GFX_FAST_DEPTH_CALC, false);
 +  Config::SetBase(Config::GFX_HACK_IMMEDIATE_XFB, true);
 +  Config::SetBase(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
++  Config::SetBase(Config::GFX_VSYNC, false);
++  Config::SetBase(Config::GFX_MSAA, 1u);
++  Config::SetBase(Config::GFX_SSAA, false);
++  Config::SetBase(Config::GFX_ENABLE_PIXEL_LIGHTING, false);
++  Config::SetBase(Config::GFX_SHADER_CACHE, true);
++  Config::SetBase(Config::GFX_HACK_VI_SKIP, true);
++  Config::SetBase(Config::GFX_HACK_FAST_TEXTURE_SAMPLING, true);
++  Config::SetBase(Config::GFX_HACK_EFB_DEFER_INVALIDATION, true);
++  Config::SetBase(Config::GFX_HACK_EARLY_XFB_OUTPUT, true);
++  Config::SetBase(Config::GFX_ENHANCE_DISABLE_COPY_FILTER, true);
++  Config::SetBase(Config::GFX_ENHANCE_FORCE_TEXTURE_FILTERING,
++                  TextureFilteringMode::Default);
++  Config::SetBase(Config::GFX_ENHANCE_MAX_ANISOTROPY,
++                  AnisotropicFilteringMode::Force1x);
++  Config::SetBase(Config::MAIN_DSP_HLE, true);
++  Config::SetBase(Config::MAIN_SYNC_GPU, false);
++  Config::SetBase(Config::MAIN_RUSH_FRAME_PRESENTATION, true);
++  Config::SetBase(Config::MAIN_LOAD_GAME_INTO_MEMORY, false);
++  Config::SetBase(Config::MAIN_PRECISION_FRAME_TIMING, false);
 +#endif
  #endif
    const std::vector<std::string> audio_backends =

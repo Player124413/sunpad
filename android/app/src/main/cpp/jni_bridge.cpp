@@ -12,10 +12,12 @@
 #include <android/native_window_jni.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <dlfcn.h>
 #include <fcntl.h>
 #include <filesystem>
@@ -53,6 +55,13 @@ static jmethodID g_audio_sample_rate = nullptr;
 static jmethodID g_audio_frames = nullptr;
 
 static char g_crash_log_path[512];
+static std::mutex g_log_mu;
+static int g_log_fd = -1;
+static std::atomic<bool> g_log_quiet{false};
+
+extern "C" void SunPadSetLogQuiet(bool quiet) {
+  g_log_quiet.store(quiet);
+}
 
 extern "C" void SunPadNativeLog(const char* msg) {
   if (msg == nullptr)
@@ -62,6 +71,13 @@ extern "C" void SunPadNativeLog(const char* msg) {
   while (len > 0 && (msg[len - 1] == '\n' || msg[len - 1] == '\r'))
     --len;
   if (len == 0)
+    return;
+
+  __android_log_print(ANDROID_LOG_INFO, "SunPad", "%.*s", static_cast<int>(len),
+                      msg);
+  // After boot, skip the crash-log file: open/write/close per line used to
+  // stall weak 64-bit phones more than the emulator itself.
+  if (g_log_quiet.load() || g_crash_log_path[0] == '\0')
     return;
 
   char stamped[1600];
@@ -76,14 +92,13 @@ extern "C" void SunPadNativeLog(const char* msg) {
                               static_cast<int>(len), msg);
   if (n <= 0)
     return;
-  __android_log_print(ANDROID_LOG_INFO, "SunPad", "%.*s", static_cast<int>(len), msg);
-  if (g_crash_log_path[0] == '\0')
-    return;
-  const int fd = ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
-  if (fd < 0)
-    return;
-  ::write(fd, stamped, static_cast<std::size_t>(n));
-  ::close(fd);
+  std::lock_guard<std::mutex> lock(g_log_mu);
+  if (g_log_fd < 0) {
+    g_log_fd = ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (g_log_fd < 0)
+      return;
+  }
+  ::write(g_log_fd, stamped, static_cast<std::size_t>(n));
 }
 
 struct UnwindState {
@@ -473,13 +488,26 @@ extern "C" JNIEXPORT void JNICALL
 Java_com_sunpad_android_SunPadNative_nativeSetCrashLogPath(
     JNIEnv* env, jobject, jstring path) {
   if (!path) {
+    std::lock_guard<std::mutex> lock(g_log_mu);
+    if (g_log_fd >= 0) {
+      ::close(g_log_fd);
+      g_log_fd = -1;
+    }
     g_crash_log_path[0] = '\0';
     return;
   }
   const char* chars = env->GetStringUTFChars(path, nullptr);
   if (chars) {
-    std::snprintf(g_crash_log_path, sizeof(g_crash_log_path), "%s", chars);
+    {
+      std::lock_guard<std::mutex> lock(g_log_mu);
+      if (g_log_fd >= 0) {
+        ::close(g_log_fd);
+        g_log_fd = -1;
+      }
+      std::snprintf(g_crash_log_path, sizeof(g_crash_log_path), "%s", chars);
+    }
     env->ReleaseStringUTFChars(path, chars);
+    g_log_quiet.store(false);
     SunPadNativeLog("crash log path set");
   }
 }

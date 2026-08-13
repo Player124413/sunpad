@@ -5,9 +5,11 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.view.Choreographer
 import android.view.Gravity
 import android.view.SurfaceHolder
@@ -62,6 +64,12 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         importer = GameDataImporter(this)
         gamepad = GamepadReader(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            try {
+                window.setSustainedPerformanceMode(true)
+            } catch (_: Throwable) {
+            }
+        }
         setImmersive()
 
         rootView = FrameLayout(this)
@@ -226,6 +234,10 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         prefs.edit().putBoolean("bootInProgress", true).commit()
         showStatus("Starting game…")
         Thread {
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_DISPLAY)
+            } catch (_: Throwable) {
+            }
             val error = try {
                 SunPadNative.start(
                     importer.gameRoot.absolutePath,
