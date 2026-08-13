@@ -507,7 +507,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         val items = ArrayList<String>()
         val actions = ArrayList<() -> Unit>()
 
-        items.add("Render scale: ${prefs.getInt("scale", 1)}×")
+        items.add("Render scale: ${scaleLabel(prefs.getInt("scale", 1))}")
         actions.add { cycleRenderScale(); showMenu() }
 
         items.add("Aspect ratio")
@@ -612,8 +612,13 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         }
     }
 
+    private fun scaleLabel(scale: Int): String =
+        if (scale <= 0) "0.5×" else "${scale}×"
+
     private fun cycleRenderScale() {
-        val next = (prefs.getInt("scale", 1) % 4) + 1
+        // 0.5× → 1× → 2× → 3× → 4× → 0.5×
+        val cur = prefs.getInt("scale", 1).coerceIn(0, 4)
+        val next = if (cur >= 4) 0 else cur + 1
         prefs.edit().putInt("scale", next).apply()
         SunPadNative.setRenderScale(next)
     }

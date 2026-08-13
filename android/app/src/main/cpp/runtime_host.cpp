@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
@@ -271,6 +272,9 @@ const AndroidDeviceProfile& CachedDevice() {
   return p;
 }
 
+// 0 = 0.5× present (EFB stays native 1× so SMS goo/EFB stay correct).
+std::atomic<int> g_ui_scale{1};
+
 void BoostHostThreads() {
   // Best-effort: Android may reject a negative nice. Failure is ignored.
   ::setpriority(PRIO_PROCESS, 0, -8);
@@ -286,19 +290,22 @@ void FitPresentBuffer(ANativeWindow* surface) {
     ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
     return;
   }
+  // 0.5×: present at ~640 so a 120 Hz 2.6K panel is not fill-rate bound.
   // Honor X9b is 2652x1220 @ 120 Hz. Blitting 1x EFB (640x528) onto that
-  // every frame costs more than the GameCube scene. 1280 is plenty.
+  // every frame costs more than the GameCube scene. 1280 is plenty at 1×.
   const int long_side = std::max(nw, nh);
-  const bool need_cap = dev.gpu_weak || long_side > 1600;
+  const int ui = g_ui_scale.load();
+  const bool half = ui == 0;
+  const bool need_cap = half || dev.gpu_weak || long_side > 1600;
   if (!need_cap) {
     ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
     return;
   }
-  const int cap =
-      (dev.weak && ((dev.mem_mb > 0 && dev.mem_mb < 3000) ||
-                    (dev.max_mhz > 0 && dev.max_mhz < 1800))) ?
-          960 :
-          1280;
+  const int cap = half ? 640 :
+      ((dev.weak && ((dev.mem_mb > 0 && dev.mem_mb < 3000) ||
+                     (dev.max_mhz > 0 && dev.max_mhz < 1800))) ?
+           960 :
+           1280);
   if (long_side <= cap) {
     ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
     return;
@@ -698,13 +705,15 @@ void RuntimeHost::PublishInput(const InputState& input) {
 }
 
 void RuntimeHost::SetRenderScale(int scale) {
-  const int clamped = scale < 1 ? 1 : (scale > 4 ? 4 : scale);
+  // 0 = 0.5× present. Dolphin EFB scale cannot go below 1 (0 is "auto").
+  const int clamped = scale < 0 ? 0 : (scale > 4 ? 4 : scale);
   pending_scale_ = clamped;
+  g_ui_scale.store(clamped);
+  if (current_surface_ != nullptr)
+    FitPresentBuffer(current_surface_);
   if (!running_.load())
     return;
-  // Config::SetCurrent is mutex-protected; the video backend refreshes
-  // g_ActiveConfig on the next config callback.
-  Config::SetCurrent(Config::GFX_EFB_SCALE, clamped);
+  Config::SetCurrent(Config::GFX_EFB_SCALE, clamped < 1 ? 1 : clamped);
 }
 
 void RuntimeHost::SetAspectRatioMode(AspectRatioMode mode) {
@@ -756,7 +765,8 @@ void RuntimeHost::EnableDolphinLogs() {
 
 void RuntimeHost::ApplyPendingSettings() {
   const auto& dev = CachedDevice();
-  SetCfg(Config::GFX_EFB_SCALE, pending_scale_);
+  g_ui_scale.store(pending_scale_);
+  SetCfg(Config::GFX_EFB_SCALE, pending_scale_ < 1 ? 1 : pending_scale_);
   SetCfg(Config::GFX_MAX_EFB_SCALE, 12);
   // Adreno cannot link Dolphin ubershaders. Keep specialized + one
   // compiler thread. Dual-core (CPU vs GPU threads) is safe and is what
