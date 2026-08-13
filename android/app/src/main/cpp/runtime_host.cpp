@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -19,6 +20,11 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
+
+#ifdef ANDROID
+#include <sys/system_properties.h>
+#endif
 
 #include "Common/Config/Config.h"
 #include "Core/Config/GraphicsSettings.h"
@@ -110,12 +116,63 @@ struct AndroidDeviceProfile {
   int cores = 1;
   long mem_mb = 0;
   long max_mhz = 0;
+  int mt_model = 0;
+  bool mediatek = false;
+  bool mali = false;
   bool weak = false;
+  bool gpu_weak = false;
+  char tag[48] = "generic";
 };
+
+std::string ReadProp(const char* key) {
+#ifdef ANDROID
+  char val[PROP_VALUE_MAX] = {};
+  __system_property_get(key, val);
+  return val;
+#else
+  (void)key;
+  return {};
+#endif
+}
+
+std::string ReadFileHead(const char* path) {
+  FILE* f = std::fopen(path, "r");
+  if (!f)
+    return {};
+  char buf[192];
+  const size_t n = std::fread(buf, 1, sizeof(buf) - 1, f);
+  std::fclose(f);
+  buf[n] = '\0';
+  return buf;
+}
+
+void AppendLower(std::string& dst, const std::string& src) {
+  dst.push_back(' ');
+  for (unsigned char c : src)
+    dst.push_back(static_cast<char>(std::tolower(c)));
+}
+
+int ParseMtModel(const std::string& blob) {
+  for (size_t i = 0; i + 6 <= blob.size(); ++i) {
+    if (blob[i] == 'm' && blob[i + 1] == 't' && std::isdigit(blob[i + 2]) &&
+        std::isdigit(blob[i + 3]) && std::isdigit(blob[i + 4]) &&
+        std::isdigit(blob[i + 5])) {
+      return (blob[i + 2] - '0') * 1000 + (blob[i + 3] - '0') * 100 +
+             (blob[i + 4] - '0') * 10 + (blob[i + 5] - '0');
+    }
+  }
+  return 0;
+}
+
+bool Contains(const std::string& blob, const char* needle) {
+  return blob.find(needle) != std::string::npos;
+}
 
 // Cheap phones (Helio G, Unisoc, old Snapdragon 4xx/6xx, 3–4 GB RAM)
 // need VI skip / a slightly slower guest clock. Midrange like SD 6 Gen 1
 // (Adreno 710, ~2.2 GHz, 6+ GB) stays at full GameCube speed.
+// MediaTek is special: CPU clocks look fine, Mali is the bottleneck, and
+// Vulkan on Mali often black-screens. Helio / low Dimensity count as weak.
 AndroidDeviceProfile DetectAndroidDevice() {
   AndroidDeviceProfile p;
   const long n = ::sysconf(_SC_NPROCESSORS_CONF);
@@ -146,8 +203,51 @@ AndroidDeviceProfile DetectAndroidDevice() {
     }
   }
 
+  std::string blob;
+  AppendLower(blob, ReadProp("ro.hardware"));
+  AppendLower(blob, ReadProp("ro.board.platform"));
+  AppendLower(blob, ReadProp("ro.hardware.egl"));
+  AppendLower(blob, ReadProp("ro.soc.manufacturer"));
+  AppendLower(blob, ReadProp("ro.soc.model"));
+  AppendLower(blob, ReadProp("ro.product.board"));
+  AppendLower(blob, ReadFileHead("/proc/cpuinfo"));
+  AppendLower(blob, ReadFileHead("/sys/class/misc/mali0/device/gpuinfo"));
+  AppendLower(blob, ReadFileHead("/sys/class/misc/mali0/device/modalias"));
+
+  p.mediatek = Contains(blob, "mediatek") || Contains(blob, "dimensity") ||
+               Contains(blob, "helio") || ParseMtModel(blob) > 0;
+  p.mali = Contains(blob, "mali") || Contains(blob, "immortalis") ||
+           ::access("/sys/class/misc/mali0", F_OK) == 0 ||
+           ::access("/sys/module/mali_kbase", F_OK) == 0 ||
+           ::access("/dev/mali0", F_OK) == 0;
+  p.mt_model = ParseMtModel(blob);
+
+  const bool helio =
+      p.mt_model >= 6700 && p.mt_model < 6785;  // below Helio G90T
+  const bool low_dimensity = p.mt_model == 6833 || p.mt_model == 6835 ||
+                             p.mt_model == 6853 || p.mt_model == 6855;
+  const bool weak_mali_name =
+      Contains(blob, "mali-g31") || Contains(blob, "mali-g51") ||
+      Contains(blob, "mali-g52") || Contains(blob, "mali-g57") ||
+      Contains(blob, "mali-g68");
+
   p.weak = (p.mem_mb > 0 && p.mem_mb < 3500) || p.cores <= 4 ||
-           (p.max_mhz > 0 && p.max_mhz < 2050);
+           (p.max_mhz > 0 && p.max_mhz < 2050) || helio || low_dimensity ||
+           weak_mali_name;
+  // Any Mali / MediaTek below Dimensity 1200 class is fill-rate limited
+  // at a 2400px panel even when the CPU looks midrange on paper.
+  p.gpu_weak = p.weak || p.mali ||
+               (p.mediatek && (p.mt_model == 0 || p.mt_model < 6893));
+
+  if (p.mediatek && p.mt_model > 0)
+    std::snprintf(p.tag, sizeof(p.tag), "mtk-mt%d%s", p.mt_model,
+                  p.mali ? "-mali" : "");
+  else if (p.mali)
+    std::snprintf(p.tag, sizeof(p.tag), "mali");
+  else if (p.mediatek)
+    std::snprintf(p.tag, sizeof(p.tag), "mediatek");
+  else
+    std::snprintf(p.tag, sizeof(p.tag), "generic");
   return p;
 }
 
@@ -165,7 +265,7 @@ void FitPresentBuffer(ANativeWindow* surface) {
   if (surface == nullptr)
     return;
   const auto& dev = CachedDevice();
-  if (!dev.weak) {
+  if (!dev.gpu_weak) {
     ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
     return;
   }
@@ -411,10 +511,17 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       return moderngekko::Runtime::Create(std::move(config));
     };
 
+    const auto& dev = CachedDevice();
+    // Mali / MediaTek Vulkan is a common black screen. Always try GLES first
+    // on those chips; Snapdragon can still honour the user's Vulkan toggle.
+    const bool force_gles = dev.mali || dev.mediatek;
     const char* first =
-        preferred_backend_ == "OGL" ? "OGL" : "Vulkan";
-    const char* second = preferred_backend_ == "OGL" ? "Vulkan" : "OGL";
-    std::fprintf(stderr, "[sunpad] preferred backend=%s\n", first);
+        (force_gles || preferred_backend_ == "OGL") ? "OGL" : "Vulkan";
+    const char* second = first[0] == 'O' ? "Vulkan" : "OGL";
+    std::fprintf(stderr, "[sunpad] preferred backend=%s force_gles=%d soc=%s\n",
+                 first, force_gles ? 1 : 0, dev.tag);
+    if (force_gles)
+      SunPadNativeLog("MediaTek/Mali: forcing OpenGL ES");
     auto created = try_create(first);
     if (!created) {
       const std::string first_error = created.error ? created.error->message
@@ -655,7 +762,7 @@ void RuntimeHost::ApplyPendingSettings() {
   SetCfg(Config::MAIN_PRECISION_FRAME_TIMING, false);
   SetCfg(Config::MAIN_RUSH_FRAME_PRESENTATION, true);
   SetCfg(Config::MAIN_AUDIO_FILL_GAPS, true);
-  SetCfg(Config::MAIN_AUDIO_BUFFER_SIZE, dev.weak ? 160 : 120);
+  SetCfg(Config::MAIN_AUDIO_BUFFER_SIZE, (dev.weak || dev.gpu_weak) ? 160 : 120);
   SetCfg(Config::GFX_VSYNC, false);
   SetCfg(Config::GFX_MSAA, 1u);
   SetCfg(Config::GFX_SSAA, false);
@@ -704,11 +811,12 @@ void RuntimeHost::ApplyPendingSettings() {
     SetCfg(Config::MAIN_OVERCLOCK, 1.0f);
   }
 
-  char buf[192];
+  char buf[256];
   std::snprintf(buf, sizeof(buf),
                 "graphics: dual-core GLES SMS EFB-to-RAM vi-skip "
-                "cores=%d ram=%ldMB max=%ldMHz weak=%d",
-                dev.cores, dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0);
+                "soc=%s cores=%d ram=%ldMB max=%ldMHz weak=%d gpu_weak=%d",
+                dev.tag, dev.cores, dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0,
+                dev.gpu_weak ? 1 : 0);
   SunPadNativeLog(buf);
 
   // After boot, stop appending every Dolphin line to the crash log.

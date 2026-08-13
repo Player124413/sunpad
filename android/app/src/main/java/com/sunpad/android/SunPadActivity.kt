@@ -131,6 +131,13 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             prefs.edit().putBoolean("preferOgl", true).putBoolean("bootInProgress", false).commit()
             DiagnosticLog.append(this, "Last session died during boot; preferring OpenGL ES")
         }
+        // Mali (every MediaTek Helio/Dimensity) black-screens or crashes
+        // Dolphin Vulkan more often than Adreno. Pin GLES unless the user
+        // already survived a boot on this install.
+        if (looksLikeMaliOrMediatek() && !prefs.getBoolean("preferOgl", true)) {
+            prefs.edit().putBoolean("preferOgl", true).apply()
+            DiagnosticLog.append(this, "MediaTek/Mali GPU: forcing OpenGL ES")
+        }
         val backend = if (prefs.getBoolean("preferOgl", true)) "OGL" else "Vulkan"
         SunPadNative.setPreferredBackend(backend)
         DiagnosticLog.append(this, "SunPad activity created. native=${SunPadNative.available} backend=$backend ${SunPadNative.loadError ?: ""}")
@@ -802,6 +809,21 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
                         or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         or View.SYSTEM_UI_FLAG_LAYOUT_STABLE)
         }
+    }
+
+    private fun looksLikeMaliOrMediatek(): Boolean {
+        val parts = mutableListOf(
+            Build.HARDWARE, Build.BOARD, Build.MANUFACTURER,
+            Build.DEVICE, Build.PRODUCT, Build.MODEL,
+        )
+        if (Build.VERSION.SDK_INT >= 31) {
+            parts += Build.SOC_MANUFACTURER
+            parts += Build.SOC_MODEL
+        }
+        val blob = parts.joinToString(" ").lowercase()
+        return blob.contains("mediatek") || blob.contains("mali") ||
+            blob.contains("dimensity") || blob.contains("helio") ||
+            Regex("mt[0-9]{4}").containsMatchIn(blob)
     }
 
     private fun dp(value: Int): Int =
