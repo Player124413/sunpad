@@ -72,6 +72,17 @@ void EarlyInit() {
   Common::SetAbortOnPanicAlert(false);
   Common::RegisterMsgAlertHandler(&SunPadAlert);
   ::setenv("STATICRECOMP_NO_FALLBACK_JIT", "1", 1);
+#ifdef ANDROID
+  DolphinAnalytics::AndroidSetGetValFunc([](std::string key) -> std::string {
+    if (key == "DEVICE_MANUFACTURER")
+      return "SunPad";
+    if (key == "DEVICE_MODEL")
+      return "Android";
+    if (key == "DEVICE_OS")
+      return "8+";
+    return {};
+  });
+#endif
   std::set_terminate([] {
     SunPadNativeLog("std::terminate: uncaught C++ exception");
     try {
