@@ -85,6 +85,17 @@ void PrepareAndroidUserTree(const fs::path& user_directory) {
   fs::create_directories(user_directory / "Load", ec);
   fs::create_directories(user_directory / "Shaders", ec);
 
+  // Stale uber-shader cache from earlier APKs crashes the Adreno compiler
+  // on load. Wipe once when upgrading to specialized-on-demand.
+  const fs::path cache_dir = user_directory / "Cache";
+  const fs::path cache_marker = cache_dir / ".sunpad_shader_v2";
+  if (!fs::exists(cache_marker)) {
+    fs::remove_all(cache_dir, ec);
+    fs::create_directories(cache_dir, ec);
+    std::ofstream(cache_marker.string()) << "specialized-v2\n";
+    SunPadNativeLog("wiped stale shader cache");
+  }
+
   // Android FileUtil ASSERT-aborts the process if this is never set
   // ("Sys directory has not been set") — that is SIGABRT after shaders.
   static bool sys_set = false;
@@ -349,8 +360,10 @@ void RuntimeHost::SetSurface(ANativeWindow* surface) {
   // nullptr here, and the next Start then handed a null ANativeWindow to
   // Vulkan — which aborts the process and looks like "the game crashed
   // after import".
-  if (surface != nullptr)
+  if (surface != nullptr) {
     current_surface_ = surface;
+    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
+  }
   ModernGekkoSetAndroidRenderSurface(surface != nullptr ? surface
                                                         : current_surface_);
 }
@@ -407,6 +420,9 @@ void RuntimeHost::ApplyPendingSettings() {
                   ShaderCompilationMode::Synchronous);
   Config::SetCurrent(Config::GFX_SHADER_COMPILATION_MODE,
                      ShaderCompilationMode::Synchronous);
+  // Adreno OGL aborts during "compile shaders before starting".
+  Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
+  Config::SetCurrent(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, false);
   Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
   Config::SetCurrent(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
   Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, 1);
@@ -417,7 +433,7 @@ void RuntimeHost::ApplyPendingSettings() {
   Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
   Config::SetBase(Config::GFX_PREFER_GLES, true);
   Config::SetCurrent(Config::GFX_PREFER_GLES, true);
-  SunPadNativeLog("graphics: specialized shaders, 1 compiler thread, prefer GLES");
+  SunPadNativeLog("graphics: specialized, no precompile, 1 thread, GLES");
   ApplyAspectRatioMode(pending_aspect_);
 }
 

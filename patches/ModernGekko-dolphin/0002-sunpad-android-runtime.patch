@@ -262,7 +262,7 @@ new file mode 100644
 index 0000000..54087fb
 --- /dev/null
 +++ b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,83 @@
 +// Copyright 2026 SunPad project
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
@@ -278,6 +278,8 @@ index 0000000..54087fb
 +#include "Core/Core.h"
 +#include "Core/System.h"
 +#include "VideoCommon/Present.h"
++
++extern "C" void SunPadNativeLog(const char* msg);
 +
 +namespace
 +{
@@ -312,12 +314,17 @@ index 0000000..54087fb
 +
 +  void MainLoop() override
 +  {
++    SunPadNativeLog("PlatformAndroid MainLoop entered");
++    int ticks = 0;
 +    while (IsRunning())
 +    {
 +      UpdateRunningFlag();
 +      Core::HostDispatchJobs(Core::System::GetInstance());
++      if ((++ticks % 250) == 0)
++        SunPadNativeLog("main loop still running");
 +      std::this_thread::sleep_for(std::chrono::milliseconds(8));
 +    }
++    SunPadNativeLog("PlatformAndroid MainLoop exited");
 +  }
 +
 +  WindowSystemInfo GetWindowSystemInfo() const override

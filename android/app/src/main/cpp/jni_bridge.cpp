@@ -12,15 +12,18 @@
 #include <android/native_window_jni.h>
 
 #include <atomic>
+#include <cstdint>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
+#include <dlfcn.h>
 #include <fcntl.h>
 #include <filesystem>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unistd.h>
+#include <unwind.h>
 
 #include "Common/CommonTypes.h"
 #include "DiscIO/DiscExtractor.h"
@@ -65,6 +68,43 @@ extern "C" void SunPadNativeLog(const char* msg) {
   ::close(fd);
 }
 
+struct UnwindState {
+  void** frames;
+  int max;
+  int count;
+};
+
+static _Unwind_Reason_Code UnwindFrame(struct _Unwind_Context* ctx, void* arg) {
+  auto* state = static_cast<UnwindState*>(arg);
+  if (state->count >= state->max)
+    return _URC_END_OF_STACK;
+  const uintptr_t ip = _Unwind_GetIP(ctx);
+  if (ip)
+    state->frames[state->count++] = reinterpret_cast<void*>(ip);
+  return _URC_NO_REASON;
+}
+
+static void WriteCrashBacktrace(int fd) {
+  void* frames[24];
+  UnwindState state{frames, 24, 0};
+  _Unwind_Backtrace(&UnwindFrame, &state);
+  for (int i = 0; i < state.count; ++i) {
+    Dl_info info{};
+    char line[320];
+    if (dladdr(frames[i], &info) && info.dli_sname) {
+      std::snprintf(line, sizeof(line), "  #%d %p %s (%s)\n", i, frames[i],
+                    info.dli_sname, info.dli_fname ? info.dli_fname : "?");
+    } else if (dladdr(frames[i], &info) && info.dli_fname) {
+      std::snprintf(line, sizeof(line), "  #%d %p %s\n", i, frames[i],
+                    info.dli_fname);
+    } else {
+      std::snprintf(line, sizeof(line), "  #%d %p\n", i, frames[i]);
+    }
+    ::write(fd, line, std::strlen(line));
+    __android_log_print(ANDROID_LOG_ERROR, "SunPad", "%s", line);
+  }
+}
+
 static void OnNativeCrash(int sig) {
   char buf[96];
   std::snprintf(buf, sizeof(buf),
@@ -75,6 +115,7 @@ static void OnNativeCrash(int sig) {
     if (fd >= 0) {
       ::write(fd, buf, std::strlen(buf));
       ::write(fd, "\n", 1);
+      WriteCrashBacktrace(fd);
       ::fsync(fd);
       ::close(fd);
     }
