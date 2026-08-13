@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index ecbfc47..37aaf72 100644
+index ecbfc47..317152b 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -115,7 +115,11 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+@@ -115,13 +115,22 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
      set(ENABLE_HWDB OFF CACHE BOOL "" FORCE)
      set(ENABLE_EVDEV OFF CACHE BOOL "" FORCE)
      set(ENABLE_WAYLAND ON CACHE BOOL "" FORCE)
@@ -15,7 +15,6 @@ index ecbfc47..37aaf72 100644
      set(USE_SYSTEM_SDL3 OFF CACHE BOOL "" FORCE)
      # SDL bundles its own copy of the macOS hidapi backend
      if(APPLE)
-@@ -126,4 +130,9 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
          set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
      endif()
 -    set(LINUX_LOCAL_DEV ON CACHE BOOL "" FORCE)
@@ -26,7 +25,9 @@ index ecbfc47..37aaf72 100644
 +        set(LINUX_LOCAL_DEV ON CACHE BOOL "" FORCE)
 +    endif()
      set(DISTRIBUTOR "ModernGekko" CACHE STRING "" FORCE)
-@@ -247,7 +251,13 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+     add_subdirectory(vendor/dolphin EXCLUDE_FROM_ALL)
+     target_sources(core PRIVATE
+@@ -247,7 +256,13 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
              vendor/dolphin/Source/Core/DolphinNoGUI/PlatformWin32.cpp)
          target_link_libraries(moderngekko PRIVATE dwmapi)
      endif()
@@ -41,7 +42,7 @@ index ecbfc47..37aaf72 100644
          # SunPad's CAMetalLayer platform for iOS (no macOS windowing APIs)
          target_sources(moderngekko PRIVATE
              vendor/dolphin/Source/Core/DolphinNoGUI/PlatformIOS.mm)
-@@ -292,24 +302,29 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+@@ -292,24 +307,29 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
          target_compile_definitions(moderngekko PRIVATE HAVE_X11=1)
      endif()
      if(TARGET PkgConfig::WAYLAND)
@@ -80,7 +81,7 @@ index ecbfc47..37aaf72 100644
          set(_moderngekko_wayland_generated
              "${CMAKE_CURRENT_BINARY_DIR}/generated/wayland")
          set(_moderngekko_xdg_header
-@@ -371,7 +386,9 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
+@@ -371,7 +391,9 @@ if(MODERNGEKKO_ENABLE_DOLPHIN_RUNTIME)
              "${MODERNGEKKO_WAYLAND_CURSOR_LIBRARY}"
              "${MODERNGEKKO_XKBCOMMON_LIBRARY}")
          target_compile_definitions(moderngekko PRIVATE HAVE_WAYLAND=1)
@@ -91,7 +92,7 @@ index ecbfc47..37aaf72 100644
          if(MODERNGEKKO_FRONTEND_SDK)
              target_link_directories(moderngekko PRIVATE "${_moderngekko_sdk_lib}")
          endif()
-@@ -403,7 +420,11 @@ target_link_libraries(moderngekko-module-info
+@@ -403,7 +425,11 @@ target_link_libraries(moderngekko-module-info
      PRIVATE ModernGekko::Runtime
  )
  
@@ -105,7 +106,7 @@ index ecbfc47..37aaf72 100644
          set(_moderngekko_sdl_target SDL3-static)
      elseif(TARGET SDL3::SDL3-shared)
 diff --git a/src/runtime/dolphin_runtime.cpp b/src/runtime/dolphin_runtime.cpp
-index 1ddc25c..161902c 100644
+index 1ddc25c..1894bd7 100644
 --- a/src/runtime/dolphin_runtime.cpp
 +++ b/src/runtime/dolphin_runtime.cpp
 @@ -34,6 +34,10 @@
@@ -119,7 +120,26 @@ index 1ddc25c..161902c 100644
  #include <algorithm>
  #include <array>
  #include <atomic>
-@@ -293,6 +297,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -100,9 +104,17 @@ std::vector<std::string> Host_GetPreferredLocales() { return {}; }
+ void Host_PPCSymbolsChanged() {}
+ void Host_PPCBreakpointsChanged() {}
+ bool Host_UIBlocksControllerState() { return false; }
++#ifdef MODERNGEKKO_HAVE_ANDROID
++extern "C" void SunPadNativeLog(const char* msg);
++#endif
++
+ void Host_Message(HostMessageID id) {
+-  if (id == HostMessageID::WMUserStop && s_platform)
++  if (id == HostMessageID::WMUserStop && s_platform) {
++#ifdef MODERNGEKKO_HAVE_ANDROID
++    SunPadNativeLog("Host_Message: WMUserStop");
++#endif
+     s_platform->Stop();
++  }
+ }
+ void Host_UpdateTitle(const std::string &) {
+   if (!s_platform)
+@@ -293,6 +305,10 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
  
    if (impl->config.headless)
      impl->platform = Platform::CreateHeadlessPlatform();
@@ -130,7 +150,7 @@ index 1ddc25c..161902c 100644
  #ifdef MODERNGEKKO_HAVE_IOS
    else
      impl->platform = Platform::CreateIOSPlatform();
-@@ -320,6 +328,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -320,6 +336,9 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
                           "the requested Dolphin host platform is unavailable"}};
    }
  
@@ -140,7 +160,7 @@ index 1ddc25c..161902c 100644
  #ifdef MODERNGEKKO_HAVE_IOS
    ModernGekkoSetIOSRenderSurface(impl->config.render_surface);
  #endif
-@@ -341,11 +352,26 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+@@ -341,29 +360,49 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
                    ShaderCompilationMode::AsynchronousUberShaders);
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
@@ -169,7 +189,8 @@ index 1ddc25c..161902c 100644
 +  Config::SetBase(Config::MAIN_CPU_THREAD, false);
 +#endif
  #endif
-@@ -354,16 +378,21 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
+   const std::vector<std::string> audio_backends =
+       AudioCommon::GetSoundBackends();
    if (impl->config.headless) {
      impl->config.audio.backend = BACKEND_NULLSOUND;
    } else if (impl->config.audio.backend.empty() ||

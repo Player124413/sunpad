@@ -38,6 +38,10 @@ grep -q 'JitArm64' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android JitAr
 grep -q 'WorkQueueThread.h' "$DOLPHIN_PATCH" || fail "dolphin patch missing AsyncWorkThread bad_function_call fix"
 grep -q 'callback.second' "$DOLPHIN_PATCH" || fail "dolphin patch missing empty config-callback guard"
 grep -q 'NO_EXCEPTIONS' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android exceptions enable"
+grep -q 'HAVE_EGL=1 (NDK libEGL)' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android HAVE_EGL force"
+grep -q 'EmuThread: starting' "$DOLPHIN_PATCH" || fail "dolphin patch missing EmuThread stage logs"
+grep -q 'GetSysDirectory now' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android Sys path recache"
+grep -q 'Headless' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android OGL headless probe"
 
 # When a prepared ref/ tree exists, the 0002 patches must be fully applied
 # (reverse-apply must succeed).

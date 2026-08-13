@@ -14,6 +14,7 @@
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <optional>
 
@@ -21,6 +22,8 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/System.h"
+#include "Common/Logging/Log.h"
+#include "Common/Logging/LogManager.h"
 #include "Common/MsgHandler.h"
 #include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/VideoConfig.h"
@@ -136,6 +139,10 @@ std::string RuntimeHost::Start(const fs::path& game_root,
                                const fs::path& disc_image,
                                const fs::path& module_path,
                                const fs::path& user_directory) {
+  // A previous Run() that already finished still leaves game_thread_ joinable
+  // until Stop(). Join it so a retry is not "runtime already running".
+  if (game_thread_.joinable() && !running_.load() && !starting_.load())
+    game_thread_.join();
   if (running_.load() || starting_.load() || game_thread_.joinable())
     return "runtime already running";
   if (current_surface_ == nullptr)
@@ -145,8 +152,28 @@ std::string RuntimeHost::Start(const fs::path& game_root,
   if (game_root.empty() || !fs::exists(game_root))
     return "Extracted game data is missing.";
 
+  last_run_error_.clear();
   stop_requested_.store(false);
   starting_.store(true);
+
+  {
+    std::error_code iso_ec;
+    const auto iso_size =
+        disc_image.empty() ? 0 : fs::file_size(disc_image, iso_ec);
+    std::error_code mod_ec;
+    const auto mod_size = fs::file_size(module_path, mod_ec);
+    char boot_info[384];
+    std::snprintf(boot_info, sizeof(boot_info),
+                  "boot files: iso=%s (%llu bytes) module=%s (%llu bytes) "
+                  "surface=%dx%d",
+                  disc_image.string().c_str(),
+                  static_cast<unsigned long long>(iso_ec ? 0 : iso_size),
+                  module_path.string().c_str(),
+                  static_cast<unsigned long long>(mod_ec ? 0 : mod_size),
+                  current_surface_ ? ANativeWindow_getWidth(current_surface_) : 0,
+                  current_surface_ ? ANativeWindow_getHeight(current_surface_) : 0);
+    SunPadNativeLog(boot_info);
+  }
 
   PrepareAndroidUserTree(user_directory);
 
@@ -198,6 +225,31 @@ std::string RuntimeHost::Start(const fs::path& game_root,
     starting_.store(false);
     running_.store(false);
     return create_error;
+  }
+
+  // running_ is set just before Run(). Stay ~2s after that: if EmuThread
+  // dies immediately we return the real reason instead of a generic dialog.
+  for (int i = 0; i < 50 && !stop_requested_.load(); ++i) {
+    if (running_.load()) {
+      for (int j = 0; j < 20 && running_.load() && !stop_requested_.load(); ++j)
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      if (!running_.load() && !stop_requested_.load()) {
+        if (game_thread_.joinable())
+          game_thread_.join();
+        return last_run_error_.empty()
+                   ? "The game stopped while booting. Use ••• → Copy diagnostic log."
+                   : last_run_error_;
+      }
+      return "";
+    }
+    if (!starting_.load() && !running_.load() && i > 0) {
+      if (game_thread_.joinable())
+        game_thread_.join();
+      return last_run_error_.empty()
+                 ? "The game stopped while booting. Use ••• → Copy diagnostic log."
+                 : last_run_error_;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }
   return "";
 }
@@ -277,6 +329,7 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       return;
     }
     notify_created("");
+    EnableDolphinLogs();
     {
       std::scoped_lock lock(runtime_mutex_);
       runtime_ = created.runtime.get();
@@ -305,6 +358,7 @@ void RuntimeHost::RunGame(const fs::path& game_root,
     const std::string run_msg = result.error
         ? ("Run() returned error: " + result.error->message)
         : "Run() returned (emulation stopped)";
+    last_run_error_ = result.error ? result.error->message : run_msg;
     SunPadNativeLog(run_msg.c_str());
     {
       std::scoped_lock lock(runtime_mutex_);
@@ -319,11 +373,13 @@ void RuntimeHost::RunGame(const fs::path& game_root,
       pipe_fd_ = -1;
     }
   } catch (const std::exception& ex) {
+    last_run_error_ = ex.what();
     starting_.store(false);
     running_.store(false);
     notify_created(ex.what());
     return;
   } catch (...) {
+    last_run_error_ = "The game runtime aborted while starting.";
     starting_.store(false);
     running_.store(false);
     notify_created("The game runtime aborted while starting.");
@@ -427,6 +483,33 @@ void RuntimeHost::SetModernCStick(bool enabled) {
 void RuntimeHost::SetPreferredBackend(std::string backend) {
   if (backend == "OGL" || backend == "Vulkan")
     preferred_backend_ = std::move(backend);
+}
+
+void RuntimeHost::EnableDolphinLogs() {
+  auto* mgr = Common::Log::LogManager::GetInstance();
+  if (mgr == nullptr) {
+    SunPadNativeLog("dolphin LogManager not ready");
+    return;
+  }
+  using LT = Common::Log::LogType;
+  const LT types[] = {LT::BOOT,     LT::VIDEO,    LT::CORE,    LT::POWERPC,
+                      LT::COMMON,   LT::AUDIO,    LT::CONSOLE, LT::HOST_GPU,
+                      LT::OSHLE,    LT::MEMMAP,   LT::VIDEOINTERFACE};
+  for (const LT type : types)
+    mgr->SetEnable(type, true);
+  mgr->SetConfigLogLevel(Common::Log::LogLevel::LNOTICE);
+
+  class SunPadLogListener final : public Common::Log::LogListener {
+   public:
+    void Log(Common::Log::LogLevel, const char* msg) override {
+      SunPadNativeLog(msg);
+    }
+  };
+  mgr->RegisterListener(Common::Log::LogListener::LOG_WINDOW_LISTENER,
+                        std::make_unique<SunPadLogListener>());
+  mgr->EnableListener(Common::Log::LogListener::LOG_WINDOW_LISTENER, true);
+  mgr->EnableListener(Common::Log::LogListener::CONSOLE_LISTENER, true);
+  SunPadNativeLog("dolphin logs: BOOT/VIDEO/CORE/POWERPC → diagnostic log");
 }
 
 void RuntimeHost::ApplyPendingSettings() {

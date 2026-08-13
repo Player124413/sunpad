@@ -1,3 +1,51 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 355fe8f..b943bf9 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -314,7 +314,10 @@ else()
+ 
+   # gcc uses some optimizations which might break stuff without this flag
+   check_and_add_flag(NO_STRICT_ALIASING -fno-strict-aliasing)
+-  check_and_add_flag(NO_EXCEPTIONS -fno-exceptions)
++  # libc++ still throws bad_function_call; Android workers must be able to catch it.
++  if(NOT ANDROID)
++    check_and_add_flag(NO_EXCEPTIONS -fno-exceptions)
++  endif()
+ 
+   check_and_add_flag(VISIBILITY_INLINES_HIDDEN -fvisibility-inlines-hidden)
+   check_and_add_flag(VISIBILITY_HIDDEN -fvisibility=hidden)
+@@ -534,6 +537,18 @@ if(ENABLE_EGL)
+   endif()
+ endif()
+ 
++if(ANDROID)
++  # FindEGL.cmake looks for pkg-config "egl" and lib names egl/EGL. The NDK
++  # always ships libEGL.so + EGL/egl.h but often has no .pc file, so the
++  # probe fails and OGL then has no GLContextEGLAndroid — black screen.
++  if(NOT EGL_FOUND)
++    set(EGL_FOUND TRUE)
++    set(EGL_LIBRARIES EGL)
++  endif()
++  add_definitions(-DHAVE_EGL=1)
++  message(STATUS "Android: HAVE_EGL=1 (NDK libEGL)")
++endif()
++
+ if(ENCODE_FRAMEDUMPS)
+   if(WIN32)
+     if(_M_X86_64)
+@@ -588,8 +603,10 @@ endif()
+ if(UNIX)
+   message(STATUS "Using named pipes as controller inputs")
+   add_definitions(-DUSE_PIPES=1)
+-  message(STATUS "Watching game memory for changes")
+-  add_definitions(-DUSE_MEMORYWATCHER=1)
++  if(NOT ANDROID)
++    message(STATUS "Watching game memory for changes")
++    add_definitions(-DUSE_MEMORYWATCHER=1)
++  endif()
+ endif()
+ 
+ if(ENABLE_ANALYTICS)
 diff --git a/Source/CMakeLists.txt b/Source/CMakeLists.txt
 index 7871083..989eb69 100644
 --- a/Source/CMakeLists.txt
@@ -18,7 +66,7 @@ index 7871083..989eb69 100644
  
  if (ENABLE_TESTS)
 diff --git a/Source/Core/AudioCommon/OpenSLESStream.cpp b/Source/Core/AudioCommon/OpenSLESStream.cpp
-index 28fe285..0318216 100644
+index 28fe285..901700d 100644
 --- a/Source/Core/AudioCommon/OpenSLESStream.cpp
 +++ b/Source/Core/AudioCommon/OpenSLESStream.cpp
 @@ -14,7 +14,12 @@
@@ -35,7 +83,7 @@ index 28fe285..0318216 100644
  
  void OpenSLESStream::BQPlayerCallback(SLAndroidSimpleBufferQueueItf bq, void* context)
  {
-@@ -38,12 +43,19 @@
+@@ -38,12 +43,19 @@ void OpenSLESStream::PushSamples(SLAndroidSimpleBufferQueueItf bq)
  
  bool OpenSLESStream::Init()
  {
@@ -151,10 +199,25 @@ index 0000000..9c62326
 +  return 0;
 +}
 diff --git a/Source/Core/Common/CMakeLists.txt b/Source/Core/Common/CMakeLists.txt
-index 6a8db9c..a6d9bb8 100644
+index 6a8db9c..4684013 100644
 --- a/Source/Core/Common/CMakeLists.txt
 +++ b/Source/Core/Common/CMakeLists.txt
-@@ -245,6 +245,12 @@ if(ANDROID)
+@@ -233,9 +233,13 @@ elseif(WIN32)
+     target_link_libraries(common PRIVATE opengl32.lib)
+   endif()
+ elseif (ANDROID)
++  # SunPad does not build Dolphin's androidcommon JNI target. Link the NDK
++  # system libs the stubs + EGL path need.
+   target_link_libraries(common
+   PRIVATE
+-    androidcommon
++    android
++    log
++    EGL
+   )
+ elseif(HAIKU)
+   target_link_libraries(common PRIVATE be GL)
+@@ -245,6 +249,12 @@ if(ANDROID)
    target_sources(common PRIVATE
      Logging/ConsoleListenerDroid.cpp
      MemArenaAndroid.cpp
@@ -167,6 +230,62 @@ index 6a8db9c..a6d9bb8 100644
    )
  elseif(WIN32)
    target_sources(common PRIVATE
+diff --git a/Source/Core/Common/Config/Config.cpp b/Source/Core/Common/Config/Config.cpp
+index 62ac9e7..8a5299f 100644
+--- a/Source/Core/Common/Config/Config.cpp
++++ b/Source/Core/Common/Config/Config.cpp
+@@ -103,7 +103,10 @@ void OnConfigChanged()
+   std::lock_guard lock(s_callbacks_lock);
+ 
+   for (const auto& callback : s_callbacks)
+-    callback.second();
++  {
++    if (callback.second)
++      callback.second();
++  }
+ }
+ 
+ u64 GetConfigVersion()
+diff --git a/Source/Core/Common/FileUtil.cpp b/Source/Core/Common/FileUtil.cpp
+index a4fe205..b96cba9 100644
+--- a/Source/Core/Common/FileUtil.cpp
++++ b/Source/Core/Common/FileUtil.cpp
+@@ -780,11 +780,11 @@ static std::string CreateSysDirectoryPath()
+ 
+ #if defined(__APPLE__)
+   const std::string sys_directory = GetBundleDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
+-#elif defined(_WIN32) || defined(LINUX_LOCAL_DEV)
+-  const std::string sys_directory = GetExeDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
+ #elif defined ANDROID
+   const std::string sys_directory = s_android_sys_directory + DIR_SEP;
+   ASSERT_MSG(COMMON, !s_android_sys_directory.empty(), "Sys directory has not been set");
++#elif defined(_WIN32) || defined(LINUX_LOCAL_DEV)
++  const std::string sys_directory = GetExeDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
+ #else
+   const std::string sys_directory = SYSDATA_DIR DIR_SEP;
+ #endif
+@@ -795,8 +795,21 @@ static std::string CreateSysDirectoryPath()
+ 
+ const std::string& GetSysDirectory()
+ {
++#ifdef ANDROID
++  // Do not cache the first lookup: SetSysDirectory may run after a premature
++  // GetSysDirectory (empty → "/"), and a static const would ignore the real path.
++  static std::string sys_directory;
++  const std::string next = s_android_sys_directory + DIR_SEP;
++  if (sys_directory != next)
++  {
++    INFO_LOG_FMT(COMMON, "GetSysDirectory now {}", next);
++    sys_directory = next;
++  }
++  return sys_directory;
++#else
+   static const std::string sys_directory = CreateSysDirectoryPath();
+   return sys_directory;
++#endif
+ }
+ 
+ #ifdef ANDROID
 diff --git a/Source/Core/Common/GL/GLContext.cpp b/Source/Core/Common/GL/GLContext.cpp
 index 2414a9e..76c11fb 100644
 --- a/Source/Core/Common/GL/GLContext.cpp
@@ -180,6 +299,20 @@ index 2414a9e..76c11fb 100644
    if (wsi.type == WindowSystemType::Android)
      context = std::make_unique<GLContextEGLAndroid>();
  #endif
+diff --git a/Source/Core/Common/HookableEvent.h b/Source/Core/Common/HookableEvent.h
+index 906f3e2..224626e 100644
+--- a/Source/Core/Common/HookableEvent.h
++++ b/Source/Core/Common/HookableEvent.h
+@@ -78,7 +78,8 @@ public:
+       if (listener->is_pending_removal)
+         continue;
+ 
+-      std::invoke(listener->callback, args...);
++      if (listener->callback)
++        std::invoke(listener->callback, args...);
+     }
+ 
+     m_storage->is_triggering = false;
 diff --git a/Source/Core/Common/IDCacheStub.cpp b/Source/Core/Common/IDCacheStub.cpp
 new file mode 100644
 index 0000000..ddbbdaa
@@ -242,6 +375,183 @@ index 0000000..ddbbdaa
 +  return nullptr;
 +}
 +}  // namespace IDCache
+diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueueThread.h
+index 826ee77..4f66e91 100644
+--- a/Source/Core/Common/WorkQueueThread.h
++++ b/Source/Core/Common/WorkQueueThread.h
+@@ -167,7 +167,14 @@ private:
+         continue;
+       }
+ 
+-      function(std::move(m_items.Front()));
++      try
++      {
++        if (function)
++          function(std::move(m_items.Front()));
++      }
++      catch (const std::exception&)
++      {
++      }
+       m_items.Pop();
+     }
+   }
+@@ -194,7 +201,18 @@ public:
+ 
+   void Reset(std::string thread_name)
+   {
+-    m_worker.Reset(std::move(thread_name), std::invoke<FuncType>);
++    // Swallow bad_function_call: queued jobs often call another empty
++    // std::function. That must not abort the worker thread (SIGABRT).
++    m_worker.Reset(std::move(thread_name), [](FuncType func) {
++      try
++      {
++        if (func)
++          std::invoke(std::move(func));
++      }
++      catch (const std::exception&)
++      {
++      }
++    });
+   }
+ 
+   void Push(FuncType func) { m_worker.Push(std::move(func)); }
+diff --git a/Source/Core/Core/Boot/Boot_BS2Emu.cpp b/Source/Core/Core/Boot/Boot_BS2Emu.cpp
+index 254c22a..0bce01e 100644
+--- a/Source/Core/Core/Boot/Boot_BS2Emu.cpp
++++ b/Source/Core/Core/Boot/Boot_BS2Emu.cpp
+@@ -307,7 +307,8 @@ bool CBoot::EmulatedBS2_GC(Core::System& system, const Core::CPUThreadGuard& gua
+   xfmem.postMatrices[0x3d * 4 + 0] = 1.0f;
+   xfmem.postMatrices[0x3e * 4 + 1] = 1.0f;
+   xfmem.postMatrices[0x3f * 4 + 2] = 1.0f;
+-  g_vertex_manager->Flush();
++  if (g_vertex_manager)
++    g_vertex_manager->Flush();
+   auto& xf_state_manager = system.GetXFStateManager();
+   xf_state_manager.InvalidateXFRange(XFMEM_POSTMATRICES + 0x3d * 4, XFMEM_POSTMATRICES_END);
+ 
+diff --git a/Source/Core/Core/CMakeLists.txt b/Source/Core/Core/CMakeLists.txt
+index 099f891..9bd300a 100644
+--- a/Source/Core/Core/CMakeLists.txt
++++ b/Source/Core/Core/CMakeLists.txt
+@@ -801,9 +801,11 @@ if (APPLE)
+     resolv
+   )
+ elseif (ANDROID)
++  # SunPad: no Dolphin app JNI (androidcommon). IOAndroid uses IDCacheStub.
+   target_link_libraries(core
+   PRIVATE
+-    androidcommon
++    android
++    log
+   )
+ endif()
+ 
+diff --git a/Source/Core/Core/CPUThreadConfigCallback.cpp b/Source/Core/Core/CPUThreadConfigCallback.cpp
+index 44f9997..55ee9df 100644
+--- a/Source/Core/Core/CPUThreadConfigCallback.cpp
++++ b/Source/Core/Core/CPUThreadConfigCallback.cpp
+@@ -22,7 +22,10 @@ static size_t s_next_callback_id = 0;
+ void RunCallbacks()
+ {
+   for (const auto& callback : s_callbacks)
+-    callback.second();
++  {
++    if (callback.second)
++      callback.second();
++  }
+ }
+ 
+ void OnConfigChanged()
+diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
+index e58579e..1c2e7cc 100644
+--- a/Source/Core/Core/Core.cpp
++++ b/Source/Core/Core/Core.cpp
+@@ -473,9 +473,12 @@ static void FifoPlayerThread(Core::System& system, const std::optional<std::stri
+ // Initialize and create emulation thread
+ // Call browser: Init():s_emu_thread().
+ // See the BootManager.cpp file description for a complete call schedule.
++extern "C" void SunPadNativeLog(const char* msg);
++
+ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot,
+                       WindowSystemInfo wsi)
+ {
++  SunPadNativeLog("EmuThread: starting");
+   NotifyStateChanged(State::Starting);
+   Common::ScopeGuard flag_guard{[] {
+     {
+@@ -485,6 +488,7 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+ 
+     NotifyStateChanged(State::Uninitialized);
+ 
++    SunPadNativeLog("EmuThread: shutdown complete (state=Uninitialized)");
+     INFO_LOG_FMT(CONSOLE, "Stop\t\t---- Shutdown complete ----");
+   }};
+ 
+@@ -565,12 +569,15 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+ 
+   // In single-core mode: This holds a video backend shutdown function.
+   // In dual-core mode: This holds a GPU thread stopping function (which does the backend shutdown).
++  SunPadNativeLog("EmuThread: initializing video");
+   const auto video_guard = GetInitializedVideoGuard(system, wsi);
+   if (!video_guard)
+   {
++    SunPadNativeLog("EmuThread: video backend failed");
+     PanicAlertFmt("Failed to initialize video backend!");
+     return;
+   }
++  SunPadNativeLog("EmuThread: video ready");
+ 
+   if (cpu_info.HTT)
+     Config::SetBaseOrCurrent(Config::MAIN_DSP_THREAD, cpu_info.num_cores > 4);
+@@ -603,8 +610,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+   {
+     ASSERT(IsCPUThread());
+     CPUThreadGuard guard(system);
++    SunPadNativeLog("EmuThread: BootUp");
+     if (!CBoot::BootUp(system, guard, std::move(boot)))
++    {
++      SunPadNativeLog("EmuThread: BootUp failed");
+       return;
++    }
++    SunPadNativeLog("EmuThread: BootUp ok");
+   }
+ 
+   // Initialise Wii filesystem contents.
+@@ -638,7 +650,20 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+   UpdateTitle(system);
+ 
+   // Become the CPU thread.
+-  cpu_thread_func(system, savestate_path, delete_savestate);
++  SunPadNativeLog("EmuThread: entering CPU loop");
++  try
++  {
++    cpu_thread_func(system, savestate_path, delete_savestate);
++    SunPadNativeLog("EmuThread: CPU loop returned");
++  }
++  catch (const std::exception& ex)
++  {
++    SunPadNativeLog((std::string("EmuThread: CPU exception: ") + ex.what()).c_str());
++  }
++  catch (...)
++  {
++    SunPadNativeLog("EmuThread: CPU exception: unknown");
++  }
+ }
+ 
+ // Set or get the running state
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
+index 743bd5c..4dac801 100644
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
+@@ -188,7 +188,7 @@ void StaticRecompCore::Init()
+   // (module + interpreter only) on desktop for parity testing.
+   if (!std::getenv("STATICRECOMP_NO_FALLBACK_JIT"))
+   {
+-#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
++#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && !defined(ANDROID)
+     m_fallback_jit = std::make_unique<JitArm64>(m_system);
+ #elif defined(_M_X86_64)
+     m_fallback_jit = std::make_unique<Jit64>(m_system);
 diff --git a/Source/Core/DolphinNoGUI/Platform.h b/Source/Core/DolphinNoGUI/Platform.h
 index 3c9b5fd..478c494 100644
 --- a/Source/Core/DolphinNoGUI/Platform.h
@@ -259,10 +569,10 @@ index 3c9b5fd..478c494 100644
  
 diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
 new file mode 100644
-index 0000000..54087fb
+index 0000000..050c185
 --- /dev/null
 +++ b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,98 @@
 +// Copyright 2026 SunPad project
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
@@ -273,6 +583,7 @@ index 0000000..54087fb
 +#include "DolphinNoGUI/Platform.h"
 +
 +#include <chrono>
++#include <cstdio>
 +#include <exception>
 +#include <string>
 +#include <thread>
@@ -333,7 +644,12 @@ index 0000000..54087fb
 +        SunPadNativeLog("main loop still running");
 +      std::this_thread::sleep_for(std::chrono::milliseconds(8));
 +    }
-+    SunPadNativeLog("PlatformAndroid MainLoop exited");
++    const Core::State core_state = Core::GetState(Core::System::GetInstance());
++    char exit_msg[128];
++    std::snprintf(exit_msg, sizeof(exit_msg),
++                  "PlatformAndroid MainLoop exited (ticks=%d core_state=%d)", ticks,
++                  static_cast<int>(core_state));
++    SunPadNativeLog(exit_msg);
 +  }
 +
 +  WindowSystemInfo GetWindowSystemInfo() const override
@@ -390,116 +706,42 @@ index e70d636..f3ed09e 100644
  endif()
  
  if(TARGET LibUSB::LibUSB)
-diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
---- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
-+++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
-@@ -187,7 +187,7 @@ void StaticRecompCore::Init()
-   // STATICRECOMP_NO_FALLBACK_JIT reproduces the iOS execution contract
-   // (module + interpreter only) on desktop for parity testing.
-   if (!std::getenv("STATICRECOMP_NO_FALLBACK_JIT"))
-   {
--#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
-+#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && !defined(ANDROID)
-     m_fallback_jit = std::make_unique<JitArm64>(m_system);
- #elif defined(_M_X86_64)
-     m_fallback_jit = std::make_unique<Jit64>(m_system);
-
-diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueueThread.h
---- a/Source/Core/Common/WorkQueueThread.h
-+++ b/Source/Core/Common/WorkQueueThread.h
-@@ -166,7 +166,18 @@ public:
+diff --git a/Source/Core/VideoBackends/OGL/OGLMain.cpp b/Source/Core/VideoBackends/OGL/OGLMain.cpp
+index df0c28a..3eb5187 100644
+--- a/Source/Core/VideoBackends/OGL/OGLMain.cpp
++++ b/Source/Core/VideoBackends/OGL/OGLMain.cpp
+@@ -75,9 +75,23 @@ std::string VideoBackend::GetDisplayName() const
  
-   void Reset(std::string thread_name)
-   {
--    m_worker.Reset(std::move(thread_name), std::invoke<FuncType>);
-+    // Swallow bad_function_call: queued jobs often call another empty
-+    // std::function. That must not abort the worker thread (SIGABRT).
-+    m_worker.Reset(std::move(thread_name), [](FuncType func) {
-+      try
-+      {
-+        if (func)
-+          std::invoke(std::move(func));
-+      }
-+      catch (const std::exception&)
-+      {
-+      }
-+    });
-   }
- 
-   void Push(FuncType func) { m_worker.Push(std::move(func)); }
-diff --git a/Source/Core/Common/HookableEvent.h b/Source/Core/Common/HookableEvent.h
---- a/Source/Core/Common/HookableEvent.h
-+++ b/Source/Core/Common/HookableEvent.h
-@@ -72,7 +72,8 @@ public:
-       if (listener->is_pending_removal)
-         continue;
- 
--      std::invoke(listener->callback, args...);
-+      if (listener->callback)
-+        std::invoke(listener->callback, args...);
-     }
- 
-     m_storage->is_triggering = false;
-
-diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueueThread.h
---- a/Source/Core/Common/WorkQueueThread.h
-+++ b/Source/Core/Common/WorkQueueThread.h
-@@ -167,7 +167,14 @@ private:
-         continue;
-       }
- 
--      function(std::move(m_items.Front()));
-+      try
-+      {
-+        if (function)
-+          function(std::move(m_items.Front()));
-+      }
-+      catch (const std::exception&)
-+      {
-+      }
-       m_items.Pop();
-     }
-   }
-diff --git a/Source/Core/Common/Config/Config.cpp b/Source/Core/Common/Config/Config.cpp
---- a/Source/Core/Common/Config/Config.cpp
-+++ b/Source/Core/Common/Config/Config.cpp
-@@ -102,8 +102,11 @@ void OnConfigChanged()
- 
-   std::lock_guard lock(s_callbacks_lock);
- 
-   for (const auto& callback : s_callbacks)
--    callback.second();
-+  {
-+    if (callback.second)
-+      callback.second();
-+  }
- }
- 
- u64 GetConfigVersion()
-diff --git a/Source/Core/Core/CPUThreadConfigCallback.cpp b/Source/Core/Core/CPUThreadConfigCallback.cpp
---- a/Source/Core/Core/CPUThreadConfigCallback.cpp
-+++ b/Source/Core/Core/CPUThreadConfigCallback.cpp
-@@ -21,8 +21,11 @@ static size_t s_next_callback_id = 0;
- 
- void RunCallbacks()
+ void VideoBackend::InitBackendInfo(const WindowSystemInfo& wsi)
  {
-   for (const auto& callback : s_callbacks)
--    callback.second();
-+  {
-+    if (callback.second)
-+      callback.second();
-+  }
- }
++#ifdef ANDROID
++  // A throwaway EGL window surface on the live ANativeWindow, then
++  // eglTerminate in the unique_ptr destructor, leaves Adreno unable to
++  // create the real EmuThread context. Probe headless (pbuffer / EGL
++  // default display) so the app window stays untouched.
++  WindowSystemInfo probe = wsi;
++  probe.type = WindowSystemType::Headless;
++  probe.render_surface = nullptr;
++  probe.render_window = nullptr;
++  std::unique_ptr<GLContext> temp_gl_context =
++      GLContext::Create(probe, g_Config.stereo_mode == StereoMode::QuadBuffer, true,
++                        Config::Get(Config::GFX_PREFER_GLES));
++#else
+   std::unique_ptr<GLContext> temp_gl_context =
+       GLContext::Create(wsi, g_Config.stereo_mode == StereoMode::QuadBuffer, true,
+                         Config::Get(Config::GFX_PREFER_GLES));
++#endif
  
- void OnConfigChanged()
-
+   if (!temp_gl_context)
+     return;
 diff --git a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp b/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
+index 83eaa2e..4cb6e62 100644
 --- a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
 +++ b/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
 @@ -239,7 +239,15 @@ void AsyncShaderCompiler::WorkerThreadRun()
        m_pending_work.erase(iter);
        pending_lock.unlock();
-
+ 
 -      if (item->Compile())
 +      bool compiled = false;
 +      try
@@ -513,69 +755,3 @@ diff --git a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp b/Source/Core/Video
        {
          std::lock_guard completed_guard(m_completed_work_lock);
          m_completed_work.push_back(std::move(item));
-diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
---- a/Source/Core/Core/Core.cpp
-+++ b/Source/Core/Core/Core.cpp
-@@ -638,7 +638,13 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
-   UpdateTitle(system);
- 
-   // Become the CPU thread.
--  cpu_thread_func(system, savestate_path, delete_savestate);
-+  try
-+  {
-+    cpu_thread_func(system, savestate_path, delete_savestate);
-+  }
-+  catch (const std::exception&)
-+  {
-+  }
- }
- 
- // Set or get the running state
-
-diff --git a/CMakeLists.txt b/CMakeLists.txt
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -315,5 +315,8 @@ else()
-   # gcc uses some optimizations which might break stuff without this flag
-   check_and_add_flag(NO_STRICT_ALIASING -fno-strict-aliasing)
--  check_and_add_flag(NO_EXCEPTIONS -fno-exceptions)
-+  # libc++ still throws bad_function_call; Android workers must be able to catch it.
-+  if(NOT ANDROID)
-+    check_and_add_flag(NO_EXCEPTIONS -fno-exceptions)
-+  endif()
- 
-   check_and_add_flag(VISIBILITY_INLINES_HIDDEN -fvisibility-inlines-hidden)
-
-diff --git a/Source/Core/Common/FileUtil.cpp b/Source/Core/Common/FileUtil.cpp
---- a/Source/Core/Common/FileUtil.cpp
-+++ b/Source/Core/Common/FileUtil.cpp
-@@ -775,12 +775,12 @@ static std::string CreateSysDirectoryPath()
- #endif
- 
- #if defined(__APPLE__)
-   const std::string sys_directory = GetBundleDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
--#elif defined(_WIN32) || defined(LINUX_LOCAL_DEV)
--  const std::string sys_directory = GetExeDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
- #elif defined ANDROID
-   const std::string sys_directory = s_android_sys_directory + DIR_SEP;
-   ASSERT_MSG(COMMON, !s_android_sys_directory.empty(), "Sys directory has not been set");
-+#elif defined(_WIN32) || defined(LINUX_LOCAL_DEV)
-+  const std::string sys_directory = GetExeDirectory() + DIR_SEP SYSDATA_DIR DIR_SEP;
- #else
-   const std::string sys_directory = SYSDATA_DIR DIR_SEP;
- #endif
-diff --git a/CMakeLists.txt b/CMakeLists.txt
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -589,6 +589,8 @@ endif()
- if(UNIX)
-   message(STATUS "Using named pipes as controller inputs")
-   add_definitions(-DUSE_PIPES=1)
--  message(STATUS "Watching game memory for changes")
--  add_definitions(-DUSE_MEMORYWATCHER=1)
-+  if(NOT ANDROID)
-+    message(STATUS "Watching game memory for changes")
-+    add_definitions(-DUSE_MEMORYWATCHER=1)
-+  endif()
- endif()
-

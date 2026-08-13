@@ -323,10 +323,12 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
 
 ## Current boundaries and known gaps
 
-- **Hardware acceptance is still open**: CI APKs have been installed on a
-  phone, but Super Mario Sunshine has not yet stayed up past the shader
-  compile / first present. The Sys-directory + no-JIT + panic-log fix
-  above is the remaining native SIGABRT hypothesis.
+- **Hardware acceptance is still open**: CI APKs reach `Run()` / MainLoop on
+  device. The remaining black-screen / “stopped right after start” path is
+  EmuThread dying (video init on Adreno, BootUp, or a swallowed CPU
+  exception). Native boot stages and Dolphin BOOT/VIDEO/CORE lines now go
+  into the copyable diagnostic log. The ISO is not the cause when import
+  already accepted it (size `1459978240`, GMSE01, disc 0 rev 0).
 - The CI workflow is parked at `ci/android-build.yml` (outside
   `.github/workflows/` so it can be pushed without the GitHub App
   "workflows" permission); move it to

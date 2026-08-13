@@ -83,9 +83,12 @@ class RuntimeHost {
   std::thread game_thread_;
   std::mutex runtime_mutex_;
   moderngekko::Runtime* runtime_ = nullptr;
+  void EnableDolphinLogs();
+
   std::atomic<bool> stop_requested_{false};
   std::atomic<bool> starting_{false};
   std::atomic<bool> running_{false};
+  std::string last_run_error_;
   int pipe_fd_ = -1;
   uint16_t last_buttons_ = 0;
   bool modern_cstick_ = false;

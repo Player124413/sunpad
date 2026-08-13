@@ -116,7 +116,9 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
 
         applyPrefsToControls()
         DiagnosticLog.ensurePublicFolder(this)
-        DiagnosticLog.publicFile(this)?.absolutePath?.let { SunPadNative.setCrashLogPath(it) }
+        // Native logs must land in the private file: Copy diagnostic log
+        // reads that one first. The public sunpad.log still gets Java lines.
+        SunPadNative.setCrashLogPath(DiagnosticLog.privateFile(this).absolutePath)
         if (prefs.getBoolean("bootInProgress", false)) {
             prefs.edit().putBoolean("preferOgl", true).putBoolean("bootInProgress", false).commit()
             DiagnosticLog.append(this, "Last session died during boot; preferring OpenGL ES")
@@ -215,6 +217,12 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         started = true
         importer.userDirectory.mkdirs()
         importer.ensureDolphinSys()
+        DiagnosticLog.append(
+            this,
+            "starting ISO=${importer.activeImage.length()} " +
+                "module=${importer.moduleFile.length()} " +
+                "surface=${lastSurfaceW}x${lastSurfaceH}",
+        )
         prefs.edit().putBoolean("bootInProgress", true).commit()
         showStatus("Starting game…")
         Thread {

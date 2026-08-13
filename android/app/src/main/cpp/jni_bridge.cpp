@@ -57,14 +57,32 @@ static char g_crash_log_path[512];
 extern "C" void SunPadNativeLog(const char* msg) {
   if (msg == nullptr)
     return;
-  __android_log_print(ANDROID_LOG_INFO, "SunPad", "%s", msg);
+  // Strip a trailing newline so we can stamp every line the same way.
+  std::size_t len = std::strlen(msg);
+  while (len > 0 && (msg[len - 1] == '\n' || msg[len - 1] == '\r'))
+    --len;
+  if (len == 0)
+    return;
+
+  char stamped[1600];
+  const auto now = std::chrono::system_clock::now();
+  const std::time_t tt = std::chrono::system_clock::to_time_t(now);
+  std::tm local{};
+  localtime_r(&tt, &local);
+  const int n = std::snprintf(stamped, sizeof(stamped),
+                              "[%04d-%02d-%02d %02d:%02d:%02d] %.*s\n",
+                              local.tm_year + 1900, local.tm_mon + 1, local.tm_mday,
+                              local.tm_hour, local.tm_min, local.tm_sec,
+                              static_cast<int>(len), msg);
+  if (n <= 0)
+    return;
+  __android_log_print(ANDROID_LOG_INFO, "SunPad", "%.*s", static_cast<int>(len), msg);
   if (g_crash_log_path[0] == '\0')
     return;
   const int fd = ::open(g_crash_log_path, O_WRONLY | O_CREAT | O_APPEND, 0644);
   if (fd < 0)
     return;
-  ::write(fd, msg, std::strlen(msg));
-  ::write(fd, "\n", 1);
+  ::write(fd, stamped, static_cast<std::size_t>(n));
   ::close(fd);
 }
 
