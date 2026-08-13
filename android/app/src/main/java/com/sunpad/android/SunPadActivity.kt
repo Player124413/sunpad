@@ -556,6 +556,24 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             showMenu()
         }
 
+        items.add(
+            if (prefs.getBoolean("dualCore", true))
+                "Dual-core: ON (restart to apply)"
+            else
+                "Dual-core: OFF (restart to apply)")
+        actions.add {
+            val on = !prefs.getBoolean("dualCore", true)
+            prefs.edit().putBoolean("dualCore", on).apply()
+            SunPadNative.setDualCore(on)
+            Toast.makeText(
+                this,
+                if (on) "Dual-core on next start (close and reopen)"
+                else "Single-core on next start (close and reopen)",
+                Toast.LENGTH_LONG,
+            ).show()
+            showMenu()
+        }
+
         items.add("Edit touch layout…")
         actions.add {
             controls.editingLayout = true

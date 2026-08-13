@@ -65,6 +65,7 @@ class RuntimeHost {
   void SetModernCStick(bool enabled);
   void SetPreferredBackend(std::string backend);
   void SetExperimental60Fps(bool enabled);
+  void SetDualCore(bool enabled);
 
   double CurrentFPS() const;
   double CurrentSpeed() const;
@@ -95,6 +96,7 @@ class RuntimeHost {
   bool modern_cstick_ = false;
   std::string preferred_backend_{"OGL"};
   bool prefer_60fps_ = true;
+  bool prefer_dual_core_ = true;
   int pending_scale_ = 1;
   AspectRatioMode pending_aspect_ = AspectRatioMode::Original;
   ANativeWindow* current_surface_ = nullptr;

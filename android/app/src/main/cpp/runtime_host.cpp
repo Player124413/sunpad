@@ -731,6 +731,10 @@ void RuntimeHost::SetExperimental60Fps(bool enabled) {
   prefer_60fps_ = enabled;
 }
 
+void RuntimeHost::SetDualCore(bool enabled) {
+  prefer_dual_core_ = enabled;
+}
+
 void RuntimeHost::EnableDolphinLogs() {
   auto* mgr = Common::Log::LogManager::GetInstance();
   if (mgr == nullptr) {
@@ -782,7 +786,7 @@ void RuntimeHost::ApplyPendingSettings() {
   // Honor X9b (Adreno 710) is half-speed here vs a stable 30 FPS there.
   SetCfg(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Native);
   SetCfg(Config::MAIN_FASTMEM, true);
-  SetCfg(Config::MAIN_CPU_THREAD, true);
+  SetCfg(Config::MAIN_CPU_THREAD, prefer_dual_core_);
   SetCfg(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
   SetCfg(Config::MAIN_FAST_DISC_SPEED, true);
   SetCfg(Config::MAIN_SKIP_IPL, true);
@@ -848,10 +852,11 @@ void RuntimeHost::ApplyPendingSettings() {
 
   char buf[256];
   std::snprintf(buf, sizeof(buf),
-                "graphics: dual-core GLES native-vtx JIT async-skip "
+                "graphics: dual-core=%d GLES native-vtx JIT async-skip "
                 "SMS EFB-to-RAM 60fps=%d fast-depth=%d soc=%s cores=%d "
                 "ram=%ldMB max=%ldMHz weak=%d gpu_weak=%d",
-                prefer_60fps_ ? 1 : 0, dev.mali ? 0 : 1, dev.tag, dev.cores,
+                prefer_dual_core_ ? 1 : 0, prefer_60fps_ ? 1 : 0,
+                dev.mali ? 0 : 1, dev.tag, dev.cores,
                 dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0,
                 dev.gpu_weak ? 1 : 0);
   SunPadNativeLog(buf);
