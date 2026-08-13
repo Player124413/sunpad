@@ -319,7 +319,14 @@ index 0000000..54087fb
 +    while (IsRunning())
 +    {
 +      UpdateRunningFlag();
-+      Core::HostDispatchJobs(Core::System::GetInstance());
++      try
++      {
++        Core::HostDispatchJobs(Core::System::GetInstance());
++      }
++      catch (const std::exception& ex)
++      {
++        SunPadNativeLog((std::string("HostDispatchJobs: ") + ex.what()).c_str());
++      }
 +      if ((++ticks % 250) == 0)
 +        SunPadNativeLog("main loop still running");
 +      std::this_thread::sleep_for(std::chrono::milliseconds(8));
@@ -394,3 +401,36 @@ diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source
      m_fallback_jit = std::make_unique<JitArm64>(m_system);
  #elif defined(_M_X86_64)
      m_fallback_jit = std::make_unique<Jit64>(m_system);
+
+diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueueThread.h
+--- a/Source/Core/Common/WorkQueueThread.h
++++ b/Source/Core/Common/WorkQueueThread.h
+@@ -166,7 +166,14 @@ public:
+ 
+   void Reset(std::string thread_name)
+   {
+-    m_worker.Reset(std::move(thread_name), std::invoke<FuncType>);
++    // NDK libc++ / C++23: std::invoke<FuncType> is invoke_r with return type
++    // std::function<void()>, which does not bind as a void(FuncType) worker.
++    // The resulting empty std::function throws bad_function_call (SIGABRT)
++    // on the first queued job — that is the crash right after MainLoop.
++    m_worker.Reset(std::move(thread_name), [](FuncType func) {
++      if (func)
++        std::invoke(std::move(func));
++    });
+   }
+ 
+   void Push(FuncType func) { m_worker.Push(std::move(func)); }
+diff --git a/Source/Core/Common/HookableEvent.h b/Source/Core/Common/HookableEvent.h
+--- a/Source/Core/Common/HookableEvent.h
++++ b/Source/Core/Common/HookableEvent.h
+@@ -72,7 +72,8 @@ public:
+       if (listener->is_pending_removal)
+         continue;
+ 
+-      std::invoke(listener->callback, args...);
++      if (listener->callback)
++        std::invoke(listener->callback, args...);
+     }
+ 
+     m_storage->is_triggering = false;

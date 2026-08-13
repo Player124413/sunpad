@@ -67,6 +67,18 @@ void EarlyInit() {
   Common::SetAbortOnPanicAlert(false);
   Common::RegisterMsgAlertHandler(&SunPadAlert);
   ::setenv("STATICRECOMP_NO_FALLBACK_JIT", "1", 1);
+  std::set_terminate([] {
+    SunPadNativeLog("std::terminate: uncaught C++ exception");
+    try {
+      throw;
+    } catch (const std::exception& ex) {
+      char buf[512];
+      std::snprintf(buf, sizeof(buf), "exception: %s", ex.what());
+      SunPadNativeLog(buf);
+    } catch (...) {
+      SunPadNativeLog("exception: unknown");
+    }
+  });
   SunPadNativeLog("early init: panic logged, fallback JIT disabled");
 }
 
@@ -433,6 +445,8 @@ void RuntimeHost::ApplyPendingSettings() {
   Config::SetCurrent(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
   Config::SetBase(Config::GFX_PREFER_GLES, true);
   Config::SetCurrent(Config::GFX_PREFER_GLES, true);
+  Config::SetBase(Config::MAIN_CPU_THREAD, false);
+  Config::SetCurrent(Config::MAIN_CPU_THREAD, false);
   SunPadNativeLog("graphics: specialized, no precompile, 1 thread, GLES");
   ApplyAspectRatioMode(pending_aspect_);
 }
