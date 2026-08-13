@@ -374,3 +374,16 @@ index e70d636..f3ed09e 100644
  endif()
  
  if(TARGET LibUSB::LibUSB)
+diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
+--- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
++++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
+@@ -187,7 +187,7 @@ void StaticRecompCore::Init()
+   // STATICRECOMP_NO_FALLBACK_JIT reproduces the iOS execution contract
+   // (module + interpreter only) on desktop for parity testing.
+   if (!std::getenv("STATICRECOMP_NO_FALLBACK_JIT"))
+   {
+-#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
++#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && !defined(ANDROID)
+     m_fallback_jit = std::make_unique<JitArm64>(m_system);
+ #elif defined(_M_X86_64)
+     m_fallback_jit = std::make_unique<Jit64>(m_system);

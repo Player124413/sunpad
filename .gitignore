@@ -109,6 +109,7 @@ android/.cxx/
 android/app/src/main/cpp/generated/
 android/app/src/main/assets/dev-config.json
 android/app/src/main/assets/modules/
+android/app/src/main/assets/dolphin-sys/
 *.apk
 *.aab
 *.so

@@ -21,15 +21,84 @@
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/System.h"
+#include "Common/MsgHandler.h"
 #include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/VideoConfig.h"
 #include "moderngekko/runtime.hpp"
+
+#include <cstdlib>
+#include <string>
+
+// FileUtil.h pulls jni/AndroidCommon/AndroidCommon.h under ANDROID; that
+// header is not on this target's include path. Declare the one API we need.
+#ifdef ANDROID
+namespace File {
+void SetSysDirectory(const std::string& path);
+}
+#endif
 
 // Implemented by the SunPad Dolphin patch in PlatformAndroid.cpp.
 extern "C" void ModernGekkoSetAndroidRenderSurface(void* surface);
 extern "C" void SunPadNativeLog(const char* msg);
 
 namespace fs = std::filesystem;
+
+namespace {
+
+bool SunPadAlert(const char* caption, const char* text, bool /*yes_no*/,
+                 Common::MsgType /*style*/) {
+  char buf[1536];
+  std::snprintf(buf, sizeof(buf), "DOLPHIN ALERT [%s]: %s",
+                caption ? caption : "?", text ? text : "");
+  SunPadNativeLog(buf);
+  // true = "Ignore and continue" so ASSERT_MSG does not call Crash().
+  return true;
+}
+
+}  // namespace
+
+namespace sunpad {
+
+void EarlyInit() {
+  static bool done = false;
+  if (done)
+    return;
+  done = true;
+  Common::SetAbortOnPanicAlert(false);
+  Common::RegisterMsgAlertHandler(&SunPadAlert);
+  ::setenv("STATICRECOMP_NO_FALLBACK_JIT", "1", 1);
+  SunPadNativeLog("early init: panic logged, fallback JIT disabled");
+}
+
+}  // namespace sunpad
+
+namespace {
+
+void PrepareAndroidUserTree(const fs::path& user_directory) {
+  sunpad::EarlyInit();
+
+  std::error_code ec;
+  fs::create_directories(user_directory / "Sys", ec);
+  fs::create_directories(user_directory / "Dump", ec);
+  fs::create_directories(user_directory / "Cache", ec);
+  fs::create_directories(user_directory / "GC", ec);
+  fs::create_directories(user_directory / "Load", ec);
+  fs::create_directories(user_directory / "Shaders", ec);
+
+  // Android FileUtil ASSERT-aborts the process if this is never set
+  // ("Sys directory has not been set") — that is SIGABRT after shaders.
+  static bool sys_set = false;
+  if (!sys_set) {
+#ifdef ANDROID
+    File::SetSysDirectory((user_directory / "Sys").string());
+#endif
+    sys_set = true;
+    SunPadNativeLog(
+        ("Sys directory set to " + (user_directory / "Sys").string()).c_str());
+  }
+}
+
+}  // namespace
 
 namespace sunpad {
 
@@ -52,6 +121,8 @@ std::string RuntimeHost::Start(const fs::path& game_root,
 
   stop_requested_.store(false);
   starting_.store(true);
+
+  PrepareAndroidUserTree(user_directory);
 
   // The runtime opens the FIFO read-only; recreate if a stale file exists.
   const fs::path pipe_dir = user_directory / "Pipes";

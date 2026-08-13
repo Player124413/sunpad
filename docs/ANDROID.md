@@ -1,6 +1,6 @@
 # Android port
 
-Last updated: 2026-08-11
+Last updated: 2026-08-13
 
 Status: **port scaffolding complete — runtime deltas, Android app shell, and
 build tooling are in the repository; no Android hardware or NDK acceptance
@@ -193,6 +193,11 @@ module generation) — the build log will say precisely what is missing.
    log excerpt. **••• → Copy diagnostic log** copies it to the clipboard and
    writes `Android/data/com.sunpad.android/files/sunpad.log` (that folder
    is created on first launch; it is not present until the app runs).
+5. A successful log after **Starting game…** must contain
+   `Sys directory set to …` before `entering Run()`. If the process still
+   dies, the same file should show `DOLPHIN ALERT […]` instead of a silent
+   SIGABRT. Rebuild the APK after any core change — nothing on the phone
+   can “rebuild the core”.
 
 ## Runtime deltas (patches 0002)
 
@@ -206,8 +211,9 @@ module generation) — the build log will say precisely what is missing.
   - hands `RuntimeConfig.render_surface` to `ModernGekkoSetAndroidRenderSurface`;
   - prefers `BACKEND_OPENSLES` for audio on Android;
   - applies the mobile hardening the iOS port uses: software vertex loader
-    (no executable-code generation) and the larger audio buffer /
-    fill-gaps settings.
+    (no executable-code generation), exclusive ubershaders on Android
+    (so specialized pipelines are not swapped in after the loading
+    screen), and the larger audio buffer / fill-gaps settings.
 
 ### Vendored Dolphin (`patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch`)
 
@@ -316,19 +322,19 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
 
 ## Current boundaries and known gaps
 
-- **No acceptance run**: nothing in `android/` has been compiled or booted on
-  a device or emulator yet. The runtime patches are verified to apply at the
-  pinned revisions (CI runs the network-mode patch test); the app compiles
-  in principle but awaits a first NDK/Gradle build and hardware acceptance.
-- The CI workflow is parked at `ci/repository-checks.yml` (outside
+- **Hardware acceptance is still open**: CI APKs have been installed on a
+  phone, but Super Mario Sunshine has not yet stayed up past the shader
+  compile / first present. The Sys-directory + no-JIT + panic-log fix
+  above is the remaining native SIGABRT hypothesis.
+- The CI workflow is parked at `ci/android-build.yml` (outside
   `.github/workflows/` so it can be pushed without the GitHub App
-  "workflows" permission); move it back to
-  `.github/workflows/repository-checks.yml` to re-enable checks.
+  "workflows" permission); move it to
+  `.github/workflows/android-build.yml` to build APKs from Actions.
 - **Saves**: Dolphin save files under the user directory are preserved by the
   removal flow (only imported game data is removed), matching iOS behavior.
-- **OpenGL ES fallback**: `graphics.backend` is hardcoded to `"Vulkan"` in
-  the runtime host; switching to `"OGL"` is a one-line change for devices
-  where the Vulkan driver is broken.
+- **OpenGL ES fallback**: **••• → Renderer** switches Vulkan / OpenGL ES
+  for the next launch. After an unclean boot the next start prefers OGL
+  automatically.
 - **60 FPS experiment**: the `enable_gmse01_60fps` runtime flag exists on all
   platforms; the Android menu does not expose it yet.
 

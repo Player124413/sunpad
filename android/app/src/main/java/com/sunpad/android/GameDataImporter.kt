@@ -22,6 +22,7 @@ class GameDataImporter(private val context: Context) {
     val moduleDir: File get() = File(context.filesDir, "module")
     val moduleFile: File get() = File(moduleDir, "gGMSE01_recomp.so")
     val userDirectory: File get() = File(context.filesDir, "user")
+    val sysDirectory: File get() = File(userDirectory, "Sys")
 
     val gameRoot: File get() = activeRoot
     val discImagePath: String get() = activeImage.absolutePath
@@ -69,6 +70,51 @@ class GameDataImporter(private val context: Context) {
                 return "The module file could not be read."
         }
         return ModuleValidator.validateHeader(header)
+    }
+
+    /**
+     * Copies bundled Dolphin Sys data (GameSettings, GC fonts, etc.) from
+     * APK assets into the user directory. Dolphin Android ASSERT-aborts if
+     * File::SetSysDirectory is never called / the folder is missing.
+     */
+    fun ensureDolphinSys(): File {
+        userDirectory.mkdirs()
+        sysDirectory.mkdirs()
+        val marker = File(sysDirectory, "GameSettings")
+        if (marker.isDirectory) {
+            DiagnosticLog.append(context, "dolphin Sys already present at ${sysDirectory.absolutePath}")
+            return sysDirectory
+        }
+        try {
+            copyAssetTree("dolphin-sys", sysDirectory)
+        } catch (t: Throwable) {
+            android.util.Log.w("SunPad", "dolphin-sys assets not copied", t)
+            DiagnosticLog.append(context, "dolphin-sys assets not copied: ${t.message}")
+        }
+        val ready = File(sysDirectory, "GameSettings").isDirectory
+        DiagnosticLog.append(
+            context,
+            if (ready) "dolphin Sys extracted to ${sysDirectory.absolutePath}"
+            else "dolphin Sys folder is empty (rebuild the APK so CI can bundle Data/Sys)",
+        )
+        return sysDirectory
+    }
+
+    private fun copyAssetTree(assetPath: String, dest: File) {
+        dest.mkdirs()
+        val names = context.assets.list(assetPath) ?: return
+        for (name in names) {
+            val childAsset = "$assetPath/$name"
+            val childDest = File(dest, name)
+            val nested = context.assets.list(childAsset)
+            if (nested != null && nested.isNotEmpty()) {
+                copyAssetTree(childAsset, childDest)
+            } else {
+                context.assets.open(childAsset).use { input ->
+                    FileOutputStream(childDest).use { input.copyTo(it) }
+                }
+            }
+        }
     }
 
     /** Bytes that should be free before a full ISO copy + extract. */

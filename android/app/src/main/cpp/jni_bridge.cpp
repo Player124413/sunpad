@@ -251,6 +251,9 @@ extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
   g_vm = vm;
   SunPadAndroidSetJavaVM(vm);
   InstallCrashHandlers();
+  // Before Start(): any Dolphin ASSERT (empty Sys, etc.) would otherwise
+  // hit the default handler, return false, and Crash() → SIGABRT.
+  sunpad::EarlyInit();
   JNIEnv* env = nullptr;
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) == JNI_OK &&
       env != nullptr) {

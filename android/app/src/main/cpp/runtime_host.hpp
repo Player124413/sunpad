@@ -26,6 +26,11 @@ class Runtime;
 
 namespace sunpad {
 
+// Process-wide: log Dolphin PanicAlert instead of aborting, and disable the
+// PowerPC fallback JIT (W^X). Safe to call more than once. Invoked from
+// JNI_OnLoad so an ASSERT during extract cannot SIGABRT before Start().
+void EarlyInit();
+
 enum class AspectRatioMode { Original = 0, Widescreen = 1, FillScreen = 2 };
 
 class RuntimeHost {

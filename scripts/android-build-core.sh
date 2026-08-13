@@ -269,6 +269,7 @@ fi
   for inc in \
       "$MG/include" \
       "$MG/vendor/dolphin/Source/Core" \
+      "$MG/vendor/dolphin/Source/Android" \
       "$MG/vendor/dolphin/GXRuntime/include" \
       "$MG/vendor/dolphin/Externals/fmt/fmt/include" \
       "$MG/vendor/dolphin/Externals/enet/enet/include" \
@@ -288,6 +289,18 @@ fi
   echo ")"
 } > "$GEN_DIR/core_libs.cmake"
 echo "provisioned: $GEN_DIR/core_libs.cmake (${#LIBS[@]} archives)"
+
+# Dolphin Android ASSERT-aborts if Sys is unset. Bundle Data/Sys into the
+# APK so the app can extract it to the user directory on first launch.
+SYS_SRC="$MG/vendor/dolphin/Data/Sys"
+SYS_DST="$ROOT/android/app/src/main/assets/dolphin-sys"
+if [[ -d "$SYS_SRC" ]]; then
+  mkdir -p "$SYS_DST"
+  cp -a "$SYS_SRC/." "$SYS_DST/"
+  echo "bundled Dolphin Sys into $SYS_DST"
+else
+  echo "warning: Dolphin Data/Sys not found at $SYS_SRC" >&2
+fi
 
 if [[ -n "$MODULE_SO" ]]; then
   echo "Android core, module, and provisioning complete."

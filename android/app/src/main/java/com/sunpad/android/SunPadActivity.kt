@@ -203,6 +203,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         startPending = false
         started = true
         importer.userDirectory.mkdirs()
+        importer.ensureDolphinSys()
         prefs.edit().putBoolean("bootInProgress", true).commit()
         showStatus("Starting game…")
         Thread {
