@@ -379,11 +379,12 @@ diff --git a/Source/Core/Common/WorkQueueThread.h b/Source/Core/Common/WorkQueue
 index 826ee77..4f66e91 100644
 --- a/Source/Core/Common/WorkQueueThread.h
 +++ b/Source/Core/Common/WorkQueueThread.h
-@@ -167,7 +167,14 @@ private:
+@@ -167,7 +167,19 @@ private:
          continue;
        }
  
 -      function(std::move(m_items.Front()));
++#ifdef ANDROID
 +      try
 +      {
 +        if (function)
@@ -392,14 +393,19 @@ index 826ee77..4f66e91 100644
 +      catch (const std::exception&)
 +      {
 +      }
++#else
++      if (function)
++        function(std::move(m_items.Front()));
++#endif
        m_items.Pop();
      }
    }
-@@ -194,7 +201,18 @@ public:
+@@ -194,7 +206,22 @@ public:
  
    void Reset(std::string thread_name)
    {
 -    m_worker.Reset(std::move(thread_name), std::invoke<FuncType>);
++#ifdef ANDROID
 +    // Swallow bad_function_call: queued jobs often call another empty
 +    // std::function. That must not abort the worker thread (SIGABRT).
 +    m_worker.Reset(std::move(thread_name), [](FuncType func) {
@@ -412,6 +418,9 @@ index 826ee77..4f66e91 100644
 +      {
 +      }
 +    });
++#else
++    m_worker.Reset(std::move(thread_name), std::invoke<FuncType>);
++#endif
    }
  
    void Push(FuncType func) { m_worker.Push(std::move(func)); }
@@ -545,12 +554,13 @@ index e58579e..20f3c79 100644
    }
  
    // Initialise Wii filesystem contents.
-@@ -638,7 +654,23 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
+@@ -638,7 +654,28 @@ static void EmuThread(Core::System& system, std::unique_ptr<BootParameters> boot
    UpdateTitle(system);
  
    // Become the CPU thread.
 -  cpu_thread_func(system, savestate_path, delete_savestate);
 +  SunPadNativeLog("EmuThread: entering CPU loop");
++#ifdef ANDROID
 +  try
 +  {
 +    cpu_thread_func(system, savestate_path, delete_savestate);
@@ -567,6 +577,10 @@ index e58579e..20f3c79 100644
 +  {
 +    SunPadNativeLog("EmuThread: CPU exception: unknown");
 +  }
++#else
++  cpu_thread_func(system, savestate_path, delete_savestate);
++  SunPadNativeLog("EmuThread: CPU loop returned");
++#endif
  }
  
  // Set or get the running state
@@ -794,11 +808,12 @@ diff --git a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp b/Source/Core/Video
 index 83eaa2e..4cb6e62 100644
 --- a/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
 +++ b/Source/Core/VideoCommon/AsyncShaderCompiler.cpp
-@@ -239,7 +239,15 @@ void AsyncShaderCompiler::WorkerThreadRun()
+@@ -239,7 +239,19 @@ void AsyncShaderCompiler::WorkerThreadRun()
        m_pending_work.erase(iter);
        pending_lock.unlock();
  
 -      if (item->Compile())
++#ifdef ANDROID
 +      bool compiled = false;
 +      try
 +      {
@@ -808,6 +823,9 @@ index 83eaa2e..4cb6e62 100644
 +      {
 +      }
 +      if (compiled)
++#else
++      if (item->Compile())
++#endif
        {
          std::lock_guard completed_guard(m_completed_work_lock);
          m_completed_work.push_back(std::move(item));

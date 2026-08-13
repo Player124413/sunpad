@@ -43,6 +43,8 @@ grep -q 'SunPadAndroidQueryAudio' "$DOLPHIN_PATCH" || fail "dolphin patch missin
 grep -q 'CreateAndroidPlatform' "$DOLPHIN_PATCH" || fail "dolphin patch missing CreateAndroidPlatform"
 grep -q 'JitArm64' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android JitArm64 exclusion"
 grep -q 'WorkQueueThread.h' "$DOLPHIN_PATCH" || fail "dolphin patch missing AsyncWorkThread bad_function_call fix"
+# Desktop CI compiles these TUs with -fno-exceptions; try/catch must be Android-only.
+grep -q 'item && item->Compile' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android shader compile guard"
 grep -q 'callback.second' "$DOLPHIN_PATCH" || fail "dolphin patch missing empty config-callback guard"
 grep -q 'NO_EXCEPTIONS' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android exceptions enable"
 grep -q 'HAVE_EGL=1 (NDK libEGL)' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android HAVE_EGL force"
