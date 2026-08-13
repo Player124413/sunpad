@@ -81,7 +81,12 @@ void EarlyInit() {
   done = true;
   Common::SetAbortOnPanicAlert(false);
   Common::RegisterMsgAlertHandler(&SunPadAlert);
+  // iOS forbids W^X. Official Dolphin Android uses JitArm64 — without it
+  // SMS's 138 SMC ranges hit the interpreter and Honor X9b crawls at
+  // ~half the FPS of the same game in Dolphin.
+#ifndef ANDROID
   ::setenv("STATICRECOMP_NO_FALLBACK_JIT", "1", 1);
+#endif
 #ifdef ANDROID
   DolphinAnalytics::AndroidSetGetValFunc([](std::string key) -> std::string {
     if (key == "DEVICE_MANUFACTURER")
@@ -105,7 +110,11 @@ void EarlyInit() {
       SunPadNativeLog("exception: unknown");
     }
   });
+#ifdef ANDROID
+  SunPadNativeLog("early init: panic logged, ARM64 JIT fallback on, analytics stub set");
+#else
   SunPadNativeLog("early init: panic logged, fallback JIT disabled, analytics stub set");
+#endif
 }
 
 }  // namespace sunpad
@@ -265,24 +274,25 @@ void FitPresentBuffer(ANativeWindow* surface) {
   if (surface == nullptr)
     return;
   const auto& dev = CachedDevice();
-  if (!dev.gpu_weak) {
-    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
-    return;
-  }
   const int nw = ANativeWindow_getWidth(surface);
   const int nh = ANativeWindow_getHeight(surface);
   if (nw <= 1 || nh <= 1) {
     ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
     return;
   }
-  // Weak GPUs spend a lot of time upscaling 640x528 to a 2400px panel.
-  // Present at 1280 (or 960 on very small SoCs); the compositor scales.
+  // Honor X9b is 2652x1220 @ 120 Hz. Blitting 1x EFB (640x528) onto that
+  // every frame costs more than the GameCube scene. 1280 is plenty.
+  const int long_side = std::max(nw, nh);
+  const bool need_cap = dev.gpu_weak || long_side > 1600;
+  if (!need_cap) {
+    ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
+    return;
+  }
   const int cap =
-      (dev.mem_mb > 0 && dev.mem_mb < 3000) ||
-              (dev.max_mhz > 0 && dev.max_mhz < 1800) ?
+      (dev.weak && ((dev.mem_mb > 0 && dev.mem_mb < 3000) ||
+                    (dev.max_mhz > 0 && dev.max_mhz < 1800))) ?
           960 :
           1280;
-  const int long_side = std::max(nw, nh);
   if (long_side <= cap) {
     ANativeWindow_setBuffersGeometry(surface, 0, 0, WINDOW_FORMAT_RGBA_8888);
     return;
@@ -749,6 +759,10 @@ void RuntimeHost::ApplyPendingSettings() {
   SetCfg(Config::GFX_BACKEND_MULTITHREADING, false);
   SetCfg(Config::GFX_PREFER_GLES, true);
   SetCfg(Config::GFX_SHADER_CACHE, true);
+  // Official Dolphin Android uses the JIT vertex loader. Software is why
+  // Honor X9b (Adreno 710) is half-speed here vs a stable 30 FPS there.
+  SetCfg(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Native);
+  SetCfg(Config::MAIN_FASTMEM, true);
   SetCfg(Config::MAIN_CPU_THREAD, true);
   SetCfg(Config::MAIN_SYNC_ON_SKIP_IDLE, false);
   SetCfg(Config::MAIN_FAST_DISC_SPEED, true);
@@ -797,7 +811,9 @@ void RuntimeHost::ApplyPendingSettings() {
   SetCfg(Config::GFX_ENHANCE_ARBITRARY_MIPMAP_DETECTION, true);
   SetCfg(Config::GFX_ENABLE_GPU_TEXTURE_DECODING, false);
   SetCfg(Config::GFX_HACK_COPY_EFB_SCALED, false);
-  SetCfg(Config::GFX_FAST_DEPTH_CALC, false);
+  // Fast depth flickers on Mali GLES. Adreno (Honor X9b) matches official
+  // Dolphin with it on — a free chunk of GPU time.
+  SetCfg(Config::GFX_FAST_DEPTH_CALC, !dev.mali);
   SetCfg(Config::GFX_HACK_IMMEDIATE_XFB, true);
   SetCfg(Config::GFX_HACK_SKIP_DUPLICATE_XFBS, true);
 
@@ -813,10 +829,11 @@ void RuntimeHost::ApplyPendingSettings() {
 
   char buf[256];
   std::snprintf(buf, sizeof(buf),
-                "graphics: dual-core GLES SMS EFB-to-RAM vi-skip "
-                "soc=%s cores=%d ram=%ldMB max=%ldMHz weak=%d gpu_weak=%d",
-                dev.tag, dev.cores, dev.mem_mb, dev.max_mhz, dev.weak ? 1 : 0,
-                dev.gpu_weak ? 1 : 0);
+                "graphics: dual-core GLES native-vtx JIT SMS EFB-to-RAM "
+                "fast-depth=%d soc=%s cores=%d ram=%ldMB max=%ldMHz weak=%d "
+                "gpu_weak=%d",
+                dev.mali ? 0 : 1, dev.tag, dev.cores, dev.mem_mb, dev.max_mhz,
+                dev.weak ? 1 : 0, dev.gpu_weak ? 1 : 0);
   SunPadNativeLog(buf);
 
   // After boot, stop appending every Dolphin line to the crash log.

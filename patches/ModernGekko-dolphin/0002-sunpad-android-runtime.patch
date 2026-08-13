@@ -598,12 +598,13 @@ diff --git a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp b/Source
 index 743bd5c..4dac801 100644
 --- a/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
 +++ b/Source/Core/Core/PowerPC/StaticRecomp/StaticRecompCore.cpp
-@@ -188,7 +188,7 @@ void StaticRecompCore::Init()
+@@ -188,7 +188,9 @@ void StaticRecompCore::Init()
    // (module + interpreter only) on desktop for parity testing.
    if (!std::getenv("STATICRECOMP_NO_FALLBACK_JIT"))
    {
--#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
-+#if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && !defined(ANDROID)
+ #if defined(_M_ARM_64) && !defined(__IPHONE_OS_VERSION_MIN_REQUIRED)
++    // Android included: official Dolphin JIT holds 30 FPS on Honor X9b.
++    // SMS has 138 SMC ranges; interpreting them is the lag vs Dolphin.
      m_fallback_jit = std::make_unique<JitArm64>(m_system);
  #elif defined(_M_X86_64)
      m_fallback_jit = std::make_unique<Jit64>(m_system);
