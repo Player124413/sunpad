@@ -262,7 +262,7 @@ new file mode 100644
 index 0000000..54087fb
 --- /dev/null
 +++ b/Source/Core/DolphinNoGUI/PlatformAndroid.cpp
-@@ -0,0 +1,83 @@
+@@ -0,0 +1,92 @@
 +// Copyright 2026 SunPad project
 +// SPDX-License-Identifier: GPL-2.0-or-later
 +
@@ -273,6 +273,8 @@ index 0000000..54087fb
 +#include "DolphinNoGUI/Platform.h"
 +
 +#include <chrono>
++#include <exception>
++#include <string>
 +#include <thread>
 +
 +#include "Core/Core.h"
