@@ -9,14 +9,15 @@
 # What this builds:
 #   - the ModernGekko / Dolphin-derived core for Android arm64-v8a
 #     (Vulkan + OpenSL ES, the SunPad 0001+0002 patches applied),
-#   - when you provide an ISO URL in the workflow_dispatch form: the GMSE01
-#     recompiled module, generated from your disc image and BUNDLED into
-#     the APK (the app extracts it to private storage on first launch),
+#   - when you provide an ISO URL: generates the GMSE01 Android module from
+#     your disc image; or when you provide a module URL: reuses that already
+#     built Android arm64 module. Either module source is bundled into the APK
+#     and uploaded as a separate artifact,
 #   - the Kotlin app + JNI shim into an installable debug APK.
 #
-# Game data is never committed: the ISO is downloaded only for the run and
-# discarded afterwards. If no ISO URL is given (plain push), the APK is
-# built without the module and it must be provisioned on-device.
+# Game data is never committed: an ISO or prebuilt module is downloaded only
+# for the run and discarded afterwards. A plain push builds an APK without a
+# module, so it must be provisioned on-device.
 name: Android build
 
 on:
@@ -27,8 +28,14 @@ on:
       iso_url:
         description: >-
           Direct URL to your GMSE01 USA Rev 0 ISO (1.4 GB, SHA-256
-          67cec163...73e51d). Leave empty to build the APK without the game
-          module.
+          67cec163...73e51d). Generates and bundles a new Android module.
+          Leave this and module_url empty for an APK without a module.
+        required: false
+      module_url:
+        description: >-
+          Direct public download URL to an existing Android arm64
+          gGMSE01_recomp.so. Reuses and bundles it without regeneration.
+          Do not set this together with iso_url.
         required: false
 
 permissions:
@@ -41,6 +48,12 @@ jobs:
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
+
+      - name: Reject conflicting module sources
+        if: ${{ inputs.iso_url != '' && inputs.module_url != '' }}
+        run: |
+          echo "Choose either iso_url (generate a module) or module_url (reuse one), not both." >&2
+          exit 1
 
       - name: Install system dependencies
         run: |
@@ -125,13 +138,42 @@ jobs:
         if: ${{ inputs.iso_url != '' }}
         run: ./scripts/ci-prepare-game.sh /tmp/gmse01.iso
 
+      - name: Download prebuilt GMSE01 Android module
+        if: ${{ inputs.module_url != '' }}
+        env:
+          MODULE_URL: ${{ inputs.module_url }}
+        run: |
+          aria2c -x16 -s16 -k1M --allow-overwrite=true --console-log-level=warn \
+            -d /tmp -o gGMSE01_recomp.so "$MODULE_URL"
+          python3 - /tmp/gGMSE01_recomp.so <<'PY'
+          import struct
+          import sys
+
+          with open(sys.argv[1], "rb") as module:
+              header = module.read(20)
+          if len(header) < 20 or header[:4] != b"\x7fELF":
+              raise SystemExit("Downloaded module is not an ELF file")
+          if header[4] != 2 or header[5] != 1:
+              raise SystemExit("Downloaded module must be a 64-bit little-endian ELF file")
+          e_type, e_machine = struct.unpack_from("<HH", header, 16)
+          if e_type != 3 or e_machine != 183:
+              raise SystemExit(
+                  "Downloaded module must be an Android arm64 shared library "
+                  f"(type={e_type}, machine={e_machine})"
+              )
+          PY
+
       - name: Build Android core and provision the app
         env:
           SUNPAD_BUNDLE_MODULE: "1"
+          MODULE_URL: ${{ inputs.module_url }}
         run: |
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
           export ANDROID_NDK_HOME="$SDK_ROOT/ndk/26.3.11579264"
           test -d "$ANDROID_NDK_HOME" || { echo "NDK missing in $SDK_ROOT/ndk/"; ls -1 "$SDK_ROOT/ndk/" 2>/dev/null || true; exit 1; }
+          if [[ -n "$MODULE_URL" ]]; then
+            export SUNPAD_PREBUILT_MODULE=/tmp/gGMSE01_recomp.so
+          fi
           ./scripts/android-build-core.sh
 
       - name: Build APK and run unit tests
@@ -143,4 +185,12 @@ jobs:
         with:
           name: sunpad-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload recompiled GMSE01 module
+        if: ${{ hashFiles('android/app/src/main/assets/modules/gGMSE01_recomp.so') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gGMSE01_recomp.so
+          path: android/app/src/main/assets/modules/gGMSE01_recomp.so
           if-no-files-found: error
