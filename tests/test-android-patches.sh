@@ -53,6 +53,11 @@ grep -q 'GetSysDirectory now' "$DOLPHIN_PATCH" || fail "dolphin patch missing An
 grep -q 'Headless' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android OGL headless probe"
 grep -q 's_get_val_func' "$DOLPHIN_PATCH" || fail "dolphin patch missing Android analytics callback guard"
 grep -q 'extern "C" void SunPadNativeLog' "$DOLPHIN_PATCH" || fail "dolphin patch missing SunPadNativeLog declaration for Core.cpp"
+# Core.cpp also belongs to the desktop moderngekko-run link, which does not
+# include SunPad's JNI host implementation. Keep the Android diagnostics a
+# no-op there instead of emitting an unresolved SunPadNativeLog reference.
+grep -Fq 'static void SunPadNativeLog(const char*) {}' "$DOLPHIN_PATCH" \
+  || fail "dolphin patch missing desktop SunPadNativeLog no-op"
 
 # When a prepared ref/ tree exists, the 0002 patches must be fully applied
 # (reverse-apply must succeed).

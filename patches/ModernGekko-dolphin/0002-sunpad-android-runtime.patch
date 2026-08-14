@@ -489,11 +489,17 @@ index e58579e..20f3c79 100644
  #include <utility>
  #include <variant>
  
-@@ -92,6 +94,8 @@
+@@ -92,6 +94,14 @@
  #include "VideoCommon/VideoBackendBase.h"
  #include "VideoCommon/VideoEvents.h"
  
++#ifdef ANDROID
 +extern "C" void SunPadNativeLog(const char* msg);
++#else
++// Desktop tools link core without SunPad's JNI host. Keep Android stage
++// diagnostics compiled out rather than introducing an unresolved symbol.
++static void SunPadNativeLog(const char*) {}
++#endif
 +
  namespace Core
  {
