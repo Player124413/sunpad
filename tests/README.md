@@ -23,6 +23,7 @@ Focused source regression gates:
 ./tests/test-experimental-60fps-config.sh
 ./tests/test-diagnostics.sh
 ./tests/test-android-patches.sh   # Android 0002 patch reproducibility (network mode: SUNPAD_NETWORK_TESTS=1)
+./tests/test-android-workflow.sh  # Workflow module-reuse and Android UI/source checks
 ```
 
 Before publishing or merging release-hardening work, run the combined

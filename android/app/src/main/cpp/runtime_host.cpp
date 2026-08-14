@@ -815,10 +815,6 @@ void RuntimeHost::SetPreferredBackend(std::string backend) {
     preferred_backend_ = std::move(backend);
 }
 
-void RuntimeHost::SetDualCore(bool enabled) {
-  prefer_dual_core_ = enabled;
-}
-
 void RuntimeHost::EnableDolphinLogs() {
   auto* mgr = Common::Log::LogManager::GetInstance();
   if (mgr == nullptr) {
@@ -851,13 +847,10 @@ void RuntimeHost::ApplyPendingSettings() {
   const int scale = pending_scale_ < 1 ? 1 : pending_scale_;
   SetCfg(Config::GFX_EFB_SCALE, scale);
   SetCfg(Config::GFX_MAX_EFB_SCALE, 12);
-  // Adreno cannot link Dolphin ubershaders (black screen / 50+ link
-  // failures). Official Dolphin default is Synchronous specialized —
-  // AsynchronousSkipRendering is what dropped frames on Honor X9b.
-  // Other GPUs get async uber so new areas do not hitch.
+  // Use specialized shaders on every GPU. Uber shaders fail to link on some
+  // Adreno devices and are not reliable enough for this app's fixed profile.
   SetCfg(Config::GFX_SHADER_COMPILATION_MODE,
-         dev.adreno ? ShaderCompilationMode::Synchronous
-                    : ShaderCompilationMode::AsynchronousUberShaders);
+         ShaderCompilationMode::Synchronous);
   SetCfg(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
   const int shader_threads = (!dev.weak && !dev.mali && dev.cores > 4) ? 2 : 1;
   SetCfg(Config::GFX_SHADER_PRECOMPILER_THREADS, shader_threads);
@@ -869,7 +862,9 @@ void RuntimeHost::ApplyPendingSettings() {
   // Honor X9b (Adreno 710) is half-speed here vs a stable 30 FPS there.
   SetCfg(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Native);
   SetCfg(Config::MAIN_FASTMEM, true);
-  SetCfg(Config::MAIN_CPU_THREAD, prefer_dual_core_);
+  // Dual-core stays enabled for every device; the app deliberately does not
+  // offer a single-core mode because Sunshine needs the CPU and GPU threads.
+  SetCfg(Config::MAIN_CPU_THREAD, true);
   // Official Dolphin default. Dual-core + skip-idle unsynced is a common
   // hitch on SMS; matching Dolphin Android here.
   SetCfg(Config::MAIN_SYNC_ON_SKIP_IDLE, true);
@@ -944,10 +939,9 @@ void RuntimeHost::ApplyPendingSettings() {
 
   char buf[256];
   std::snprintf(buf, sizeof(buf),
-                "graphics: dual-core=%d GLES 30fps ram-iso=%d vi-skip=0 "
-                "uber=%d soc=%s cores=%d ram=%ldMB weak=%d",
-                prefer_dual_core_ ? 1 : 0, ram_load ? 1 : 0,
-                dev.adreno ? 0 : 1, dev.tag, dev.cores, dev.mem_mb,
+                "graphics: dual-core=1 GLES 30fps ram-iso=%d vi-skip=0 "
+                "specialized=1 soc=%s cores=%d ram=%ldMB weak=%d",
+                ram_load ? 1 : 0, dev.tag, dev.cores, dev.mem_mb,
                 dev.weak ? 1 : 0);
   SunPadNativeLog(buf);
 

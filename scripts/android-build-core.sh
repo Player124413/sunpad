@@ -81,37 +81,68 @@ ninja -C "$BUILD" iconv libcharset linkernsbypass adrenotools -j"$JOBS" 2>/dev/n
   || echo "note: some externals targets not buildable in this configuration"
 
 # ---------------------------------------------------------------------------
-# Optional: GMSE01 recompiled module (needs the user's locally generated
-# DolRecomp sources from scripts/prepare-game.sh).
-ACTIVE_FILE="$TPL/build/modules-macos14/GMSE01/active-module.txt"
-if [[ -f "$ACTIVE_FILE" ]]; then
-  ACTIVE_MODULE="$(<"$ACTIVE_FILE")"
-  if [[ "$ACTIVE_MODULE" != /* ]]; then
-    ACTIVE_MODULE="$TPL/$ACTIVE_MODULE"
-  fi
-  GEN="$(dirname "$ACTIVE_MODULE")/dolrecomp-output/generated"
-else
-  GEN="$TPL/extracted/Super-Mario-Sunshine/recomp/generated"
-fi
+# Optional: GMSE01 recompiled module. SUNPAD_PREBUILT_MODULE lets CI (or a
+# local caller) reuse an already-built Android arm64 module instead of doing
+# the expensive source-generation/module-build pass. Without it, preserve the
+# existing source-generation path from scripts/prepare-game.sh.
+validate_android_module() {
+  local module=$1
+  [[ -s "$module" ]] || { echo "prebuilt module is missing or empty: $module" >&2; exit 1; }
+  python3 - "$module" <<'PY'
+import struct
+import sys
+
+path = sys.argv[1]
+with open(path, "rb") as module:
+    header = module.read(20)
+if len(header) < 20 or header[:4] != b"\x7fELF":
+    raise SystemExit("prebuilt module is not an ELF file")
+if header[4] != 2 or header[5] != 1:
+    raise SystemExit("prebuilt module must be a 64-bit little-endian ELF file")
+e_type, e_machine = struct.unpack_from("<HH", header, 16)
+if e_type != 3 or e_machine != 183:
+    raise SystemExit(
+        f"prebuilt module must be an Android arm64 shared library "
+        f"(type={e_type}, machine={e_machine})"
+    )
+PY
+}
+
 MODULE_SO=""
-if [[ -f "$GEN/generated.c" && -f "$GEN/generated.h" ]]; then
-  if [[ ! -f "$GEN/main.dol" ]]; then
-    cp "$TPL/extracted/Super-Mario-Sunshine/sys/main.dol" "$GEN/main.dol"
-  fi
-  echo "==> Building GMSE01 recompiled module for Android"
-  cmake -S "$MG/vendor/dolphin/module-template" -B "$MODULE_BUILD" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
-    -DGAME_ID=GMSE01 \
-    -DGENERATED_DIR="$GEN" \
-    -DGXRUNTIME_DIR="$MG/vendor/dolphin/GXRuntime" \
-    -DCHASSIS_ABI_DIR="$MG/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp"
-  ninja -C "$MODULE_BUILD" -j"$JOBS"
-  MODULE_SO="$MODULE_BUILD/gGMSE01_recomp.so"
-  test -f "$MODULE_SO"
+if [[ -n "${SUNPAD_PREBUILT_MODULE:-}" ]]; then
+  MODULE_SO="$SUNPAD_PREBUILT_MODULE"
+  validate_android_module "$MODULE_SO"
+  echo "==> Reusing prebuilt GMSE01 Android module: $MODULE_SO"
 else
-  echo "==> Skipping GMSE01 module build (no prepared game sources; run"
-  echo "    scripts/prepare-game.sh locally and provision the module on-device)"
+  ACTIVE_FILE="$TPL/build/modules-macos14/GMSE01/active-module.txt"
+  if [[ -f "$ACTIVE_FILE" ]]; then
+    ACTIVE_MODULE="$(<"$ACTIVE_FILE")"
+    if [[ "$ACTIVE_MODULE" != /* ]]; then
+      ACTIVE_MODULE="$TPL/$ACTIVE_MODULE"
+    fi
+    GEN="$(dirname "$ACTIVE_MODULE")/dolrecomp-output/generated"
+  else
+    GEN="$TPL/extracted/Super-Mario-Sunshine/recomp/generated"
+  fi
+  if [[ -f "$GEN/generated.c" && -f "$GEN/generated.h" ]]; then
+    if [[ ! -f "$GEN/main.dol" ]]; then
+      cp "$TPL/extracted/Super-Mario-Sunshine/sys/main.dol" "$GEN/main.dol"
+    fi
+    echo "==> Building GMSE01 recompiled module for Android"
+    cmake -S "$MG/vendor/dolphin/module-template" -B "$MODULE_BUILD" -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN" \
+      -DGAME_ID=GMSE01 \
+      -DGENERATED_DIR="$GEN" \
+      -DGXRUNTIME_DIR="$MG/vendor/dolphin/GXRuntime" \
+      -DCHASSIS_ABI_DIR="$MG/vendor/dolphin/Source/Core/Core/PowerPC/StaticRecomp"
+    ninja -C "$MODULE_BUILD" -j"$JOBS"
+    MODULE_SO="$MODULE_BUILD/gGMSE01_recomp.so"
+    validate_android_module "$MODULE_SO"
+  else
+    echo "==> Skipping GMSE01 module build (no prepared game sources; run"
+    echo "    scripts/prepare-game.sh locally, or set SUNPAD_PREBUILT_MODULE)"
+  fi
 fi
 
 # ---------------------------------------------------------------------------

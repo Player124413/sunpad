@@ -541,24 +541,6 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
             showMenu()
         }
 
-        items.add(
-            if (prefs.getBoolean("dualCore", true))
-                "Dual-core: ON (restart to apply)"
-            else
-                "Dual-core: OFF (restart to apply)")
-        actions.add {
-            val on = !prefs.getBoolean("dualCore", true)
-            prefs.edit().putBoolean("dualCore", on).apply()
-            SunPadNative.setDualCore(on)
-            Toast.makeText(
-                this,
-                if (on) "Dual-core on next start (close and reopen)"
-                else "Single-core on next start (close and reopen)",
-                Toast.LENGTH_LONG,
-            ).show()
-            showMenu()
-        }
-
         items.add("Edit touch layout…")
         actions.add {
             controls.editingLayout = true
@@ -685,7 +667,6 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
         SunPadNative.setModernCStick(prefs.getBoolean("modernCStick", false))
         SunPadNative.setRenderScale(storedScale())
         SunPadNative.setAspectRatioMode(prefs.getInt("aspect", 0))
-        SunPadNative.setDualCore(prefs.getBoolean("dualCore", true))
     }
 
     // ------------------------------------------------------------------ input loop
@@ -725,7 +706,7 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private fun confirmResetLayout() {
         AlertDialog.Builder(this)
             .setTitle("Reset Touch Control Layout?")
-            .setMessage("All control positions and sizes, including the grouped D-pad, return to their defaults.")
+            .setMessage("All touch-control positions and sizes return to their defaults.")
             .setPositiveButton("Reset") { _, _ -> controls.resetLayout() }
             .setNegativeButton("Cancel", null)
             .show()
@@ -744,7 +725,6 @@ class SunPadActivity : Activity(), SurfaceHolder.Callback {
     private fun controlLabel(controlId: String): String = when (controlId) {
         TouchControlsView.ID_MOVE -> "Move stick"
         TouchControlsView.ID_C -> "Camera stick"
-        TouchControlsView.ID_DPAD_GROUP -> "D-Pad"
         else -> "Control $controlId"
     }
 

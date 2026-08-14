@@ -162,7 +162,8 @@ index 1ddc25c..1894bd7 100644
  #endif
 @@ -341,29 +360,81 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
    Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
-                   ShaderCompilationMode::AsynchronousUberShaders);
+-                  ShaderCompilationMode::AsynchronousUberShaders);
++                  ShaderCompilationMode::Synchronous);
    Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
 -#ifdef MODERNGEKKO_HAVE_IOS
 +#if defined(MODERNGEKKO_HAVE_IOS) || defined(MODERNGEKKO_HAVE_ANDROID)
@@ -176,10 +177,10 @@ index 1ddc25c..1894bd7 100644
    Config::SetBase(Config::MAIN_AUDIO_FILL_GAPS, true);
 +#ifdef MODERNGEKKO_HAVE_ANDROID
 +  Config::SetBase(Config::GFX_VERTEX_LOADER_TYPE, VertexLoaderType::Native);
-+  // Adreno cannot link ubershaders. Dual-core (CPU vs GPU) is the
-+  // official Dolphin Android default and is what makes the game playable.
++  // Use specialized shaders on every Android GPU. Uber shaders can fail to
++  // link, while this fixed game profile does not need their fallback path.
 +  Config::SetBase(Config::GFX_SHADER_COMPILATION_MODE,
-+                  ShaderCompilationMode::AsynchronousUberShaders);
++                  ShaderCompilationMode::Synchronous);
 +  Config::SetBase(Config::GFX_WAIT_FOR_SHADERS_BEFORE_STARTING, true);
 +  Config::SetBase(Config::GFX_SHADER_PRECOMPILER_THREADS, 1);
 +  Config::SetBase(Config::GFX_SHADER_COMPILER_THREADS, 1);

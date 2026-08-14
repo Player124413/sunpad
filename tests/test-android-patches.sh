@@ -31,7 +31,11 @@ grep -q 'MAIN_RUSH_FRAME_PRESENTATION, false' "$MG_PATCH" || fail "MG patch miss
 grep -q 'MAIN_PRECISION_FRAME_TIMING, true' "$MG_PATCH" || fail "MG patch missing Android precision frame timing"
 grep -q 'GFX_HACK_IMMEDIATE_XFB, false' "$MG_PATCH" || fail "MG patch missing Android immediate XFB off"
 grep -q 'VertexLoaderType::Native' "$MG_PATCH" || fail "MG patch missing Android native vertex loader"
-grep -q 'AsynchronousUberShaders' "$MG_PATCH" || fail "MG patch missing Android uber shaders"
+grep -q 'ShaderCompilationMode::Synchronous' "$MG_PATCH" \
+  || fail "MG patch missing Android specialized shaders"
+if grep -q '^+.*ShaderCompilationMode::AsynchronousUberShaders' "$MG_PATCH"; then
+  fail "MG patch must not enable Android uber shaders"
+fi
 
 # The Dolphin 0002 patch must add the Android platform and decouple OpenSL ES.
 grep -q '^diff --git a/Source/Core/DolphinNoGUI/PlatformAndroid.cpp' "$DOLPHIN_PATCH" \

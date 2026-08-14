@@ -20,6 +20,7 @@ plutil -lint apple/ios/Info.plist apple/macos/Info.plist
 ./tests/test-experimental-60fps-config.sh
 ./tests/test-diagnostics.sh
 ./tests/test-android-patches.sh
+./tests/test-android-workflow.sh
 
 test -x scripts/package-ios.sh
 test -x scripts/audit-ios-package.sh

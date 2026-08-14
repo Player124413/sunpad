@@ -1,6 +1,6 @@
 # Android port
 
-Last updated: 2026-08-13
+Last updated: 2026-08-14
 
 Status: **port scaffolding complete — runtime deltas, Android app shell, and
 build tooling are in the repository; no Android hardware or NDK acceptance
@@ -94,8 +94,11 @@ cd android
 ./gradlew :app:assembleDebug
 ```
 
-The APK never contains game data or the game module. The debug APK is
-installable with `adb install app/build/outputs/apk/debug/app-debug.apk`.
+The APK never contains game data. When the core script is given a generated
+or prebuilt module with `SUNPAD_BUNDLE_MODULE=1` (as in the workflow's
+`iso_url` and `module_url` paths), it contains that module; otherwise the
+module is provisioned on-device. The debug APK is installable with
+`adb install app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Building with GitHub Actions
 
@@ -109,28 +112,33 @@ or game data needed:
 4. builds `app-debug.apk` with `./gradlew :app:assembleDebug` and runs the
    JUnit mapping tests;
 5. uploads the APK as the `sunpad-debug-apk` artifact (Actions → run →
-   Artifacts).
+   Artifacts). When a module was generated or reused, it also uploads a
+   `gGMSE01_recomp.so` artifact.
 
-### Building the APK with the game module bundled (ISO URL)
+### Building the APK with a bundled game module
 
-The workflow accepts a **direct download URL to your GMSE01 ISO** in the
-`workflow_dispatch` form:
+The manually started workflow has **two mutually exclusive module sources**:
 
-1. **Actions → Android build → Run workflow**;
-2. paste the direct link into the **iso_url** field (the ISO must be the
-   supported GMSE01 USA Rev 0 image — the run verifies its SHA-256 and
-   fails with a clear message otherwise);
-3. the run downloads the image, validates it, generates the DolRecomp C
-   sources (`scripts/ci-prepare-game.sh`), recompiles `gGMSE01_recomp.so`
-   for Android arm64, and **bundles it into the APK** under
-   `assets/modules/`;
-4. the app extracts the bundled module to private storage on first launch —
-   no on-device module step needed.
+1. **First build — `iso_url`:** paste a direct URL to the supported GMSE01
+   USA Rev 0 ISO. The run verifies its SHA-256, generates the DolRecomp C
+   sources (`scripts/ci-prepare-game.sh`), recompiles the Android arm64
+   `gGMSE01_recomp.so`, bundles it into the APK, and uploads it as a separate
+   `gGMSE01_recomp.so` artifact.
+2. **Later builds — `module_url`:** paste a direct public URL to an existing
+   **Android arm64** `gGMSE01_recomp.so`. The run validates that it is an
+   ELF64 AArch64 shared library, skips source generation and the module build,
+   bundles the downloaded module into the APK, and uploads the same module as
+   an artifact. Do not fill in `iso_url` at the same time.
 
-Notes on the URL: it must be a direct link (the file starts downloading
-immediately). GitHub release assets, S3/GCS signed links, and similar work;
-share-link pages (Google Drive web UI, Mega) do not. The downloaded ISO is
-only used inside the runner and is not committed anywhere.
+In either case, the app extracts the bundled module to private storage on its
+first launch; no on-device module selection is needed. The ISO itself is not
+bundled into the APK or uploaded as an artifact.
+
+Each URL must be a direct download (the file starts downloading immediately).
+GitHub release assets, S3/GCS signed links, and similar direct links work;
+share-link pages (Google Drive web UI, Mega) do not. The workflow does not
+accept an Actions artifact landing page as `module_url`; download that artifact
+first and publish the `.so` at a direct URL you control.
 
 Speed and retries:
 
@@ -165,7 +173,8 @@ What the CI APK contains and does not contain:
 
 - **Contains**: the app, the JNI shim, the statically linked
   ModernGekko/Dolphin core (Vulkan + OpenSL ES + Pipes input), and — when
-  you supplied an ISO URL — the bundled `gGMSE01_recomp.so` module.
+  you supplied either `iso_url` or `module_url` — the bundled
+  `gGMSE01_recomp.so` module.
 - **Does not contain**: game data (the 1.4 GB image itself). With a
   bundled module you only import your ISO on the device; without it, the
   module must be generated locally (`scripts/prepare-game.sh`) and
@@ -210,11 +219,9 @@ module generation) — the build log will say precisely what is missing.
   - creates `Platform::CreateAndroidPlatform()` (ANativeWindow platform);
   - hands `RuntimeConfig.render_surface` to `ModernGekkoSetAndroidRenderSurface`;
   - prefers `BACKEND_OPENSLES` for audio on Android;
-  - applies the mobile hardening the iOS port uses: software vertex loader
-    (no executable-code generation), **specialized** shaders with a single
-    compiler thread (Adreno cannot link Dolphin ubershaders), GLES preferred,
-    and the larger audio buffer / fill-gaps settings. Default renderer is
-    OpenGL ES.
+  - applies the mobile runtime profile: native vertex loading, **specialized**
+    shaders on every GPU (no Uber shader mode), GLES preferred, and the larger
+    audio buffer / fill-gaps settings. Default renderer is OpenGL ES.
 
 ### Vendored Dolphin (`patches/ModernGekko-dolphin/0002-sunpad-android-runtime.patch`)
 
@@ -271,11 +278,10 @@ Ported from the iOS overlay. From the menu choose **Edit touch layout…**:
   (`SunPadControlOrigins` in app preferences, keyed like the iOS app) and
   survive app restart / reboot (they are lost only on Reset, clear-data, or
   uninstall);
-- the grouped D-pad moves as one group and persists under
-  `SunPadExperimentalDPadOriginKey`;
 - tap a control to resize it (per-control scale 0.6–1.75, persisted in
-  `SunPadControlSizeScales`; the D-pad group uses
-  `SunPadExperimentalDPadScaleKey`);
+  `SunPadControlSizeScales`);
+- the touch overlay deliberately has no arrow/D-pad controls; a connected
+  physical gamepad's D-pad remains mapped directly;
 - the editor bar at the bottom offers **Reset** (restores every position and
   size to defaults) and **Done**;
 - while editing, touch input is suppressed and every editable control gets a
@@ -329,16 +335,18 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
   exception). Native boot stages and Dolphin BOOT/VIDEO/CORE lines now go
   into the copyable diagnostic log. The ISO is not the cause when import
   already accepted it (size `1459978240`, GMSE01, disc 0 rev 0).
-- The CI workflow is parked at `ci/android-build.yml` (outside
-  `.github/workflows/` so it can be pushed without the GitHub App
-  "workflows" permission); move it to
-  `.github/workflows/android-build.yml` to build APKs from Actions.
+- `ci/android-build.yml` is the reviewed workflow source copy. To expose its
+  current manual inputs in GitHub Actions, a maintainer must copy it to
+  `.github/workflows/android-build.yml` and push with the `workflows`
+  permission (the source copy is kept because this App cannot update that
+  protected path).
 - **Saves**: Dolphin save files under the user directory are preserved by the
   removal flow (only imported game data is removed), matching iOS behavior.
-- **OpenGL ES is the default** (Adreno 710 and similar cannot link Dolphin
-  ubershaders on either backend). **••• → Renderer** still switches
-  Vulkan / OpenGL ES for the next launch. Dual-core is on (CPU and GPU
-  on separate threads). Super Mario Sunshine uses Dolphin’s GMS.ini EFB
+- **OpenGL ES is the default**. The runtime uses specialized shaders on every
+  GPU; Uber shader mode is disabled. **••• → Renderer** still switches
+  Vulkan / OpenGL ES for the next launch. Dual-core is permanently enabled
+  (CPU and GPU on separate threads) and no longer appears in the menu.
+  Super Mario Sunshine uses Dolphin’s GMS.ini EFB
   rules: CPU EFB reads, EFB copies to RAM, arbitrary-mip graffiti, no
   GLES fast-depth (that flickers textures).
 - **60 FPS experiment**: the `enable_gmse01_60fps` runtime flag exists on all
@@ -346,7 +354,8 @@ regression coverage (`ControllerMappingTest`, mirroring the iOS tests):
 
 ## Legal note
 
-As with the Apple ports, the Android port contains no game assets, no disc
-image, no generated module, and no Nintendo code beyond what the pinned
-GPL-3.0 / Dolphin-derived upstreams provide. The user imports their own
-legally obtained `GMSE01` image on-device.
+As with the Apple ports, the source repository contains no game assets, disc
+image, generated module, or Nintendo code beyond what the pinned GPL-3.0 /
+Dolphin-derived upstreams provide. A workflow module artifact is produced
+only from a user-supplied ISO or a user-supplied direct module URL. The user
+imports their own legally obtained `GMSE01` image on-device.

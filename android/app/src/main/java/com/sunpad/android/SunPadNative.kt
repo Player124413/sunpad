@@ -74,8 +74,6 @@ object SunPadNative {
 
     fun setPreferredBackend(backend: String) = ifAvailable { nativeSetPreferredBackend(backend) }
 
-    fun setDualCore(enabled: Boolean) = ifAvailable { nativeSetDualCore(enabled) }
-
     fun currentFPS(): Double = if (available) nativeCurrentFPS() else 0.0
 
     fun currentSpeed(): Double = if (available) nativeCurrentSpeed() else 0.0
@@ -136,8 +134,6 @@ object SunPadNative {
     private external fun nativeSetCrashLogPath(path: String)
 
     private external fun nativeSetPreferredBackend(backend: String)
-
-    private external fun nativeSetDualCore(enabled: Boolean)
 
     private external fun nativeCurrentFPS(): Double
 
